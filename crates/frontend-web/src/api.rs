@@ -155,3 +155,205 @@ pub struct DashboardCounts {
     pub tasks: i64,
     pub properties: i64,
 }
+
+// ============================================================================
+// METADATA TYPES (for metadata-driven UI)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityType {
+    pub id: String,
+    pub name: String,
+    pub label: String,
+    pub label_plural: String,
+    pub icon: Option<String>,
+    pub app_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldDef {
+    pub id: String,
+    pub name: String,
+    pub label: String,
+    pub field_type: String,
+    pub is_required: bool,
+    pub show_in_list: bool,
+    pub show_in_card: bool,
+    pub is_readonly: bool,
+    pub sort_order: i32,
+    pub options: Option<serde_json::Value>,
+    pub placeholder: Option<String>,
+    pub help_text: Option<String>,
+}
+
+// ============================================================================
+// HTTP HELPERS
+// ============================================================================
+
+/// POST helper for making POST requests with JSON body
+pub async fn post_json<T: for<'de> Deserialize<'de>>(url: &str, body: &serde_json::Value) -> Result<T, String> {
+    let window = web_sys::window().ok_or("no window")?;
+
+    let opts = RequestInit::new();
+    opts.set_method("POST");
+    opts.set_mode(RequestMode::Cors);
+    
+    let body_str = serde_json::to_string(body).map_err(|e| format!("Serialize error: {}", e))?;
+    opts.set_body(&JsValue::from_str(&body_str));
+
+    let request = Request::new_with_str_and_init(url, &opts)
+        .map_err(|e| format!("Request error: {:?}", e))?;
+
+    request.headers()
+        .set("Content-Type", "application/json")
+        .map_err(|e| format!("Header error: {:?}", e))?;
+
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch error: {:?}", e))?;
+
+    let resp: Response = resp_value.dyn_into()
+        .map_err(|_| "response conversion error")?;
+
+    if !resp.ok() {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    let json = JsFuture::from(resp.json().map_err(|e| format!("JSON parse error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("JSON await error: {:?}", e))?;
+
+    serde_wasm_bindgen::from_value(json)
+        .map_err(|e| format!("Deserialize error: {:?}", e))
+}
+
+/// PUT helper for making PUT requests with JSON body
+pub async fn put_json<T: for<'de> Deserialize<'de>>(url: &str, body: &serde_json::Value) -> Result<T, String> {
+    let window = web_sys::window().ok_or("no window")?;
+
+    let opts = RequestInit::new();
+    opts.set_method("PUT");
+    opts.set_mode(RequestMode::Cors);
+    
+    let body_str = serde_json::to_string(body).map_err(|e| format!("Serialize error: {}", e))?;
+    opts.set_body(&JsValue::from_str(&body_str));
+
+    let request = Request::new_with_str_and_init(url, &opts)
+        .map_err(|e| format!("Request error: {:?}", e))?;
+
+    request.headers()
+        .set("Content-Type", "application/json")
+        .map_err(|e| format!("Header error: {:?}", e))?;
+
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch error: {:?}", e))?;
+
+    let resp: Response = resp_value.dyn_into()
+        .map_err(|_| "response conversion error")?;
+
+    if !resp.ok() {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    let json = JsFuture::from(resp.json().map_err(|e| format!("JSON parse error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("JSON await error: {:?}", e))?;
+
+    serde_wasm_bindgen::from_value(json)
+        .map_err(|e| format!("Deserialize error: {:?}", e))
+}
+
+/// DELETE helper for making DELETE requests
+pub async fn delete_request(url: &str) -> Result<serde_json::Value, String> {
+    let window = web_sys::window().ok_or("no window")?;
+
+    let opts = RequestInit::new();
+    opts.set_method("DELETE");
+    opts.set_mode(RequestMode::Cors);
+
+    let request = Request::new_with_str_and_init(url, &opts)
+        .map_err(|e| format!("Request error: {:?}", e))?;
+
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch error: {:?}", e))?;
+
+    let resp: Response = resp_value.dyn_into()
+        .map_err(|_| "response conversion error")?;
+
+    if !resp.ok() {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    let json = JsFuture::from(resp.json().map_err(|e| format!("JSON parse error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("JSON await error: {:?}", e))?;
+
+    serde_wasm_bindgen::from_value(json)
+        .map_err(|e| format!("Deserialize error: {:?}", e))
+}
+
+// ============================================================================
+// METADATA API FUNCTIONS
+// ============================================================================
+
+/// Fetch all entity types for the tenant
+pub async fn fetch_entity_types() -> Result<Vec<EntityType>, String> {
+    let url = format!("{}/metadata/entities?tenant_id={}", API_BASE, TENANT_ID);
+    fetch_json(&url).await
+}
+
+/// Fetch a single entity type by name
+pub async fn fetch_entity_type(name: &str) -> Result<EntityType, String> {
+    let url = format!("{}/metadata/entities/{}?tenant_id={}", API_BASE, name, TENANT_ID);
+    fetch_json(&url).await
+}
+
+/// Fetch field definitions for an entity type
+pub async fn fetch_field_defs(entity_name: &str) -> Result<Vec<FieldDef>, String> {
+    let url = format!("{}/metadata/entities/{}/fields?tenant_id={}", API_BASE, entity_name, TENANT_ID);
+    fetch_json(&url).await
+}
+
+// ============================================================================
+// GENERIC ENTITY CRUD FUNCTIONS
+// ============================================================================
+
+/// Generic list response for entities
+#[derive(Debug, Clone, Deserialize)]
+pub struct GenericListResponse {
+    pub data: Vec<serde_json::Value>,
+    pub total: i64,
+}
+
+/// Fetch a list of records for any entity type
+pub async fn fetch_entity_list(entity_type: &str) -> Result<GenericListResponse, String> {
+    let url = format!("{}/entities/{}?tenant_id={}", API_BASE, entity_type, TENANT_ID);
+    fetch_json(&url).await
+}
+
+/// Fetch a single record by ID
+pub async fn fetch_entity(entity_type: &str, id: &str) -> Result<serde_json::Value, String> {
+    let url = format!("{}/entities/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
+    fetch_json(&url).await
+}
+
+/// Create a new record
+pub async fn create_entity(entity_type: &str, data: serde_json::Value) -> Result<serde_json::Value, String> {
+    let url = format!("{}/entities/{}?tenant_id={}", API_BASE, entity_type, TENANT_ID);
+    post_json(&url, &data).await
+}
+
+/// Update an existing record
+pub async fn update_entity(entity_type: &str, id: &str, data: serde_json::Value) -> Result<serde_json::Value, String> {
+    let url = format!("{}/entities/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
+    put_json(&url, &data).await
+}
+
+/// Delete a record (soft delete)
+pub async fn delete_entity(entity_type: &str, id: &str) -> Result<serde_json::Value, String> {
+    let url = format!("{}/entities/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
+    delete_request(&url).await
+}
+
