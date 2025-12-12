@@ -168,14 +168,12 @@ impl SessionService {
     }
 }
 
-/// Simple SHA256 hash for tokens
+/// Cryptographically secure SHA256 hash for session tokens
 fn sha256_hash(input: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use sha2::{Sha256, Digest};
     
-    // Note: In production, use a proper SHA256 implementation
-    // This is a placeholder for development
-    let mut hasher = DefaultHasher::new();
-    input.hash(&mut hasher);
-    format!("{:x}", hasher.finish())
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    let result = hasher.finalize();
+    hex::encode(result)
 }
