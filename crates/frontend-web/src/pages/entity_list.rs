@@ -347,7 +347,7 @@ async fn fetch_entity_data(entity_type: &str) -> Result<Vec<serde_json::Value>, 
         format!("{}/entities/{}?tenant_id={}", API_BASE, entity_type, TENANT_ID)
     };
     
-    let mut opts = RequestInit::new();
+    let opts = RequestInit::new();
     opts.set_method("GET");
 
     let request = Request::new_with_str_and_init(&url, &opts)
@@ -389,7 +389,7 @@ async fn create_entity(entity_type: &str, body: serde_json::Value) -> Result<(),
         format!("{}/entities/{}?tenant_id={}", API_BASE, entity_type, TENANT_ID)
     };
     
-    let mut opts = RequestInit::new();
+    let opts = RequestInit::new();
     opts.set_method("POST");
     opts.set_body(&JsValue::from_str(&body.to_string()));
 

@@ -24,6 +24,7 @@ pub fn routes() -> Router<Arc<AppState>> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ListQuery {
     pub tenant_id: Uuid,
     pub page: Option<i32>,
@@ -46,7 +47,7 @@ async fn list_records(
     Path(entity_type): Path<String>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<ListResponse>, ApiError> {
-    use sqlx::Row;
+    
     
     let page = query.page.unwrap_or(1);
     let per_page = query.per_page.unwrap_or(25).min(100);

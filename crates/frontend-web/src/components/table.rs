@@ -9,7 +9,7 @@ pub fn DataTable(
     columns: Vec<ViewColumn>,
     fields: Vec<FieldDef>,
     data: Vec<serde_json::Value>,
-    #[prop(optional)] on_row_click: Option<Callback<serde_json::Value>>,
+    #[prop(optional)] _on_row_click: Option<Callback<serde_json::Value>>,
 ) -> impl IntoView {
     // Build field lookup
     let field_map: std::collections::HashMap<String, FieldDef> = fields

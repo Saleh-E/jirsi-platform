@@ -24,7 +24,7 @@ pub fn FieldRenderer(
     field: FieldDef,
     value: serde_json::Value,
     context: FieldContext,
-    #[prop(optional)] on_change: Option<Callback<serde_json::Value>>,
+    #[prop(optional)] _on_change: Option<Callback<serde_json::Value>>,
 ) -> impl IntoView {
     let is_display = matches!(
         context,

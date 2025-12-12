@@ -10,6 +10,7 @@ use core_metadata::MetadataError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum ApiError {
     #[error("Not found: {0}")]
     NotFound(String),

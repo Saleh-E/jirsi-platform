@@ -3,8 +3,8 @@
 //! Seeds the EntityTypes, FieldDefs, and ViewDefs for CRM entities.
 
 use core_models::{
-    AppDef, EntityType, FieldDef, FieldType, FieldOptions, FieldValidation,
-    SelectChoice, ViewDef, ViewColumn, ViewType,
+    AppDef, EntityType, FieldDef, FieldType, FieldOptions,
+    SelectChoice, ViewDef, ViewColumn,
 };
 use chrono::Utc;
 use uuid::Uuid;

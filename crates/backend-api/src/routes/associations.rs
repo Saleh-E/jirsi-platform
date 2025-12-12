@@ -23,6 +23,7 @@ pub fn routes() -> Router<Arc<AppState>> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct AssociationQuery {
     pub tenant_id: Uuid,
     /// Filter by source entity type

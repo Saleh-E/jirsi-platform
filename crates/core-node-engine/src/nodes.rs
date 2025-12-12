@@ -127,7 +127,7 @@ impl NodeHandler for SendEmailHandler {
             .and_then(|v| v.as_str())
             .unwrap_or("");
         
-        let body = node.config.get("body")
+        let _body = node.config.get("body")
             .and_then(|v| v.as_str())
             .unwrap_or("");
         

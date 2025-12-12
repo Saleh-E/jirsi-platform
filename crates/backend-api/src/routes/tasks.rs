@@ -24,6 +24,7 @@ pub fn routes() -> Router<Arc<AppState>> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct TaskQuery {
     pub tenant_id: Uuid,
     pub linked_entity_type: Option<String>,

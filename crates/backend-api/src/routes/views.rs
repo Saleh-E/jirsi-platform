@@ -9,7 +9,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 use crate::state::AppState;
 use crate::error::ApiError;
@@ -24,6 +24,7 @@ pub fn routes() -> Router<Arc<AppState>> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ViewQuery {
     pub tenant_id: Uuid,
     pub entity_type_id: Option<Uuid>,

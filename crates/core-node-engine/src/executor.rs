@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use core_models::{
-    EdgeDef, ExecutionStatus, GraphExecution, NodeDef, NodeGraphDef, NodeType,
+    EdgeDef, ExecutionStatus, GraphExecution, NodeDef, NodeGraphDef,
 };
 use serde_json::Value;
 use sqlx::PgPool;
@@ -14,6 +14,7 @@ use crate::nodes::NodeRegistry;
 use crate::NodeEngineError;
 
 /// Graph executor - runs node graphs
+#[allow(dead_code)]
 pub struct GraphExecutor {
     pool: PgPool,
     registry: NodeRegistry,

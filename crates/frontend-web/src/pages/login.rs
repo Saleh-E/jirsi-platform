@@ -101,7 +101,7 @@ async fn do_login(email: &str, password: &str) -> Result<(), String> {
         "subdomain": "demo"
     });
 
-    let mut opts = RequestInit::new();
+    let opts = RequestInit::new();
     opts.set_method("POST");
     opts.set_body(&JsValue::from_str(&body.to_string()));
 

@@ -4,6 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Represents a job from the queue
+#[allow(dead_code)]
 struct Job {
     id: Uuid,
     job_type: String,

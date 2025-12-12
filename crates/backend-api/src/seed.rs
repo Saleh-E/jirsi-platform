@@ -1,7 +1,6 @@
 //! Database seeding for development
 
 use chrono::Utc;
-use core_models::{Tenant, User, UserRole, UserStatus, PlanTier, TenantStatus};
 use core_auth::password::hash_password;
 use sqlx::PgPool;
 use uuid::Uuid;

@@ -7,7 +7,7 @@ use crate::models::FieldDef;
 #[component]
 pub fn EntityForm(
     fields: Vec<FieldDef>,
-    #[prop(optional)] initial_data: Option<serde_json::Value>,
+    #[prop(optional)] _initial_data: Option<serde_json::Value>,
     on_submit: Callback<serde_json::Value>,
 ) -> impl IntoView {
     let sorted_fields: Vec<_> = {

@@ -2,7 +2,7 @@
 
 use axum::{
     extract::{Path, Query, State},
-    routing::{get, post, put, delete},
+    routing::get,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,7 @@ pub fn router() -> Router<Arc<AppState>> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct PropertyQuery {
     pub tenant_id: Uuid,
     #[serde(default = "default_limit")]
