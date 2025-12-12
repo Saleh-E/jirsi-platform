@@ -1,0 +1,19 @@
+[package]
+name = "app-crm"
+description = "CRM application - Contacts, Companies, Deals, Tasks"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+core-models = { path = "../core-models" }
+core-metadata = { path = "../core-metadata" }
+core-auth = { path = "../core-auth" }
+core-engagement = { path = "../core-engagement" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

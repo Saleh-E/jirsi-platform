@@ -1,0 +1,16 @@
+[package]
+name = "core-analytics"
+description = "Search, metrics, dashboards, and AI services"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+core-models = { path = "../core-models" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

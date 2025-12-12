@@ -1,0 +1,34 @@
+# Build artifacts
+/target
+
+# IDE
+/.idea
+/.vscode
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+*.lcov
+
+# Dependencies lock (keep Cargo.lock for binary crates)
+# Cargo.lock  # Uncomment if this is a library
+
+# Node (for any JS tools)
+node_modules/
+
+# Generated
+*.generated.*

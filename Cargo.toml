@@ -1,0 +1,65 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core-models",
+    "crates/core-metadata",
+    "crates/core-node-engine",
+    "crates/core-auth",
+    "crates/core-engagement",
+    "crates/core-analytics",
+    "crates/app-crm",
+    "crates/app-properties",
+    "crates/backend-api",
+    "crates/frontend-web",
+    "crates/jobs-runner",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/your-org/saas-platform"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# Web framework
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip"] }
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Auth & Security
+argon2 = "0.5"
+jsonwebtoken = "9.2"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging & Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Frontend (Leptos)
+leptos = { version = "0.6", features = ["csr"] }
+leptos_router = { version = "0.6", features = ["csr"] }
+leptos_meta = { version = "0.6", features = ["csr"] }
+leptos_axum = { version = "0.6" }
+
+# Background jobs
+apalis = { version = "0.5", features = ["postgres"] }
+
+# Testing
+tokio-test = "0.4"

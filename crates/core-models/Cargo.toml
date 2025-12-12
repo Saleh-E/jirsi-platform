@@ -1,0 +1,12 @@
+[package]
+name = "core-models"
+description = "Shared domain types and models for the SaaS platform"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }

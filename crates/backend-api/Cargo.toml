@@ -1,0 +1,33 @@
+[package]
+name = "backend-api"
+description = "Axum HTTP API server"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+core-models = { path = "../core-models" }
+core-metadata = { path = "../core-metadata" }
+core-auth = { path = "../core-auth" }
+core-node-engine = { path = "../core-node-engine" }
+core-engagement = { path = "../core-engagement" }
+core-analytics = { path = "../core-analytics" }
+app-crm = { path = "../app-crm" }
+app-properties = { path = "../app-properties" }
+
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

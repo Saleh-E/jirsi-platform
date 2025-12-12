@@ -1,0 +1,36 @@
+//! API routes
+
+use axum::Router;
+use std::sync::Arc;
+
+use crate::state::AppState;
+
+pub mod auth;
+pub mod entities;
+pub mod metadata;
+pub mod associations;
+pub mod interactions;
+pub mod tasks;
+pub mod views;
+pub mod properties;
+
+/// Build all API routes
+pub fn api_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        // Auth routes (public - login, register, logout)
+        .nest("/auth", auth::routes())
+        // Metadata routes (authentication enforced via extractors in handlers)
+        .nest("/metadata", metadata::routes())
+        // Entity CRUD routes (authentication enforced via extractors in handlers)
+        .nest("/entities", entities::routes())
+        // Association routes (linking records together)
+        .nest("/associations", associations::routes())
+        // Interactions routes (timeline/activities)
+        .nest("/interactions", interactions::routes())
+        // Tasks routes (entity-linked tasks)
+        .nest("/tasks", tasks::routes())
+        // Views routes (saved user views)
+        .nest("/views", views::routes())
+        // Properties routes (Phase 3 - real estate)
+        .merge(properties::router())
+}
