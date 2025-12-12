@@ -357,3 +357,68 @@ pub async fn delete_entity(entity_type: &str, id: &str) -> Result<serde_json::Va
     delete_request(&url).await
 }
 
+// ============================================================================
+// ASSOCIATIONS API FUNCTIONS
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Association {
+    pub id: String,
+    pub association_def_id: String,
+    pub source_id: String,
+    pub target_id: String,
+    pub role: Option<String>,
+    pub is_primary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssociationDef {
+    pub id: String,
+    pub name: String,
+    pub source_entity: String,
+    pub target_entity: String,
+    pub label_source: String,
+    pub label_target: String,
+    pub cardinality: String,
+}
+
+/// Fetch associations for a record (as source or target)
+pub async fn fetch_associations(entity_type: &str, record_id: &str) -> Result<Vec<Association>, String> {
+    let url = format!(
+        "{}/associations?tenant_id={}&source_entity={}&source_id={}",
+        API_BASE, TENANT_ID, entity_type, record_id
+    );
+    fetch_json(&url).await
+}
+
+/// Fetch association definitions for an entity type
+pub async fn fetch_association_defs(entity_type: &str) -> Result<Vec<AssociationDef>, String> {
+    let url = format!(
+        "{}/associations/defs?tenant_id={}&source_entity={}",
+        API_BASE, TENANT_ID, entity_type
+    );
+    fetch_json(&url).await
+}
+
+/// Create an association between two records
+pub async fn create_association(
+    association_def_id: &str,
+    source_id: &str,
+    target_id: &str,
+) -> Result<serde_json::Value, String> {
+    let url = format!("{}/associations?tenant_id={}", API_BASE, TENANT_ID);
+    let body = serde_json::json!({
+        "tenant_id": TENANT_ID,
+        "association_def_id": association_def_id,
+        "source_id": source_id,
+        "target_id": target_id,
+        "is_primary": false
+    });
+    post_json(&url, &body).await
+}
+
+/// Delete an association
+pub async fn delete_association(association_id: &str) -> Result<serde_json::Value, String> {
+    let url = format!("{}/associations/{}?tenant_id={}", API_BASE, association_id, TENANT_ID);
+    delete_request(&url).await
+}

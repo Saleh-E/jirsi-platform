@@ -7,7 +7,7 @@
 use leptos::*;
 use leptos_router::*;
 use crate::api::{
-    fetch_field_defs, fetch_entity, update_entity, FieldDef,
+    fetch_field_defs, fetch_entity, update_entity, fetch_associations, FieldDef, Association,
 };
 
 /// Tab options for the detail page
@@ -178,7 +178,7 @@ pub fn EntityDetailPage() -> impl IntoView {
                                 }
                             },
                             DetailTab::Related => view! {
-                                <RelatedTab />
+                                <RelatedTab entity_type=entity_type() record_id=record_id() />
                             }.into_view(),
                             DetailTab::Timeline => view! {
                                 <TimelineTab />
@@ -420,13 +420,83 @@ fn render_edit_input(
     }
 }
 
-/// Related tab - placeholder for Task 9
+/// Related tab - displays associations (linked records)
 #[component]
-fn RelatedTab() -> impl IntoView {
+fn RelatedTab(entity_type: String, record_id: String) -> impl IntoView {
+    let (associations, set_associations) = create_signal(Vec::<Association>::new());
+    let (loading, set_loading) = create_signal(true);
+    let (show_link_modal, set_show_link_modal) = create_signal(false);
+    
+    // Fetch associations on mount
+    let etype = entity_type.clone();
+    let rid = record_id.clone();
+    create_effect(move |_| {
+        let etype = etype.clone();
+        let rid = rid.clone();
+        spawn_local(async move {
+            set_loading.set(true);
+            match fetch_associations(&etype, &rid).await {
+                Ok(assocs) => set_associations.set(assocs),
+                Err(e) => logging::log!("Failed to fetch associations: {}", e),
+            }
+            set_loading.set(false);
+        });
+    });
+    
     view! {
         <div class="related-tab">
-            <p class="placeholder">"Related records (associations) will be displayed here."</p>
-            <p class="placeholder-hint">"Task 9: Link contacts to companies, deals, etc."</p>
+            <div class="related-header">
+                <h3>"Related Records"</h3>
+                <button class="btn btn-secondary" on:click=move |_| set_show_link_modal.set(true)>
+                    "+ Link Record"
+                </button>
+            </div>
+            
+            {move || loading.get().then(|| view! {
+                <p class="loading">"Loading associations..."</p>
+            })}
+            
+            {move || (!loading.get()).then(|| {
+                let assocs = associations.get();
+                if assocs.is_empty() {
+                    view! {
+                        <div class="empty-state">
+                            <p>"No related records yet."</p>
+                            <p class="hint">"Click '+ Link Record' to connect this record to another."</p>
+                        </div>
+                    }.into_view()
+                } else {
+                    view! {
+                        <div class="associations-list">
+                            {assocs.into_iter().map(|assoc| {
+                                view! {
+                                    <div class="association-item">
+                                        <span class="target-id">{assoc.target_id.clone()}</span>
+                                        {assoc.role.map(|r| view! { <span class="role">{r}</span> })}
+                                        {assoc.is_primary.then(|| view! { <span class="badge">"Primary"</span> })}
+                                    </div>
+                                }
+                            }).collect_view()}
+                        </div>
+                    }.into_view()
+                }
+            })}
+            
+            // Link Modal Placeholder
+            {move || show_link_modal.get().then(|| view! {
+                <div class="modal-overlay" on:click=move |_| set_show_link_modal.set(false)>
+                    <div class="modal" on:click=move |ev| ev.stop_propagation()>
+                        <h2>"Link Record"</h2>
+                        <p class="placeholder">"Record linking UI coming soon."</p>
+                        <p class="placeholder-hint">"Select entity type and search for records to link."</p>
+                        <div class="form-actions">
+                            <button class="btn" on:click=move |_| set_show_link_modal.set(false)>
+                                "Close"
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            })}
         </div>
     }
 }
