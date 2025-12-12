@@ -130,12 +130,20 @@ pub fn EntityListPage() -> impl IntoView {
                                     {cols.iter().map(|f| {
                                         view! { <th>{f.label.clone()}</th> }
                                     }).collect_view()}
+                                    <th class="action-header">""</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {move || {
                                     let cols = list_columns();
+                                    let etype = entity_type();
                                     data.get().into_iter().map(|row| {
+                                        let record_id = row.get("id")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or_default()
+                                            .to_string();
+                                        let etype_clone = etype.clone();
+                                        let row_path = format!("/app/crm/entity/{}/{}", etype_clone, record_id);
                                         view! {
                                             <tr class="clickable-row">
                                                 // Dynamic cells from field names
@@ -145,6 +153,10 @@ pub fn EntityListPage() -> impl IntoView {
                                                         .unwrap_or_default();
                                                     view! { <td>{value}</td> }
                                                 }).collect_view()}
+                                                // Hidden link for navigation
+                                                <td class="action-cell">
+                                                    <a href=row_path class="row-link">"→"</a>
+                                                </td>
                                             </tr>
                                         }
                                     }).collect_view()
@@ -174,6 +186,7 @@ pub fn EntityListPage() -> impl IntoView {
                                     let field_type = field.field_type.clone();
                                     let is_required = field.is_required;
                                     let placeholder = field.placeholder.clone().unwrap_or_default();
+                                    let options = field.options.clone();
                                     
                                     view! {
                                         <div class="form-group">
@@ -181,7 +194,7 @@ pub fn EntityListPage() -> impl IntoView {
                                                 {field_label}
                                                 {is_required.then(|| " *")}
                                             </label>
-                                            {render_input_field(field_name, field_type, is_required, placeholder, update_form_field.clone())}
+                                            {render_input_field(field_name, field_type, is_required, placeholder, options, update_form_field.clone())}
                                         </div>
                                     }
                                 }).collect_view()}
@@ -224,6 +237,7 @@ fn render_input_field(
     field_type: String, 
     is_required: bool,
     placeholder: String,
+    options: Option<serde_json::Value>,
     on_change: impl Fn(String, String) + Clone + 'static,
 ) -> impl IntoView {
     let name = field_name.clone();
@@ -271,11 +285,28 @@ fn render_input_field(
                 on:input=on_input
             />
         }.into_view(),
-        "select" => view! {
-            <select required=is_required on:change=on_input>
-                <option value="">"-- Select --"</option>
-            </select>
-        }.into_view(),
+        "select" => {
+            // Extract options from FieldDef.options (expects array of {"value": "x", "label": "X"})
+            let select_options: Vec<(String, String)> = options
+                .and_then(|v| v.as_array().cloned())
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|opt| {
+                    let value = opt.get("value")?.as_str()?.to_string();
+                    let label = opt.get("label")?.as_str()?.to_string();
+                    Some((value, label))
+                })
+                .collect();
+            
+            view! {
+                <select required=is_required on:change=on_input>
+                    <option value="">"-- Select --"</option>
+                    {select_options.into_iter().map(|(value, label)| {
+                        view! { <option value=value>{label}</option> }
+                    }).collect_view()}
+                </select>
+            }.into_view()
+        },
         _ => view! {
             <input 
                 type="text" 
