@@ -5,7 +5,7 @@
 -- VIEWING ENTITY TYPE
 -- ============================================================================
 
-INSERT INTO entity_types (id, tenant_id, app_id, name, label, label_plural, icon, table_name, is_enabled, sort_order)
+INSERT INTO entity_types (id, tenant_id, app_id, name, label, label_plural, icon)
 VALUES (
     'e0000000-0000-0000-0000-000000000011',
     'b128c8da-6e56-485d-b2fe-e45fb7492b2e',
@@ -13,10 +13,7 @@ VALUES (
     'viewing',
     'Viewing',
     'Viewings',
-    'calendar',
-    'viewings',
-    true,
-    2
+    'calendar'
 )
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
@@ -73,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_viewings_status ON viewings(status);
 -- OFFER ENTITY TYPE
 -- ============================================================================
 
-INSERT INTO entity_types (id, tenant_id, app_id, name, label, label_plural, icon, table_name, is_enabled, sort_order)
+INSERT INTO entity_types (id, tenant_id, app_id, name, label, label_plural, icon)
 VALUES (
     'e0000000-0000-0000-0000-000000000012',
     'b128c8da-6e56-485d-b2fe-e45fb7492b2e',
@@ -81,10 +78,7 @@ VALUES (
     'offer',
     'Offer',
     'Offers',
-    'file-text',
-    'offers',
-    true,
-    3
+    'file-text'
 )
 ON CONFLICT (tenant_id, name) DO NOTHING;
 

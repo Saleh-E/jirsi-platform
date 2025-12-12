@@ -8,10 +8,7 @@ INSERT INTO entity_types (
     name, 
     label, 
     label_plural, 
-    icon, 
-    table_name, 
-    is_enabled, 
-    sort_order
+    icon
 )
 VALUES (
     'e0000000-0000-0000-0000-000000000010',
@@ -20,9 +17,8 @@ VALUES (
     'property',
     'Property',
     'Properties',
-    'home',
-    'properties',
-    true,
-    1
+    'home'
 )
 ON CONFLICT (tenant_id, name) DO NOTHING;
+
+

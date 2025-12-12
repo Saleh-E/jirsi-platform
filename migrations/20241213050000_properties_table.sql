@@ -1,7 +1,10 @@
 -- Phase 1B Task P1B-05: Properties Table Schema
 -- Creates the properties table with all columns matching FieldDefs
 
-CREATE TABLE IF NOT EXISTS properties (
+-- Drop existing table if it exists (for clean slate)
+DROP TABLE IF EXISTS properties CASCADE;
+
+CREATE TABLE properties (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id),
     
@@ -59,13 +62,13 @@ CREATE TABLE IF NOT EXISTS properties (
 );
 
 -- Indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_properties_tenant ON properties(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_properties_reference ON properties(tenant_id, reference);
-CREATE INDEX IF NOT EXISTS idx_properties_status ON properties(tenant_id, status);
-CREATE INDEX IF NOT EXISTS idx_properties_city ON properties(tenant_id, city);
-CREATE INDEX IF NOT EXISTS idx_properties_usage ON properties(tenant_id, usage);
-CREATE INDEX IF NOT EXISTS idx_properties_property_type ON properties(tenant_id, property_type);
-CREATE INDEX IF NOT EXISTS idx_properties_price ON properties(price) WHERE price IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_properties_rent ON properties(rent_amount) WHERE rent_amount IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_properties_geo ON properties(latitude, longitude) WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_properties_deleted ON properties(deleted_at) WHERE deleted_at IS NULL;
+CREATE INDEX idx_properties_tenant ON properties(tenant_id);
+CREATE INDEX idx_properties_reference ON properties(tenant_id, reference);
+CREATE INDEX idx_properties_status ON properties(tenant_id, status);
+CREATE INDEX idx_properties_city ON properties(tenant_id, city);
+CREATE INDEX idx_properties_usage ON properties(tenant_id, usage);
+CREATE INDEX idx_properties_property_type ON properties(tenant_id, property_type);
+CREATE INDEX idx_properties_price ON properties(price) WHERE price IS NOT NULL;
+CREATE INDEX idx_properties_rent ON properties(rent_amount) WHERE rent_amount IS NOT NULL;
+CREATE INDEX idx_properties_geo ON properties(latitude, longitude) WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
+CREATE INDEX idx_properties_deleted ON properties(deleted_at) WHERE deleted_at IS NULL;
