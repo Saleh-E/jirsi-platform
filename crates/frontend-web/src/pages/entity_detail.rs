@@ -426,13 +426,15 @@ fn RelatedTab(entity_type: String, record_id: String) -> impl IntoView {
     let (associations, set_associations) = create_signal(Vec::<Association>::new());
     let (loading, set_loading) = create_signal(true);
     let (show_link_modal, set_show_link_modal) = create_signal(false);
+    let reload_trigger = create_rw_signal(0u32);
     
-    // Fetch associations on mount
+    // Fetch associations on mount and when reload_trigger changes
     let etype = entity_type.clone();
     let rid = record_id.clone();
     create_effect(move |_| {
         let etype = etype.clone();
         let rid = rid.clone();
+        let _ = reload_trigger.get(); // Subscribe to reload
         spawn_local(async move {
             set_loading.set(true);
             match fetch_associations(&etype, &rid).await {
@@ -442,6 +444,10 @@ fn RelatedTab(entity_type: String, record_id: String) -> impl IntoView {
             set_loading.set(false);
         });
     });
+    
+    // Entity type for linking
+    let source_entity = entity_type.clone();
+    let source_id = record_id.clone();
     
     view! {
         <div class="related-tab">
@@ -482,23 +488,182 @@ fn RelatedTab(entity_type: String, record_id: String) -> impl IntoView {
                 }
             })}
             
-            // Link Modal Placeholder
-            {move || show_link_modal.get().then(|| view! {
-                <div class="modal-overlay" on:click=move |_| set_show_link_modal.set(false)>
-                    <div class="modal" on:click=move |ev| ev.stop_propagation()>
-                        <h2>"Link Record"</h2>
-                        <p class="placeholder">"Record linking UI coming soon."</p>
-                        <p class="placeholder-hint">"Select entity type and search for records to link."</p>
-                        <div class="form-actions">
-                            <button class="btn" on:click=move |_| set_show_link_modal.set(false)>
-                                "Close"
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            // Link Modal
+            {move || show_link_modal.get().then(|| {
+                view! {
+                    <LinkRecordModal 
+                        source_entity=source_entity.clone()
+                        source_id=source_id.clone()
+                        set_show_modal=set_show_link_modal
+                        reload_trigger=reload_trigger
+                    />
+                }
             })}
         </div>
     }
+}
+
+/// Modal for linking records
+#[component]
+fn LinkRecordModal(
+    source_entity: String,
+    source_id: String,
+    set_show_modal: WriteSignal<bool>,
+    reload_trigger: RwSignal<u32>,
+) -> impl IntoView {
+    // Available entity types to link to
+    let linkable_entities = vec![
+        ("contact", "Contact"),
+        ("company", "Company"),
+        ("deal", "Deal"),
+    ];
+    
+    let (selected_entity, set_selected_entity) = create_signal(String::new());
+    let (search_results, set_search_results) = create_signal(Vec::<serde_json::Value>::new());
+    let (searching, set_searching) = create_signal(false);
+    let (linking, set_linking) = create_signal(false);
+    let (error, set_error) = create_signal(Option::<String>::None);
+    
+    // Search records when entity type changes
+    let handle_entity_change = move |ev: web_sys::Event| {
+        let target = event_target::<web_sys::HtmlSelectElement>(&ev);
+        let entity = target.value();
+        set_selected_entity.set(entity.clone());
+        set_search_results.set(vec![]);
+        
+        if entity.is_empty() { return; }
+        
+        spawn_local(async move {
+            set_searching.set(true);
+            match crate::api::fetch_entity_list(&entity).await {
+                Ok(response) => set_search_results.set(response.data),
+                Err(e) => set_error.set(Some(e)),
+            }
+            set_searching.set(false);
+        });
+    };
+    
+    // Link record
+    let src_entity = source_entity.clone();
+    let src_id = source_id.clone();
+    let link_record = move |target_id: String| {
+        let src_entity = src_entity.clone();
+        let src_id = src_id.clone();
+        let target_entity = selected_entity.get();
+        
+        spawn_local(async move {
+            set_linking.set(true);
+            
+            // Get association def for this entity pair
+            match crate::api::fetch_association_defs(&src_entity).await {
+                Ok(defs) => {
+                    // Find matching def
+                    if let Some(def) = defs.iter().find(|d| d.target_entity == target_entity) {
+                        match crate::api::create_association(&def.id, &src_id, &target_id).await {
+                            Ok(_) => {
+                                set_show_modal.set(false);
+                                reload_trigger.update(|n| *n += 1);
+                            }
+                            Err(e) => set_error.set(Some(e)),
+                        }
+                    } else {
+                        set_error.set(Some(format!("No association definition found for {} -> {}", src_entity, target_entity)));
+                    }
+                }
+                Err(e) => set_error.set(Some(e)),
+            }
+            
+            set_linking.set(false);
+        });
+    };
+    
+    view! {
+        <div class="modal-overlay" on:click=move |_| set_show_modal.set(false)>
+            <div class="modal link-modal" on:click=move |ev| ev.stop_propagation()>
+                <h2>"Link Record"</h2>
+                
+                {move || error.get().map(|e| view! {
+                    <div class="error-banner">{e}</div>
+                })}
+                
+                <div class="form-group">
+                    <label>"Select Entity Type"</label>
+                    <select class="form-input" on:change=handle_entity_change>
+                        <option value="">"-- Choose type --"</option>
+                        {linkable_entities.iter().map(|(value, label)| {
+                            view! { <option value=*value>{*label}</option> }
+                        }).collect_view()}
+                    </select>
+                </div>
+                
+                {move || searching.get().then(|| view! {
+                    <p class="loading">"Searching..."</p>
+                })}
+                
+                {move || {
+                    let results = search_results.get();
+                    (!results.is_empty() && !searching.get()).then(|| {
+                        view! {
+                            <div class="search-results">
+                                <label>"Select a record to link:"</label>
+                                <div class="results-list">
+                                    {results.into_iter().map(|record| {
+                                        let id = record.get("id")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or_default()
+                                            .to_string();
+                                        let display_name = get_record_display_name(&record);
+                                        let id_for_click = id.clone();
+                                        let link_fn = link_record.clone();
+                                        
+                                        view! {
+                                            <div class="result-item" on:click=move |_| link_fn(id_for_click.clone())>
+                                                <span class="record-name">{display_name}</span>
+                                                <span class="record-id">{id.clone()}</span>
+                                            </div>
+                                        }
+                                    }).collect_view()}
+                                </div>
+                            </div>
+                        }
+                    })
+                }}
+                
+                {move || linking.get().then(|| view! {
+                    <p class="linking">"Linking..."</p>
+                })}
+                
+                <div class="form-actions">
+                    <button 
+                        class="btn" 
+                        on:click=move |_| set_show_modal.set(false)
+                        disabled=move || linking.get()
+                    >
+                        "Cancel"
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+/// Get display name from a record
+fn get_record_display_name(record: &serde_json::Value) -> String {
+    // Try first_name + last_name
+    let first = record.get("first_name").and_then(|v| v.as_str()).unwrap_or("");
+    let last = record.get("last_name").and_then(|v| v.as_str()).unwrap_or("");
+    if !first.is_empty() || !last.is_empty() {
+        return format!("{} {}", first, last).trim().to_string();
+    }
+    // Try name
+    if let Some(name) = record.get("name").and_then(|v| v.as_str()) {
+        return name.to_string();
+    }
+    // Try title
+    if let Some(title) = record.get("title").and_then(|v| v.as_str()) {
+        return title.to_string();
+    }
+    "Unnamed".to_string()
 }
 
 /// Timeline tab - placeholder for Task 10
