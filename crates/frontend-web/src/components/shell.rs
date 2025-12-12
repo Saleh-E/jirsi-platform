@@ -47,8 +47,10 @@ pub fn Shell() -> impl IntoView {
                         <a href="/app/crm/entity/task" class="nav-item">"Tasks"</a>
                     </div>
                     <div class="nav-section">
-                        <span class="nav-section-title">"Properties"</span>
-                        <a href="/app/properties/entity/property" class="nav-item">"All Properties"</a>
+                        <span class="nav-section-title">"Real Estate"</span>
+                        <a href="/app/realestate/entity/property" class="nav-item">"🏠 Properties"</a>
+                        <a href="/app/realestate/entity/viewing" class="nav-item">"📅 Viewings"</a>
+                        <a href="/app/realestate/entity/offer" class="nav-item">"📝 Offers"</a>
                     </div>
                 </nav>
             </aside>
