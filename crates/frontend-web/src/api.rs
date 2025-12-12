@@ -422,3 +422,57 @@ pub async fn delete_association(association_id: &str) -> Result<serde_json::Valu
     let url = format!("{}/associations/{}?tenant_id={}", API_BASE, association_id, TENANT_ID);
     delete_request(&url).await
 }
+
+// ============================================================================
+// INTERACTIONS API FUNCTIONS (Activity Timeline)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Interaction {
+    pub id: String,
+    pub entity_type: String,
+    pub record_id: String,
+    pub interaction_type: String,
+    pub title: String,
+    pub content: Option<String>,
+    pub created_by: String,
+    pub occurred_at: String,
+    pub duration_minutes: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct InteractionListResponse {
+    pub data: Vec<Interaction>,
+    pub total: i64,
+}
+
+/// Fetch interactions (activity timeline) for a record
+pub async fn fetch_interactions(entity_type: &str, record_id: &str) -> Result<InteractionListResponse, String> {
+    let url = format!(
+        "{}/interactions?tenant_id={}&entity_type={}&record_id={}",
+        API_BASE, TENANT_ID, entity_type, record_id
+    );
+    fetch_json(&url).await
+}
+
+/// Create a new interaction (activity)
+pub async fn create_interaction(
+    entity_type: &str,
+    record_id: &str,
+    interaction_type: &str,
+    title: &str,
+    content: Option<&str>,
+    created_by: &str,
+) -> Result<serde_json::Value, String> {
+    let url = format!("{}/interactions?tenant_id={}", API_BASE, TENANT_ID);
+    let body = serde_json::json!({
+        "tenant_id": TENANT_ID,
+        "entity_type": entity_type,
+        "record_id": record_id,
+        "interaction_type": interaction_type,
+        "title": title,
+        "content": content,
+        "created_by": created_by
+    });
+    post_json(&url, &body).await
+}

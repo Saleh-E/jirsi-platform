@@ -7,7 +7,8 @@
 use leptos::*;
 use leptos_router::*;
 use crate::api::{
-    fetch_field_defs, fetch_entity, update_entity, fetch_associations, FieldDef, Association,
+    fetch_field_defs, fetch_entity, update_entity, fetch_associations, fetch_interactions,
+    FieldDef, Association, Interaction,
 };
 
 /// Tab options for the detail page
@@ -181,7 +182,7 @@ pub fn EntityDetailPage() -> impl IntoView {
                                 <RelatedTab entity_type=entity_type() record_id=record_id() />
                             }.into_view(),
                             DetailTab::Timeline => view! {
-                                <TimelineTab />
+                                <TimelineTab entity_type=entity_type() record_id=record_id() />
                             }.into_view(),
                         }}
                     </div>
@@ -666,13 +667,103 @@ fn get_record_display_name(record: &serde_json::Value) -> String {
     "Unnamed".to_string()
 }
 
-/// Timeline tab - placeholder for Task 10
+/// Timeline tab - displays interactions/activity timeline
 #[component]
-fn TimelineTab() -> impl IntoView {
+fn TimelineTab(entity_type: String, record_id: String) -> impl IntoView {
+    let (interactions, set_interactions) = create_signal(Vec::<Interaction>::new());
+    let (loading, set_loading) = create_signal(true);
+    let (show_add_modal, set_show_add_modal) = create_signal(false);
+    let reload_trigger = create_rw_signal(0u32);
+    
+    // Fetch interactions on mount
+    let etype = entity_type.clone();
+    let rid = record_id.clone();
+    create_effect(move |_| {
+        let etype = etype.clone();
+        let rid = rid.clone();
+        let _ = reload_trigger.get();
+        spawn_local(async move {
+            set_loading.set(true);
+            match fetch_interactions(&etype, &rid).await {
+                Ok(response) => set_interactions.set(response.data),
+                Err(e) => logging::log!("Failed to fetch interactions: {}", e),
+            }
+            set_loading.set(false);
+        });
+    });
+    
     view! {
         <div class="timeline-tab">
-            <p class="placeholder">"Activity timeline (interactions) will be displayed here."</p>
-            <p class="placeholder-hint">"Task 10: Show calls, emails, notes, etc."</p>
+            <div class="timeline-header">
+                <h3>"Activity Timeline"</h3>
+                <button class="btn btn-secondary" on:click=move |_| set_show_add_modal.set(true)>
+                    "+ Log Activity"
+                </button>
+            </div>
+            
+            {move || loading.get().then(|| view! {
+                <p class="loading">"Loading timeline..."</p>
+            })}
+            
+            {move || (!loading.get()).then(|| {
+                let items = interactions.get();
+                if items.is_empty() {
+                    view! {
+                        <div class="empty-state">
+                            <p>"No activities recorded yet."</p>
+                            <p class="hint">"Click '+ Log Activity' to record a call, email, meeting, or note."</p>
+                        </div>
+                    }.into_view()
+                } else {
+                    view! {
+                        <div class="timeline-list">
+                            {items.into_iter().map(|item| {
+                                let icon = match item.interaction_type.as_str() {
+                                    "call" => "📞",
+                                    "email" => "📧",
+                                    "meeting" => "🤝",
+                                    "note" => "📝",
+                                    _ => "📋",
+                                };
+                                view! {
+                                    <div class="timeline-item">
+                                        <span class="timeline-icon">{icon}</span>
+                                        <div class="timeline-content">
+                                            <div class="timeline-title">{item.title}</div>
+                                            {item.content.map(|c| view! {
+                                                <div class="timeline-description">{c}</div>
+                                            })}
+                                            <div class="timeline-meta">
+                                                <span class="timeline-type">{item.interaction_type}</span>
+                                                <span class="timeline-date">{item.occurred_at}</span>
+                                                {item.duration_minutes.map(|d| view! {
+                                                    <span class="timeline-duration">{format!("{} min", d)}</span>
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }).collect_view()}
+                        </div>
+                    }.into_view()
+                }
+            })}
+            
+            // Add Activity Modal Placeholder
+            {move || show_add_modal.get().then(|| view! {
+                <div class="modal-overlay" on:click=move |_| set_show_add_modal.set(false)>
+                    <div class="modal" on:click=move |ev| ev.stop_propagation()>
+                        <h2>"Log Activity"</h2>
+                        <p class="placeholder">"Activity logging form coming soon."</p>
+                        <p class="placeholder-hint">"Record calls, emails, meetings, and notes."</p>
+                        <div class="form-actions">
+                            <button class="btn" on:click=move |_| set_show_add_modal.set(false)>
+                                "Close"
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            })}
         </div>
     }
 }
