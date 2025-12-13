@@ -5,3 +5,4 @@ pub mod sidebar;
 pub mod field;
 pub mod table;
 pub mod form;
+pub mod kanban;
