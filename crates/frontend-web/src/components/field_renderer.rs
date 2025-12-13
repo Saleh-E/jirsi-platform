@@ -213,7 +213,7 @@ fn get_status_color(status: &str) -> &'static str {
     }
 }
 
-/// Inline editable field (future enhancement)
+/// Inline editable field - click to edit, supports all field types
 #[component]
 pub fn EditableFieldValue(
     field: FieldDef,
@@ -223,35 +223,220 @@ pub fn EditableFieldValue(
     let (editing, set_editing) = create_signal(false);
     let (current_value, set_current_value) = create_signal(value.clone());
     let field_type = field.field_type.clone();
+    let field_type_for_edit = field_type.clone();
     
     view! {
         <div 
             class="editable-field"
-            on:click=move |_| set_editing.set(true)
+            on:dblclick=move |_| set_editing.set(true)
         >
             {move || {
+                let ft = field_type_for_edit.clone();
                 if editing.get() {
-                    // Render input based on field type
-                    let val = current_value.get().as_str().unwrap_or("").to_string();
-                    let on_change_cloned = on_change.clone();
-                    view! {
-                        <input 
-                            type="text"
-                            value=val
-                            class="field-input"
-                            on:blur=move |ev| {
-                                set_editing.set(false);
-                                let new_val = event_target_value(&ev);
-                                let json_val = serde_json::Value::String(new_val);
-                                set_current_value.set(json_val.clone());
-                                on_change_cloned.call(json_val);
-                            }
-                        />
-                    }.into_view()
+                    render_edit_input(&ft, current_value.get(), set_editing, set_current_value, on_change.clone()).into_view()
                 } else {
-                    render_field_value(&field_type, &current_value.get(), false).into_view()
+                    view! {
+                        <div class="editable-field-view" title="Double-click to edit">
+                            {render_field_value(&field_type, &current_value.get(), false)}
+                        </div>
+                    }.into_view()
                 }
             }}
         </div>
     }
 }
+
+/// Render the appropriate input control for editing based on field type
+fn render_edit_input(
+    field_type: &str,
+    current_value: serde_json::Value,
+    set_editing: WriteSignal<bool>,
+    set_current_value: WriteSignal<serde_json::Value>,
+    on_change: Callback<serde_json::Value>,
+) -> impl IntoView {
+    match field_type {
+        // Boolean - render as checkbox
+        "boolean" => {
+            let checked = current_value.as_bool().unwrap_or(false);
+            view! {
+                <input 
+                    type="checkbox"
+                    checked=checked
+                    class="field-input-checkbox"
+                    on:change=move |ev| {
+                        let new_val = event_target_checked(&ev);
+                        let json_val = serde_json::Value::Bool(new_val);
+                        set_current_value.set(json_val.clone());
+                        on_change.call(json_val);
+                        set_editing.set(false);
+                    }
+                />
+            }.into_view()
+        }
+        
+        // Number/Money - render as number input
+        "number" | "money" | "integer" | "decimal" | "score" => {
+            let num = current_value.as_f64().unwrap_or(0.0);
+            view! {
+                <input 
+                    type="number"
+                    value=num.to_string()
+                    step="any"
+                    class="field-input-number"
+                    on:blur=move |ev| {
+                        set_editing.set(false);
+                        let new_val = event_target_value(&ev);
+                        if let Ok(n) = new_val.parse::<f64>() {
+                            let json_val = serde_json::json!(n);
+                            set_current_value.set(json_val.clone());
+                            on_change.call(json_val);
+                        }
+                    }
+                    on:keydown=move |ev| {
+                        if ev.key() == "Enter" || ev.key() == "Escape" {
+                            set_editing.set(false);
+                        }
+                    }
+                />
+            }.into_view()
+        }
+        
+        // Date - render as date input
+        "date" => {
+            let date_str = current_value.as_str().unwrap_or("").to_string();
+            view! {
+                <input 
+                    type="date"
+                    value=date_str
+                    class="field-input-date"
+                    on:blur=move |ev| {
+                        set_editing.set(false);
+                        let new_val = event_target_value(&ev);
+                        let json_val = serde_json::Value::String(new_val);
+                        set_current_value.set(json_val.clone());
+                        on_change.call(json_val);
+                    }
+                />
+            }.into_view()
+        }
+        
+        // DateTime - render as datetime-local input
+        "date_time" => {
+            let datetime_str = current_value.as_str().unwrap_or("").to_string();
+            view! {
+                <input 
+                    type="datetime-local"
+                    value=datetime_str
+                    class="field-input-datetime"
+                    on:blur=move |ev| {
+                        set_editing.set(false);
+                        let new_val = event_target_value(&ev);
+                        let json_val = serde_json::Value::String(new_val);
+                        set_current_value.set(json_val.clone());
+                        on_change.call(json_val);
+                    }
+                />
+            }.into_view()
+        }
+        
+        // TextArea - render as textarea for multiline
+        "text_area" | "rich_text" => {
+            let text = current_value.as_str().unwrap_or("").to_string();
+            view! {
+                <textarea 
+                    class="field-input-textarea"
+                    on:blur=move |ev| {
+                        set_editing.set(false);
+                        let new_val = event_target_value(&ev);
+                        let json_val = serde_json::Value::String(new_val);
+                        set_current_value.set(json_val.clone());
+                        on_change.call(json_val);
+                    }
+                >{text}</textarea>
+            }.into_view()
+        }
+        
+        // URL/Email/Phone - specialized text inputs
+        "url" => {
+            let val = current_value.as_str().unwrap_or("").to_string();
+            view! {
+                <input 
+                    type="url"
+                    value=val
+                    class="field-input-url"
+                    placeholder="https://..."
+                    on:blur=move |ev| {
+                        set_editing.set(false);
+                        let new_val = event_target_value(&ev);
+                        let json_val = serde_json::Value::String(new_val);
+                        set_current_value.set(json_val.clone());
+                        on_change.call(json_val);
+                    }
+                />
+            }.into_view()
+        }
+        
+        "email" => {
+            let val = current_value.as_str().unwrap_or("").to_string();
+            view! {
+                <input 
+                    type="email"
+                    value=val
+                    class="field-input-email"
+                    placeholder="email@example.com"
+                    on:blur=move |ev| {
+                        set_editing.set(false);
+                        let new_val = event_target_value(&ev);
+                        let json_val = serde_json::Value::String(new_val);
+                        set_current_value.set(json_val.clone());
+                        on_change.call(json_val);
+                    }
+                />
+            }.into_view()
+        }
+        
+        "phone" => {
+            let val = current_value.as_str().unwrap_or("").to_string();
+            view! {
+                <input 
+                    type="tel"
+                    value=val
+                    class="field-input-phone"
+                    placeholder="+1-555-000-0000"
+                    on:blur=move |ev| {
+                        set_editing.set(false);
+                        let new_val = event_target_value(&ev);
+                        let json_val = serde_json::Value::String(new_val);
+                        set_current_value.set(json_val.clone());
+                        on_change.call(json_val);
+                    }
+                />
+            }.into_view()
+        }
+        
+        // Default: Text input for all other types
+        _ => {
+            let val = current_value.as_str().unwrap_or("").to_string();
+            view! {
+                <input 
+                    type="text"
+                    value=val
+                    class="field-input-text"
+                    on:blur=move |ev| {
+                        set_editing.set(false);
+                        let new_val = event_target_value(&ev);
+                        let json_val = serde_json::Value::String(new_val);
+                        set_current_value.set(json_val.clone());
+                        on_change.call(json_val);
+                    }
+                    on:keydown=move |ev| {
+                        if ev.key() == "Enter" || ev.key() == "Escape" {
+                            set_editing.set(false);
+                        }
+                    }
+                />
+            }.into_view()
+        }
+    }
+}
+
