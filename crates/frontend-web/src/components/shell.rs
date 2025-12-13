@@ -49,6 +49,7 @@ pub fn Shell() -> impl IntoView {
                     <div class="nav-section">
                         <span class="nav-section-title">"Real Estate"</span>
                         <a href="/app/realestate/entity/property" class="nav-item">"🏠 Properties"</a>
+                        <a href="/app/realestate/entity/listing" class="nav-item">"📢 Listings"</a>
                         <a href="/app/realestate/entity/viewing" class="nav-item">"📅 Viewings"</a>
                         <a href="/app/realestate/entity/offer" class="nav-item">"📝 Offers"</a>
                     </div>

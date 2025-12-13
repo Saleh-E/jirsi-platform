@@ -66,6 +66,9 @@ async fn list_records(
         "company" => query_companies(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         "deal" => query_deals(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         "property" => query_properties(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
+        "listing" => query_listings(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
+        "viewing" => query_viewings(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
+        "offer" => query_offers(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         _ => (Vec::new(), 0),
     };
 
@@ -317,6 +320,136 @@ async fn query_properties(
             "bathrooms": row.try_get::<Option<i32>, _>("bathrooms").ok().flatten(),
             "price": row.try_get::<Option<f64>, _>("price").ok().flatten(),
             "rent_amount": row.try_get::<Option<f64>, _>("rent_amount").ok().flatten(),
+        })
+    }).collect();
+
+    Ok((data, total))
+}
+
+async fn query_listings(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    limit: i32,
+    offset: i32,
+    _search: Option<&str>,
+) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
+    use sqlx::Row;
+    
+    let count_row = sqlx::query("SELECT COUNT(*) as count FROM listings WHERE tenant_id = $1 AND deleted_at IS NULL")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let total: i64 = count_row.try_get("count").unwrap_or(0);
+
+    let rows = sqlx::query(
+        r#"SELECT id, property_id, channel, channel_name, listing_price, listing_currency,
+                  start_date, end_date, status, featured, created_at
+           FROM listings WHERE tenant_id = $1 AND deleted_at IS NULL
+           ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
+    )
+    .bind(tenant_id)
+    .bind(limit as i64)
+    .bind(offset as i64)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
+        serde_json::json!({
+            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
+            "property_id": row.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
+            "channel": row.try_get::<Option<String>, _>("channel").ok().flatten(),
+            "channel_name": row.try_get::<Option<String>, _>("channel_name").ok().flatten(),
+            "listing_price": row.try_get::<Option<f64>, _>("listing_price").ok().flatten(),
+            "status": row.try_get::<Option<String>, _>("status").ok().flatten(),
+            "featured": row.try_get::<Option<bool>, _>("featured").ok().flatten(),
+        })
+    }).collect();
+
+    Ok((data, total))
+}
+
+async fn query_viewings(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    limit: i32,
+    offset: i32,
+    _search: Option<&str>,
+) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
+    use sqlx::Row;
+    
+    let count_row = sqlx::query("SELECT COUNT(*) as count FROM viewings WHERE tenant_id = $1 AND deleted_at IS NULL")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let total: i64 = count_row.try_get("count").unwrap_or(0);
+
+    let rows = sqlx::query(
+        r#"SELECT id, property_id, contact_id, agent_id, scheduled_at, duration_minutes, 
+                  status, feedback, rating, created_at
+           FROM viewings WHERE tenant_id = $1 AND deleted_at IS NULL
+           ORDER BY scheduled_at DESC LIMIT $2 OFFSET $3"#
+    )
+    .bind(tenant_id)
+    .bind(limit as i64)
+    .bind(offset as i64)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
+        serde_json::json!({
+            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
+            "property_id": row.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
+            "contact_id": row.try_get::<Option<Uuid>, _>("contact_id").ok().flatten(),
+            "scheduled_at": row.try_get::<Option<chrono::DateTime<chrono::Utc>>, _>("scheduled_at").ok().flatten(),
+            "status": row.try_get::<Option<String>, _>("status").ok().flatten(),
+            "duration_minutes": row.try_get::<Option<i32>, _>("duration_minutes").ok().flatten(),
+        })
+    }).collect();
+
+    Ok((data, total))
+}
+
+async fn query_offers(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    limit: i32,
+    offset: i32,
+    _search: Option<&str>,
+) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
+    use sqlx::Row;
+    
+    let count_row = sqlx::query("SELECT COUNT(*) as count FROM offers WHERE tenant_id = $1 AND deleted_at IS NULL")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let total: i64 = count_row.try_get("count").unwrap_or(0);
+
+    let rows = sqlx::query(
+        r#"SELECT id, property_id, contact_id, offer_amount, currency, status, 
+                  submitted_at, expires_at, created_at
+           FROM offers WHERE tenant_id = $1 AND deleted_at IS NULL
+           ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
+    )
+    .bind(tenant_id)
+    .bind(limit as i64)
+    .bind(offset as i64)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
+        serde_json::json!({
+            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
+            "property_id": row.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
+            "contact_id": row.try_get::<Option<Uuid>, _>("contact_id").ok().flatten(),
+            "offer_amount": row.try_get::<Option<f64>, _>("offer_amount").ok().flatten(),
+            "currency": row.try_get::<Option<String>, _>("currency").ok().flatten(),
+            "status": row.try_get::<Option<String>, _>("status").ok().flatten(),
         })
     }).collect();
 
@@ -614,6 +747,9 @@ async fn delete_record(
         "company" => "companies",
         "deal" => "deals",
         "property" => "properties",
+        "listing" => "listings",
+        "viewing" => "viewings",
+        "offer" => "offers",
         _ => return Err(ApiError::NotFound(format!("Entity type {} not found", entity_type))),
     };
 
