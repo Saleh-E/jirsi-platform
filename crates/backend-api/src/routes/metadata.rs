@@ -2,7 +2,7 @@
 
 use axum::{
     Router,
-    routing::get,
+    routing::{get, post},
     extract::{State, Path, Query},
     Json,
 };
@@ -21,6 +21,7 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/entities/:name", get(get_entity))
         .route("/entities/:name/fields", get(get_fields))
         .route("/entities/:name/views", get(get_views))
+        .route("/entities/:name/views", post(create_view))
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,3 +88,62 @@ async fn get_views(
         .await?;
     Ok(Json(views))
 }
+
+/// Request body for creating a personal view
+#[derive(Debug, Deserialize)]
+pub struct CreateViewRequest {
+    pub name: String,
+    pub label: String,
+    pub view_type: String,
+    pub columns: Option<Vec<String>>,
+    pub filters: Option<serde_json::Value>,
+    pub sort: Option<serde_json::Value>,
+    pub group_by: Option<String>,
+    pub settings: Option<serde_json::Value>,
+}
+
+/// Create a personal view for the current user
+async fn create_view(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Query(query): Query<TenantQuery>,
+    Json(payload): Json<CreateViewRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    // Get entity type
+    let entity = state.metadata
+        .get_entity_type(query.tenant_id, &name)
+        .await?;
+    
+    let view_id = uuid::Uuid::new_v4();
+    let now = chrono::Utc::now();
+    
+    // Insert view into database
+    sqlx::query(
+        r#"INSERT INTO view_defs 
+           (id, tenant_id, entity_type_id, name, label, view_type, is_default, is_system, 
+            columns, filters, sort, settings, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, false, false, $7, $8, $9, $10, $11, $12)"#
+    )
+    .bind(view_id)
+    .bind(query.tenant_id)
+    .bind(entity.id)
+    .bind(&payload.name)
+    .bind(&payload.label)
+    .bind(&payload.view_type)
+    .bind(serde_json::to_value(payload.columns.unwrap_or_default()).unwrap())
+    .bind(payload.filters.unwrap_or_else(|| serde_json::json!([])))
+    .bind(payload.sort.unwrap_or_else(|| serde_json::json!([])))
+    .bind(payload.settings.unwrap_or_else(|| serde_json::json!({})))
+    .bind(now)
+    .bind(now)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    
+    Ok(Json(serde_json::json!({
+        "id": view_id,
+        "name": payload.name,
+        "created": true
+    })))
+}
+

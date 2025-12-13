@@ -309,6 +309,9 @@ fn view_def_from_row(row: &sqlx::postgres::PgRow) -> Result<ViewDef, MetadataErr
         is_default: row.try_get("is_default")?,
         is_system: row.try_get("is_system")?,
         created_by: row.try_get("created_by")?,
+        owner_id: row.try_get("created_by").ok(), // Use created_by as owner
+        is_favorite: false, // Default to not favorite
+        group_by: None, // Will read from settings if needed
         columns: serde_json::from_value(columns).unwrap_or_default(),
         filters: serde_json::from_value(filters).unwrap_or_default(),
         sort: serde_json::from_value(sort).unwrap_or_default(),

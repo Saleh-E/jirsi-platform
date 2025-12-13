@@ -45,6 +45,7 @@ impl Default for SortDirection {
 }
 
 /// View definition - how to display an entity list
+/// The Golden Rule: Views are metadata-driven configurations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViewDef {
     pub id: Uuid,
@@ -63,6 +64,12 @@ pub struct ViewDef {
     pub is_system: bool,
     /// Creator user ID (None for system views)
     pub created_by: Option<Uuid>,
+    /// Owner for personal views (None = global/system)
+    pub owner_id: Option<Uuid>,
+    /// User favorite flag
+    pub is_favorite: bool,
+    /// Field to group by (for Kanban views)
+    pub group_by: Option<String>,
     /// Column configuration
     pub columns: Vec<ViewColumn>,
     /// Default filters
@@ -165,6 +172,9 @@ impl ViewDef {
             is_default: false,
             is_system: false,
             created_by: None,
+            owner_id: None,
+            is_favorite: false,
+            group_by: None,
             columns: Vec::new(),
             filters: Vec::new(),
             sort: Vec::new(),
@@ -174,7 +184,7 @@ impl ViewDef {
         }
     }
 
-    pub fn kanban(tenant_id: Uuid, entity_type_id: Uuid, name: &str, label: &str) -> Self {
+    pub fn kanban(tenant_id: Uuid, entity_type_id: Uuid, name: &str, label: &str, group_by_field: &str) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
@@ -186,6 +196,33 @@ impl ViewDef {
             is_default: false,
             is_system: false,
             created_by: None,
+            owner_id: None,
+            is_favorite: false,
+            group_by: Some(group_by_field.to_string()),
+            columns: Vec::new(),
+            filters: Vec::new(),
+            sort: Vec::new(),
+            settings: serde_json::json!({}),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    pub fn map(tenant_id: Uuid, entity_type_id: Uuid, name: &str, label: &str) -> Self {
+        let now = Utc::now();
+        Self {
+            id: Uuid::new_v4(),
+            tenant_id,
+            entity_type_id,
+            name: name.to_string(),
+            label: label.to_string(),
+            view_type: ViewType::Map,
+            is_default: false,
+            is_system: false,
+            created_by: None,
+            owner_id: None,
+            is_favorite: false,
+            group_by: None,
             columns: Vec::new(),
             filters: Vec::new(),
             sort: Vec::new(),
@@ -209,4 +246,15 @@ impl ViewDef {
         self.columns = columns;
         self
     }
+    
+    pub fn with_group_by(mut self, field: &str) -> Self {
+        self.group_by = Some(field.to_string());
+        self
+    }
+    
+    pub fn owned_by(mut self, user_id: Uuid) -> Self {
+        self.owner_id = Some(user_id);
+        self
+    }
 }
+

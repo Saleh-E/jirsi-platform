@@ -1,57 +1,89 @@
 //! FieldDef model - Single source of truth for all field definitions
+//! 
+//! The Golden Rule: A field is defined once in FieldDef and reused everywhere.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// All supported field types in the system
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+/// Uses tagged serde format for type-specific configuration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "config")]
 pub enum FieldType {
+    // ==================
+    // Basic Types
+    // ==================
+    
     /// Single line text
     Text,
     /// Multi-line text
     TextArea,
-    /// Rich text with formatting
+    /// Rich text with HTML formatting
     RichText,
-    /// Integer number
-    Integer,
-    /// Decimal number
-    Decimal,
-    /// Currency amount (stored as cents)
-    Money,
-    /// Date only
+    /// Numeric value with configurable decimals
+    Number { decimals: Option<u8> },
+    /// Currency amount with currency code
+    Money { currency_code: Option<String> },
+    /// True/false boolean
+    Boolean,
+    /// Date only (no time)
     Date,
     /// Date and time
     DateTime,
-    /// True/false
-    Boolean,
-    /// Single select from options
-    Select,
+    
+    // ==================
+    // Selection Types
+    // ==================
+    
+    /// Single select from dropdown options
+    Select { options: Vec<String> },
     /// Multiple select from options
-    MultiSelect,
-    /// Link to another entity (foreign key)
-    Link,
+    MultiSelect { options: Vec<String> },
+    
+    // ==================
+    // Relational Types
+    // ==================
+    
+    /// Link to another entity (foreign key reference)
+    Link { target_entity: String },
     /// Multiple links to entities
-    MultiLink,
-    /// List of tags (free-form strings)
+    MultiLink { target_entity: String },
+    /// List of tags (free-form string chips)
     TagList,
-    /// File/document attachment
+    
+    // ==================
+    // Advanced Types
+    // ==================
+    
+    /// Image URL
+    Image,
+    /// File/document attachment (URL + metadata)
     Attachment,
     /// Multiple attachments
     MultiAttachment,
-    /// Email address
+    /// Email address with validation
     Email,
     /// Phone number
     Phone,
-    /// URL
+    /// URL with validation
     Url,
-    /// Numeric score (e.g., lead score, rating)
-    Score,
-    /// Calculated field (formula-based)
-    Calculated,
-    /// JSON data
+    /// Numeric score (e.g., lead score 1-100)
+    Score { max_value: Option<i32> },
+    /// JSON data (arbitrary structure)
     Json,
+    
+    // ==================
+    // Computed Types
+    // ==================
+    
+    /// Calculated field from formula
+    Calculated { formula: String },
+    /// Rollup from related records
+    Rollup { 
+        target_field: String, 
+        operation: String,  // sum, count, avg, min, max
+    },
 }
 
 impl Default for FieldType {

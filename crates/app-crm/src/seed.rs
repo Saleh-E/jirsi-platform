@@ -1,6 +1,7 @@
 //! CRM metadata seeding
 //!
 //! Seeds the EntityTypes, FieldDefs, and ViewDefs for CRM entities.
+//! Updated for Golden Rule: FieldType uses tagged serde format with config.
 
 use core_models::{
     AppDef, EntityType, FieldDef, FieldType, FieldOptions,
@@ -36,7 +37,7 @@ pub fn seed_crm_metadata(tenant_id: Uuid) -> CrmMetadata {
 
     let contact_entity_id = contact_entity.id;
 
-    // Contact Fields
+    // Contact Fields - using new FieldType tagged format
     let contact_fields = vec![
         FieldDef::new(tenant_id, contact_entity_id, "first_name", "First Name", FieldType::Text)
             .required().in_list().searchable().order(1),
@@ -46,14 +47,17 @@ pub fn seed_crm_metadata(tenant_id: Uuid) -> CrmMetadata {
             .in_list().searchable().order(3),
         FieldDef::new(tenant_id, contact_entity_id, "phone", "Phone", FieldType::Phone)
             .order(4),
-        FieldDef::new(tenant_id, contact_entity_id, "company_id", "Company", FieldType::Link)
+        FieldDef::new(tenant_id, contact_entity_id, "company_id", "Company", 
+            FieldType::Link { target_entity: "company".to_string() })
             .in_list().order(5),
         FieldDef::new(tenant_id, contact_entity_id, "job_title", "Job Title", FieldType::Text)
             .order(6),
         lifecycle_stage_field(tenant_id, contact_entity_id),
-        FieldDef::new(tenant_id, contact_entity_id, "lead_source", "Lead Source", FieldType::Select)
+        FieldDef::new(tenant_id, contact_entity_id, "lead_source", "Lead Source", 
+            FieldType::Select { options: vec!["Web".to_string(), "Referral".to_string(), "Event".to_string(), "Cold Call".to_string()] })
             .filterable().order(8),
-        FieldDef::new(tenant_id, contact_entity_id, "owner_id", "Owner", FieldType::Link)
+        FieldDef::new(tenant_id, contact_entity_id, "owner_id", "Owner", 
+            FieldType::Link { target_entity: "user".to_string() })
             .filterable().order(9),
         FieldDef::new(tenant_id, contact_entity_id, "tags", "Tags", FieldType::TagList)
             .order(10),
@@ -85,9 +89,11 @@ pub fn seed_crm_metadata(tenant_id: Uuid) -> CrmMetadata {
             .required().in_list().searchable().order(1),
         FieldDef::new(tenant_id, company_entity_id, "domain", "Domain", FieldType::Url)
             .in_list().order(2),
-        FieldDef::new(tenant_id, company_entity_id, "industry", "Industry", FieldType::Select)
+        FieldDef::new(tenant_id, company_entity_id, "industry", "Industry", 
+            FieldType::Select { options: vec!["Technology".to_string(), "Finance".to_string(), "Healthcare".to_string(), "Retail".to_string(), "Other".to_string()] })
             .filterable().order(3),
-        FieldDef::new(tenant_id, company_entity_id, "size", "Company Size", FieldType::Select)
+        FieldDef::new(tenant_id, company_entity_id, "size", "Company Size", 
+            FieldType::Select { options: vec!["1-10".to_string(), "11-50".to_string(), "51-200".to_string(), "201-500".to_string(), "500+".to_string()] })
             .filterable().order(4),
         FieldDef::new(tenant_id, company_entity_id, "phone", "Phone", FieldType::Phone)
             .order(5),
@@ -99,7 +105,8 @@ pub fn seed_crm_metadata(tenant_id: Uuid) -> CrmMetadata {
             .group("location").order(8),
         FieldDef::new(tenant_id, company_entity_id, "country", "Country", FieldType::Text)
             .group("location").order(9),
-        FieldDef::new(tenant_id, company_entity_id, "owner_id", "Owner", FieldType::Link)
+        FieldDef::new(tenant_id, company_entity_id, "owner_id", "Owner", 
+            FieldType::Link { target_entity: "user".to_string() })
             .filterable().order(10),
         FieldDef::new(tenant_id, company_entity_id, "tags", "Tags", FieldType::TagList)
             .order(11),
@@ -122,19 +129,25 @@ pub fn seed_crm_metadata(tenant_id: Uuid) -> CrmMetadata {
     let deal_fields = vec![
         FieldDef::new(tenant_id, deal_entity_id, "name", "Deal Name", FieldType::Text)
             .required().in_list().searchable().order(1),
-        FieldDef::new(tenant_id, deal_entity_id, "amount", "Amount", FieldType::Money)
+        FieldDef::new(tenant_id, deal_entity_id, "amount", "Amount", 
+            FieldType::Money { currency_code: Some("USD".to_string()) })
             .in_list().sortable().order(2),
-        FieldDef::new(tenant_id, deal_entity_id, "stage", "Stage", FieldType::Select)
+        FieldDef::new(tenant_id, deal_entity_id, "stage", "Stage", 
+            FieldType::Select { options: vec!["New".to_string(), "Contacted".to_string(), "Qualified".to_string(), "Proposal".to_string(), "Negotiation".to_string(), "Won".to_string(), "Lost".to_string()] })
             .required().in_list().filterable().order(3),
-        FieldDef::new(tenant_id, deal_entity_id, "probability", "Probability (%)", FieldType::Integer)
+        FieldDef::new(tenant_id, deal_entity_id, "probability", "Probability (%)", 
+            FieldType::Number { decimals: Some(0) })
             .order(4),
         FieldDef::new(tenant_id, deal_entity_id, "expected_close_date", "Expected Close", FieldType::Date)
             .in_list().sortable().order(5),
-        FieldDef::new(tenant_id, deal_entity_id, "contact_id", "Contact", FieldType::Link)
+        FieldDef::new(tenant_id, deal_entity_id, "contact_id", "Contact", 
+            FieldType::Link { target_entity: "contact".to_string() })
             .in_list().order(6),
-        FieldDef::new(tenant_id, deal_entity_id, "company_id", "Company", FieldType::Link)
+        FieldDef::new(tenant_id, deal_entity_id, "company_id", "Company", 
+            FieldType::Link { target_entity: "company".to_string() })
             .order(7),
-        FieldDef::new(tenant_id, deal_entity_id, "owner_id", "Owner", FieldType::Link)
+        FieldDef::new(tenant_id, deal_entity_id, "owner_id", "Owner", 
+            FieldType::Link { target_entity: "user".to_string() })
             .filterable().order(8),
         FieldDef::new(tenant_id, deal_entity_id, "lost_reason", "Lost Reason", FieldType::Text)
             .order(9),
@@ -146,7 +159,8 @@ pub fn seed_crm_metadata(tenant_id: Uuid) -> CrmMetadata {
         .as_default()
         .as_system();
 
-    let deal_kanban_view = ViewDef::kanban(tenant_id, deal_entity_id, "pipeline", "Pipeline")
+    // ViewDef::kanban now requires group_by_field parameter
+    let deal_kanban_view = ViewDef::kanban(tenant_id, deal_entity_id, "pipeline", "Pipeline", "stage")
         .as_system();
 
     // Task EntityType
@@ -163,13 +177,17 @@ pub fn seed_crm_metadata(tenant_id: Uuid) -> CrmMetadata {
             .order(2),
         FieldDef::new(tenant_id, task_entity_id, "due_date", "Due Date", FieldType::DateTime)
             .in_list().sortable().order(3),
-        FieldDef::new(tenant_id, task_entity_id, "priority", "Priority", FieldType::Select)
+        FieldDef::new(tenant_id, task_entity_id, "priority", "Priority", 
+            FieldType::Select { options: vec!["Low".to_string(), "Medium".to_string(), "High".to_string(), "Urgent".to_string()] })
             .in_list().filterable().order(4),
-        FieldDef::new(tenant_id, task_entity_id, "status", "Status", FieldType::Select)
+        FieldDef::new(tenant_id, task_entity_id, "status", "Status", 
+            FieldType::Select { options: vec!["Open".to_string(), "In Progress".to_string(), "Completed".to_string(), "Cancelled".to_string()] })
             .in_list().filterable().order(5),
-        FieldDef::new(tenant_id, task_entity_id, "task_type", "Type", FieldType::Select)
+        FieldDef::new(tenant_id, task_entity_id, "task_type", "Type", 
+            FieldType::Select { options: vec!["Call".to_string(), "Email".to_string(), "Meeting".to_string(), "Follow Up".to_string(), "Other".to_string()] })
             .filterable().order(6),
-        FieldDef::new(tenant_id, task_entity_id, "assignee_id", "Assignee", FieldType::Link)
+        FieldDef::new(tenant_id, task_entity_id, "assignee_id", "Assignee", 
+            FieldType::Link { target_entity: "user".to_string() })
             .in_list().filterable().order(7),
     ];
 
@@ -194,12 +212,23 @@ fn lifecycle_stage_field(tenant_id: Uuid, entity_type_id: Uuid) -> FieldDef {
         entity_type_id,
         "lifecycle_stage",
         "Lifecycle Stage",
-        FieldType::Select,
+        FieldType::Select { 
+            options: vec![
+                "Subscriber".to_string(), 
+                "Lead".to_string(), 
+                "MQL".to_string(), 
+                "SQL".to_string(), 
+                "Opportunity".to_string(), 
+                "Customer".to_string(), 
+                "Evangelist".to_string()
+            ] 
+        },
     )
     .in_list()
     .filterable()
     .order(7);
 
+    // Additional options with colors/icons via FieldOptions
     field.options = Some(FieldOptions {
         choices: Some(vec![
             SelectChoice { value: "subscriber".to_string(), label: "Subscriber".to_string(), color: Some("#6b7280".to_string()), icon: None, is_default: false, sort_order: 1 },
