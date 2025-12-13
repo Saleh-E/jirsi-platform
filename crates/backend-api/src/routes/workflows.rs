@@ -96,8 +96,8 @@ async fn find_matching_workflows(
     old_values: &Option<Value>,
     new_values: &Value,
 ) -> Result<Vec<WorkflowDef>, String> {
-    let rows = sqlx::query_as!(
-        WorkflowDef,
+    // Use runtime query instead of compile-time query_as! macro
+    let rows: Vec<(Uuid, Uuid, String, String, String, Value, Value, Value)> = sqlx::query_as(
         r#"
         SELECT 
             id, tenant_id, name, 
@@ -108,17 +108,30 @@ async fn find_matching_workflows(
           AND trigger_type = $2 
           AND trigger_entity = $3
           AND is_active = true
-        "#,
-        tenant_id,
-        trigger_type,
-        entity_type
+        "#
     )
+    .bind(tenant_id)
+    .bind(trigger_type)
+    .bind(entity_type)
     .fetch_all(pool)
     .await
     .map_err(|e| format!("Failed to fetch workflows: {}", e))?;
     
+    let workflows: Vec<WorkflowDef> = rows.into_iter().map(|row| {
+        WorkflowDef {
+            id: row.0,
+            tenant_id: row.1,
+            name: row.2,
+            trigger_type: row.3,
+            trigger_entity: row.4,
+            trigger_config: row.5,
+            conditions: row.6,
+            actions: row.7,
+        }
+    }).collect();
+    
     // Filter by specific trigger conditions
-    let matching: Vec<WorkflowDef> = rows.into_iter()
+    let matching: Vec<WorkflowDef> = workflows.into_iter()
         .filter(|wf| check_trigger_condition(wf, old_values, new_values))
         .collect();
     

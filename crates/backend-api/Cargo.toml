@@ -8,6 +8,9 @@ edition.workspace = true
 name = "server"
 path = "src/main.rs"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 core-models = { path = "../core-models" }
 core-metadata = { path = "../core-metadata" }
@@ -31,3 +34,7 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+regex = "1.10"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
