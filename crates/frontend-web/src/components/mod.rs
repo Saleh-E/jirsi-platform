@@ -7,3 +7,4 @@ pub mod table;
 pub mod form;
 pub mod kanban;
 pub mod calendar;
+pub mod map;

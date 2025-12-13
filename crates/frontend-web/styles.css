@@ -734,3 +734,108 @@ tr:hover {
 .calendar-error {
     color: var(--error);
 }
+
+/* Map View */
+.map-container {
+    padding: 1rem;
+    height: calc(100vh - 120px);
+}
+
+.map-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    grid-template-rows: auto 1fr;
+    gap: 1rem;
+    height: 100%;
+}
+
+.map-header {
+    grid-column: 1 / -1;
+    padding: 0.75rem 1rem;
+    background: var(--bg-content);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.marker-count {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.map-placeholder {
+    border-radius: 8px;
+    min-height: 400px;
+    border: 1px solid var(--border);
+}
+
+.map-sidebar {
+    background: var(--bg-content);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.marker-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.marker-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 0.25rem;
+}
+
+.marker-item:hover {
+    background: var(--bg-sidebar);
+}
+
+.marker-item.selected {
+    background: var(--primary);
+}
+
+.marker-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.marker-title {
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-loading,
+.map-error {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.map-error {
+    color: var(--error);
+}
