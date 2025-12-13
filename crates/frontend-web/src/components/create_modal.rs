@@ -1,0 +1,238 @@
+//! Generic Create Modal - Metadata-driven form in a modal for creating new records
+
+use leptos::*;
+use serde::{Deserialize, Serialize};
+use crate::api::{fetch_field_defs, post_json, FieldDef, API_BASE, TENANT_ID};
+
+#[component]
+pub fn CreateModal(
+    entity_type: String,
+    entity_label: String,
+    #[prop(into)] on_close: Callback<()>,
+    #[prop(into)] on_created: Callback<String>,
+) -> impl IntoView {
+    let entity_type_stored = store_value(entity_type.clone());
+    let entity_label_stored = store_value(entity_label.clone());
+    
+    // State
+    let (fields, set_fields) = create_signal::<Vec<FieldDef>>(Vec::new());
+    let (form_data, set_form_data) = create_signal::<std::collections::HashMap<String, String>>(std::collections::HashMap::new());
+    let (loading, set_loading) = create_signal(true);
+    let (saving, set_saving) = create_signal(false);
+    let (error, set_error) = create_signal::<Option<String>>(None);
+    
+    // Fetch field definitions
+    let entity_for_effect = entity_type.clone();
+    create_effect(move |_| {
+        let et = entity_for_effect.clone();
+        
+        spawn_local(async move {
+            set_loading.set(true);
+            
+            match fetch_field_defs(&et).await {
+                Ok(field_defs) => {
+                    set_fields.set(field_defs);
+                    set_loading.set(false);
+                }
+                Err(e) => {
+                    set_error.set(Some(e));
+                    set_loading.set(false);
+                }
+            }
+        });
+    });
+    
+    // Handle form submit
+    let handle_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        
+        let et = entity_type_stored.get_value();
+        let data = form_data.get();
+        
+        set_saving.set(true);
+        set_error.set(None);
+        
+        spawn_local(async move {
+            // Convert form data to JSON
+            let mut json_data = serde_json::Map::new();
+            for (key, value) in data.iter() {
+                if !value.is_empty() {
+                    json_data.insert(key.clone(), serde_json::json!(value));
+                }
+            }
+            
+            let url = format!("{}/entities/{}?tenant_id={}", API_BASE, et, TENANT_ID);
+            
+            match post_json::<serde_json::Value>(&url, &serde_json::Value::Object(json_data)).await {
+                Ok(response) => {
+                    if let Some(id) = response.get("id").and_then(|v| v.as_str()) {
+                        on_created.call(id.to_string());
+                    }
+                    set_saving.set(false);
+                }
+                Err(e) => {
+                    set_error.set(Some(e));
+                    set_saving.set(false);
+                }
+            }
+        });
+    };
+    
+    // Handle field change
+    let update_field = move |name: String, value: String| {
+        set_form_data.update(|d| {
+            d.insert(name, value);
+        });
+    };
+    
+    view! {
+        <div class="modal-overlay" on:click=move |_| on_close.call(())>
+            <div class="modal-container" on:click=move |ev| ev.stop_propagation()>
+                <div class="modal-header">
+                    <h2 class="modal-title">{format!("Create {}", entity_label_stored.get_value())}</h2>
+                    <button class="modal-close" on:click=move |_| on_close.call(())>"×"</button>
+                </div>
+                
+                {move || {
+                    if loading.get() {
+                        view! { <div class="modal-loading">"Loading form..."</div> }.into_view()
+                    } else {
+                        view! {
+                            <form class="modal-form" on:submit=handle_submit>
+                                {move || error.get().map(|e| view! { <div class="form-error">{e}</div> })}
+                                
+                                <div class="form-fields">
+                                    <For
+                                        each=move || fields.get().into_iter().filter(|f| !f.is_readonly)
+                                        key=|f| f.name.clone()
+                                        children=move |field| {
+                                            let field_name = field.name.clone();
+                                            let field_name_change = field.name.clone();
+                                            let field_label = field.label.clone();
+                                            let field_type = field.field_type.clone();
+                                            let is_required = field.is_required;
+                                            let placeholder = field.placeholder.clone().unwrap_or_default();
+                                            
+                                            view! {
+                                                <div class="form-field">
+                                                    <label class="field-label">
+                                                        {field_label}
+                                                        {if is_required { " *" } else { "" }}
+                                                    </label>
+                                                    {match field_type.as_str() {
+                                                        "textarea" | "longtext" => view! {
+                                                            <textarea
+                                                                class="field-input"
+                                                                placeholder=placeholder
+                                                                required=is_required
+                                                                on:input=move |ev| {
+                                                                    update_field(field_name_change.clone(), event_target_value(&ev));
+                                                                }
+                                                            ></textarea>
+                                                        }.into_view(),
+                                                        "select" => view! {
+                                                            <select
+                                                                class="field-input"
+                                                                required=is_required
+                                                                on:change=move |ev| {
+                                                                    update_field(field_name_change.clone(), event_target_value(&ev));
+                                                                }
+                                                            >
+                                                                <option value="">{"-- Select --"}</option>
+                                                                // Options would come from field.options
+                                                            </select>
+                                                        }.into_view(),
+                                                        "boolean" => view! {
+                                                            <input
+                                                                type="checkbox"
+                                                                class="field-checkbox"
+                                                                on:change=move |ev| {
+                                                                    let checked = event_target_checked(&ev);
+                                                                    update_field(field_name_change.clone(), checked.to_string());
+                                                                }
+                                                            />
+                                                        }.into_view(),
+                                                        "date" => view! {
+                                                            <input
+                                                                type="date"
+                                                                class="field-input"
+                                                                required=is_required
+                                                                on:input=move |ev| {
+                                                                    update_field(field_name_change.clone(), event_target_value(&ev));
+                                                                }
+                                                            />
+                                                        }.into_view(),
+                                                        "datetime" => view! {
+                                                            <input
+                                                                type="datetime-local"
+                                                                class="field-input"
+                                                                required=is_required
+                                                                on:input=move |ev| {
+                                                                    update_field(field_name_change.clone(), event_target_value(&ev));
+                                                                }
+                                                            />
+                                                        }.into_view(),
+                                                        "number" | "integer" | "currency" => view! {
+                                                            <input
+                                                                type="number"
+                                                                class="field-input"
+                                                                placeholder=placeholder
+                                                                required=is_required
+                                                                on:input=move |ev| {
+                                                                    update_field(field_name_change.clone(), event_target_value(&ev));
+                                                                }
+                                                            />
+                                                        }.into_view(),
+                                                        "email" => view! {
+                                                            <input
+                                                                type="email"
+                                                                class="field-input"
+                                                                placeholder=placeholder
+                                                                required=is_required
+                                                                on:input=move |ev| {
+                                                                    update_field(field_name_change.clone(), event_target_value(&ev));
+                                                                }
+                                                            />
+                                                        }.into_view(),
+                                                        _ => view! {
+                                                            <input
+                                                                type="text"
+                                                                class="field-input"
+                                                                placeholder=placeholder
+                                                                required=is_required
+                                                                on:input=move |ev| {
+                                                                    update_field(field_name_change.clone(), event_target_value(&ev));
+                                                                }
+                                                            />
+                                                        }.into_view(),
+                                                    }}
+                                                </div>
+                                            }
+                                        }
+                                    />
+                                </div>
+                                
+                                <div class="modal-footer">
+                                    <button 
+                                        type="button" 
+                                        class="btn btn-secondary"
+                                        on:click=move |_| on_close.call(())
+                                    >
+                                        "Cancel"
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        class="btn btn-primary"
+                                        disabled=move || saving.get()
+                                    >
+                                        {move || if saving.get() { "Saving..." } else { "Create" }}
+                                    </button>
+                                </div>
+                            </form>
+                        }.into_view()
+                    }
+                }}
+            </div>
+        </div>
+    }
+}

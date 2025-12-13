@@ -8,3 +8,5 @@ pub mod form;
 pub mod kanban;
 pub mod calendar;
 pub mod map;
+pub mod view_switcher;
+pub mod create_modal;
