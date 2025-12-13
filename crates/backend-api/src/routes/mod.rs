@@ -13,6 +13,7 @@ pub mod interactions;
 pub mod tasks;
 pub mod views;
 pub mod properties;
+pub mod workflows;
 
 /// Build all API routes
 pub fn api_routes() -> Router<Arc<AppState>> {
