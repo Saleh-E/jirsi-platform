@@ -6,11 +6,11 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
+use sqlx::{Row, postgres::PgRow};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::{error::ApiError, AppState};
+use crate::{error::ApiError, state::AppState};
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
@@ -44,14 +44,14 @@ async fn list_properties(
     State(state): State<Arc<AppState>>,
     Query(query): Query<PropertyQuery>,
 ) -> Result<Json<PropertyListResponse>, ApiError> {
-    let count_row = sqlx::query("SELECT COUNT(*) as count FROM properties WHERE tenant_id = $1 AND deleted_at IS NULL")
+    let count_row: PgRow = sqlx::query("SELECT COUNT(*) as count FROM properties WHERE tenant_id = $1 AND deleted_at IS NULL")
         .bind(query.tenant_id)
         .fetch_one(&state.pool)
         .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+        .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
     let total: i64 = count_row.try_get("count").unwrap_or(0);
 
-    let rows = sqlx::query(
+    let rows: Vec<PgRow> = sqlx::query(
         r#"
         SELECT id, reference, title, property_type, status, address, city, country, 
                price, currency, bedrooms, bathrooms, area_sqm, created_at
@@ -66,9 +66,9 @@ async fn list_properties(
     .bind(query.offset as i64)
     .fetch_all(&state.pool)
     .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
 
-    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
+    let data: Vec<serde_json::Value> = rows.iter().map(|row: &PgRow| {
         serde_json::json!({
             "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
             "reference": row.try_get::<String, _>("reference").unwrap_or_default(),
@@ -134,7 +134,7 @@ async fn create_property(
     .bind(now)
     .execute(&state.pool)
     .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "id": id, "created": true })))
 }
@@ -144,14 +144,14 @@ async fn get_property(
     Path(id): Path<Uuid>,
     Query(query): Query<PropertyQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let row = sqlx::query(
+    let row: PgRow = sqlx::query(
         r#"SELECT * FROM properties WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
     )
     .bind(id)
     .bind(query.tenant_id)
     .fetch_optional(&state.pool)
     .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?
+    .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?
     .ok_or(ApiError::NotFound("Property not found".to_string()))?;
 
     Ok(Json(serde_json::json!({
@@ -196,7 +196,7 @@ async fn update_property(
     .bind(now)
     .execute(&state.pool)
     .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "id": id, "updated": true })))
 }
@@ -214,7 +214,7 @@ async fn delete_property(
         .bind(now)
         .execute(&state.pool)
         .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+        .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "id": id, "deleted": true })))
 }
@@ -225,7 +225,7 @@ async fn list_viewings(
     Path(property_id): Path<Uuid>,
     Query(query): Query<PropertyQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let rows = sqlx::query(
+    let rows: Vec<PgRow> = sqlx::query(
         r#"SELECT v.*, c.first_name, c.last_name 
            FROM viewings v 
            LEFT JOIN contacts c ON v.contact_id = c.id
@@ -236,9 +236,9 @@ async fn list_viewings(
     .bind(query.tenant_id)
     .fetch_all(&state.pool)
     .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
 
-    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
+    let data: Vec<serde_json::Value> = rows.iter().map(|row: &PgRow| {
         serde_json::json!({
             "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
             "contact_name": format!("{} {}", 
@@ -247,7 +247,6 @@ async fn list_viewings(
             ),
             "scheduled_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("scheduled_at").ok(),
             "status": row.try_get::<String, _>("status").unwrap_or_default(),
-            "notes": row.try_get::<Option<String>, _>("notes").ok().flatten(),
         })
     }).collect();
 
@@ -268,13 +267,14 @@ async fn create_viewing(
     Json(body): Json<CreateViewingRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let id = Uuid::new_v4();
-    // Get default agent (first user)
-    let agent_id: Uuid = sqlx::query_scalar("SELECT id FROM users WHERE tenant_id = $1 LIMIT 1")
+    
+    // Get any agent - simplified assignment
+    let agent_id: Uuid = sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE tenant_id = $1 LIMIT 1")
         .bind(query.tenant_id)
         .fetch_one(&state.pool)
         .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-    
+        .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
+
     sqlx::query(
         r#"INSERT INTO viewings (id, tenant_id, property_id, contact_id, agent_id, scheduled_at, notes, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())"#
@@ -288,7 +288,7 @@ async fn create_viewing(
     .bind(&body.notes)
     .execute(&state.pool)
     .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "id": id, "created": true })))
 }
@@ -299,7 +299,7 @@ async fn list_offers(
     Path(property_id): Path<Uuid>,
     Query(query): Query<PropertyQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let rows = sqlx::query(
+    let rows: Vec<PgRow> = sqlx::query(
         r#"SELECT o.*, c.first_name, c.last_name 
            FROM offers o 
            LEFT JOIN contacts c ON o.contact_id = c.id
@@ -310,9 +310,9 @@ async fn list_offers(
     .bind(query.tenant_id)
     .fetch_all(&state.pool)
     .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
 
-    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
+    let data: Vec<serde_json::Value> = rows.iter().map(|row: &PgRow| {
         serde_json::json!({
             "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
             "contact_name": format!("{} {}", 
@@ -356,7 +356,7 @@ async fn create_offer(
     .bind(&body.conditions)
     .execute(&state.pool)
     .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "id": id, "created": true })))
 }
