@@ -1042,3 +1042,184 @@ select:focus {
     text-align: center;
     color: var(--text-secondary);
 }
+
+/* ==================================
+   View Switcher Component
+   ================================== */
+
+.view-switcher {
+    margin: 1rem 1.5rem;
+    background: var(--bg-content);
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+.view-switcher-loading {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.view-switcher-empty {
+    padding: 0.75rem 1rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.view-tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.view-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.view-tab:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border-color: var(--primary);
+}
+
+.view-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.view-icon {
+    font-size: 1rem;
+}
+
+.view-label {
+    font-weight: 500;
+}
+
+/* ==================================
+   Canvas View Component
+   ================================== */
+
+.canvas-container {
+    margin: 1.5rem;
+    background: var(--bg-content);
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 600px;
+}
+
+.canvas-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 400px;
+    color: var(--text-secondary);
+}
+
+.canvas-wrapper {
+    position: relative;
+}
+
+.canvas-svg {
+    width: 100%;
+    height: 600px;
+    background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-sidebar) 100%);
+}
+
+.canvas-node {
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.canvas-node:hover {
+    transform: scale(1.05);
+}
+
+.canvas-node.selected circle {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
+}
+
+.node-icon {
+    font-size: 20px;
+    fill: white;
+}
+
+.node-label {
+    font-size: 12px;
+    fill: var(--text-primary);
+    font-weight: 500;
+}
+
+.edge-label {
+    font-size: 10px;
+    fill: var(--text-secondary);
+}
+
+.canvas-legend {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.canvas-legend h4 {
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.canvas-info-panel {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    min-width: 200px;
+}
+
+.canvas-info-panel h4 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.canvas-info-panel p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.canvas-info-panel .btn {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+}

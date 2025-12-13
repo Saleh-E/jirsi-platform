@@ -35,8 +35,10 @@ pub fn ViewSwitcher(
     
     // Fetch available views for this entity type
     let entity_for_effect = entity_type.clone();
+    let on_view_change_effect = on_view_change.clone();
     create_effect(move |_| {
         let et = entity_for_effect.clone();
+        let callback = on_view_change_effect.clone();
         
         spawn_local(async move {
             set_loading.set(true);
@@ -44,19 +46,45 @@ pub fn ViewSwitcher(
             let url = format!("{}/views?tenant_id={}&entity_type={}", API_BASE, TENANT_ID, et);
             match fetch_json::<ViewListResponse>(&url).await {
                 Ok(response) => {
-                    let view_list = response.views;
+                    let mut view_list = response.views;
                     
-                    // Set default view as active
+                    // If no views returned, add a default table view
+                    if view_list.is_empty() {
+                        view_list.push(ViewDefResponse {
+                            id: "default_table".to_string(),
+                            name: "default_table".to_string(),
+                            label: "Table".to_string(),
+                            view_type: "table".to_string(),
+                            is_default: true,
+                            settings: serde_json::json!({}),
+                        });
+                    }
+                    
+                    // Set default view as active and trigger callback
                     if let Some(default_view) = view_list.iter().find(|v| v.is_default) {
                         set_active_view.set(Some(default_view.id.clone()));
+                        callback.call(default_view.clone());
                     } else if let Some(first) = view_list.first() {
                         set_active_view.set(Some(first.id.clone()));
+                        callback.call(first.clone());
                     }
                     
                     set_views.set(view_list);
                     set_loading.set(false);
                 }
                 Err(_) => {
+                    // On error, still show a default table view
+                    let default_views = vec![ViewDefResponse {
+                        id: "default_table".to_string(),
+                        name: "default_table".to_string(),
+                        label: "Table".to_string(),
+                        view_type: "table".to_string(),
+                        is_default: true,
+                        settings: serde_json::json!({}),
+                    }];
+                    set_active_view.set(Some("default_table".to_string()));
+                    callback.call(default_views[0].clone());
+                    set_views.set(default_views);
                     set_loading.set(false);
                 }
             }
