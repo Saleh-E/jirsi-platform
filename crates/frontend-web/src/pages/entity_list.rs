@@ -2,12 +2,17 @@
 //! 
 //! This component renders entity lists dynamically using FieldDefs metadata.
 //! Columns and form fields are NOT hardcoded per entity type.
+//! Supports multiple view types via ViewSwitcher.
 
 use leptos::*;
 use leptos_router::*;
 use crate::api::{
     fetch_field_defs, fetch_entity_list, create_entity, FieldDef,
 };
+use crate::components::view_switcher::{ViewSwitcher, ViewDefResponse};
+use crate::components::kanban::{KanbanView, KanbanConfig};
+use crate::components::calendar::{CalendarView, CalendarConfig};
+use crate::components::map::{MapView, MapConfig};
 
 /// Main entity list page component
 #[component]
@@ -22,6 +27,10 @@ pub fn EntityListPage() -> impl IntoView {
     let (show_form, set_show_form) = create_signal(false);
     let (form_data, set_form_data) = create_signal(serde_json::Map::new());
     let (error, set_error) = create_signal(Option::<String>::None);
+    
+    // View switching state
+    let (current_view_type, set_current_view_type) = create_signal("table".to_string());
+    let (current_view_settings, set_current_view_settings) = create_signal(serde_json::Value::Null);
     
     // Load metadata and data when entity type changes
     let entity_for_load = entity_type.clone();
@@ -108,6 +117,15 @@ pub fn EntityListPage() -> impl IntoView {
                 </button>
             </header>
             
+            // View Switcher - dynamically switch between table/kanban/calendar/map
+            <ViewSwitcher 
+                entity_type=entity_type()
+                on_view_change=move |view_def: ViewDefResponse| {
+                    set_current_view_type.set(view_def.view_type.clone());
+                    set_current_view_settings.set(view_def.settings.clone());
+                }
+            />
+            
             // Error display
             {move || error.get().map(|e| view! {
                 <div class="error-banner">{e}</div>
@@ -118,56 +136,148 @@ pub fn EntityListPage() -> impl IntoView {
                 <div class="loading">"Loading..."</div>
             })}
             
-            // Data table - columns from metadata
+            // Dynamic view content based on current view type
             {move || (!loading.get()).then(|| {
-                let cols = list_columns();
-                view! {
-                    <div class="table-container">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    // Dynamic headers from FieldDefs
-                                    {cols.iter().map(|f| {
-                                        view! { <th>{f.label.clone()}</th> }
-                                    }).collect_view()}
-                                    <th class="action-header">""</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {move || {
-                                    let cols = list_columns();
-                                    let etype = entity_type();
-                                    data.get().into_iter().map(|row| {
-                                        let record_id = row.get("id")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or_default()
-                                            .to_string();
-                                        let etype_clone = etype.clone();
-                                        let row_path = format!("/app/crm/entity/{}/{}", etype_clone, record_id);
-                                        view! {
-                                            <tr class="clickable-row">
-                                                // Dynamic cells from field names
-                                                {cols.iter().map(|f| {
-                                                    let value = row.get(&f.name)
-                                                        .map(|v| format_field_value(v, &f.field_type))
-                                                        .unwrap_or_default();
-                                                    view! { <td>{value}</td> }
-                                                }).collect_view()}
-                                                // Hidden link for navigation
-                                                <td class="action-cell">
-                                                    <a href=row_path class="row-link">"→"</a>
-                                                </td>
-                                            </tr>
-                                        }
-                                    }).collect_view()
-                                }}
-                            </tbody>
-                        </table>
-                        
-                        {move || data.get().is_empty().then(|| view! {
-                            <div class="empty-state">"No records found. Click + New to create one."</div>
-                        })}
-                    </div>
+                let view_type = current_view_type.get();
+                let etype = entity_type();
+                let settings = current_view_settings.get();
+                
+                match view_type.as_str() {
+                    "kanban" => {
+                        let group_by = settings.get("group_by_field")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("status")
+                            .to_string();
+                        let card_title = settings.get("card_title_field")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("title")
+                            .to_string();
+                        let kanban_config = KanbanConfig {
+                            group_by_field: group_by,
+                            card_title_field: card_title,
+                            card_subtitle_field: settings.get("card_subtitle_field")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
+                            card_fields: settings.get("card_fields")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                                .unwrap_or_default(),
+                            column_order: settings.get("column_order")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()),
+                        };
+                        view! {
+                            <KanbanView 
+                                entity_type=etype.clone()
+                                config=kanban_config
+                            />
+                        }.into_view()
+                    },
+                    "calendar" => {
+                        let calendar_config = CalendarConfig {
+                            date_field: settings.get("date_field")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("scheduled_start")
+                                .to_string(),
+                            end_date_field: settings.get("end_date_field")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
+                            title_field: settings.get("title_field")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("title")
+                                .to_string(),
+                            color_field: settings.get("color_field")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
+                            color_map: None,
+                        };
+                        view! {
+                            <CalendarView 
+                                entity_type=etype.clone()
+                                config=calendar_config
+                            />
+                        }.into_view()
+                    },
+                    "map" => {
+                        let map_config = MapConfig {
+                            lat_field: settings.get("lat_field")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("latitude")
+                                .to_string(),
+                            lng_field: settings.get("lng_field")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("longitude")
+                                .to_string(),
+                            popup_title_field: settings.get("popup_title_field")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("title")
+                                .to_string(),
+                            popup_fields: settings.get("popup_fields")
+                                .and_then(|v| v.as_array())
+                                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                                .unwrap_or_default(),
+                            marker_color_field: settings.get("marker_color_field")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
+                            default_center: None,
+                            default_zoom: None,
+                        };
+                        view! {
+                            <MapView 
+                                entity_type=etype.clone()
+                                config=map_config
+                            />
+                        }.into_view()
+                    },
+                    _ => {
+                        // Default: Table view
+                        let cols = list_columns();
+                        view! {
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            {cols.iter().map(|f| {
+                                                view! { <th>{f.label.clone()}</th> }
+                                            }).collect_view()}
+                                            <th class="action-header">""</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {move || {
+                                            let cols = list_columns();
+                                            let etype = entity_type();
+                                            data.get().into_iter().map(|row| {
+                                                let record_id = row.get("id")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or_default()
+                                                    .to_string();
+                                                let etype_clone = etype.clone();
+                                                let row_path = format!("/app/crm/entity/{}/{}", etype_clone, record_id);
+                                                view! {
+                                                    <tr class="clickable-row">
+                                                        {cols.iter().map(|f| {
+                                                            let value = row.get(&f.name)
+                                                                .map(|v| format_field_value(v, &f.field_type))
+                                                                .unwrap_or_default();
+                                                            view! { <td>{value}</td> }
+                                                        }).collect_view()}
+                                                        <td class="action-cell">
+                                                            <a href=row_path class="row-link">"→"</a>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            }).collect_view()
+                                        }}
+                                    </tbody>
+                                </table>
+                                
+                                {move || data.get().is_empty().then(|| view! {
+                                    <div class="empty-state">"No records found. Click + New to create one."</div>
+                                })}
+                            </div>
+                        }.into_view()
+                    }
                 }
             })}
             
