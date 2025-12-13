@@ -52,6 +52,7 @@ pub fn Shell() -> impl IntoView {
                         <a href="/app/realestate/entity/listing" class="nav-item">"📢 Listings"</a>
                         <a href="/app/realestate/entity/viewing" class="nav-item">"📅 Viewings"</a>
                         <a href="/app/realestate/entity/offer" class="nav-item">"📝 Offers"</a>
+                        <a href="/app/realestate/entity/contract" class="nav-item">"📄 Contracts"</a>
                     </div>
                 </nav>
             </aside>

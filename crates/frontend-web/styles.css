@@ -605,3 +605,132 @@ tr:hover {
 .kanban-error {
     color: var(--error);
 }
+
+/* Calendar View */
+.calendar-container {
+    padding: 1rem;
+    height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+}
+
+.calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-content);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.nav-btn {
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+    background: var(--primary);
+}
+
+.today-btn {
+    background: var(--primary);
+}
+
+.week-label {
+    font-weight: 600;
+    font-size: 1.1rem;
+    min-width: 200px;
+    text-align: center;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: auto 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    flex: 1;
+}
+
+.calendar-day-header {
+    background: var(--bg-content);
+    padding: 0.75rem;
+    text-align: center;
+    border-bottom: 2px solid var(--border);
+}
+
+.calendar-day-header.today {
+    background: var(--primary);
+}
+
+.day-name {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.calendar-day-header.today .day-name {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.day-num {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
+.calendar-day-cell {
+    background: var(--bg-content);
+    padding: 0.5rem;
+    min-height: 100px;
+    overflow-y: auto;
+}
+
+.calendar-day-cell.today {
+    background: rgba(79, 70, 229, 0.1);
+}
+
+.calendar-event {
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    margin-bottom: 0.25rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.calendar-event:hover {
+    transform: scale(1.02);
+}
+
+.event-title {
+    color: white;
+    font-weight: 500;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-loading,
+.calendar-error {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.calendar-error {
+    color: var(--error);
+}

@@ -69,6 +69,7 @@ async fn list_records(
         "listing" => query_listings(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         "viewing" => query_viewings(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         "offer" => query_offers(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
+        "contract" => query_contracts(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         _ => (Vec::new(), 0),
     };
 
@@ -456,6 +457,51 @@ async fn query_offers(
     Ok((data, total))
 }
 
+async fn query_contracts(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    limit: i32,
+    offset: i32,
+    _search: Option<&str>,
+) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
+    use sqlx::Row;
+    
+    let count_row = sqlx::query("SELECT COUNT(*) as count FROM contracts WHERE tenant_id = $1 AND deleted_at IS NULL")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let total: i64 = count_row.try_get("count").unwrap_or(0);
+
+    let rows = sqlx::query(
+        r#"SELECT id, contract_number, contract_type, property_id, start_date, end_date,
+                  amount, currency, status, signed_at, created_at
+           FROM contracts WHERE tenant_id = $1 AND deleted_at IS NULL
+           ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
+    )
+    .bind(tenant_id)
+    .bind(limit as i64)
+    .bind(offset as i64)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
+        serde_json::json!({
+            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
+            "contract_number": row.try_get::<Option<String>, _>("contract_number").ok().flatten(),
+            "contract_type": row.try_get::<Option<String>, _>("contract_type").ok().flatten(),
+            "property_id": row.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
+            "start_date": row.try_get::<Option<chrono::NaiveDate>, _>("start_date").ok().flatten(),
+            "end_date": row.try_get::<Option<chrono::NaiveDate>, _>("end_date").ok().flatten(),
+            "amount": row.try_get::<Option<f64>, _>("amount").ok().flatten(),
+            "status": row.try_get::<Option<String>, _>("status").ok().flatten(),
+        })
+    }).collect();
+
+    Ok((data, total))
+}
+
 async fn create_record(
     State(state): State<Arc<AppState>>,
     Path(entity_type): Path<String>,
@@ -750,6 +796,7 @@ async fn delete_record(
         "listing" => "listings",
         "viewing" => "viewings",
         "offer" => "offers",
+        "contract" => "contracts",
         _ => return Err(ApiError::NotFound(format!("Entity type {} not found", entity_type))),
     };
 
