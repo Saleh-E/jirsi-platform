@@ -606,8 +606,8 @@ pub fn DynamicSelect(
     #[prop(optional)] value: Option<String>,
     /// Callback when selection changes
     #[prop(into)] on_change: Callback<String>,
-    /// Field ID for updating options via API
-    #[prop(optional)] field_id: Option<String>,
+    /// Field ID for updating options via API (future use)
+    #[prop(optional)] _field_id: Option<String>,
     /// Allow adding new options
     #[prop(optional, default = true)] allow_create: bool,
     /// Placeholder text
@@ -617,8 +617,6 @@ pub fn DynamicSelect(
 ) -> impl IntoView {
     let (current_options, set_current_options) = create_signal(options.clone());
     let (selected_value, set_selected_value) = create_signal(value.clone());
-    let (show_prompt, set_show_prompt) = create_signal(false);
-    let (new_option_text, set_new_option_text) = create_signal(String::new());
     
     // Convert string options to SelectOption
     let select_options = move || {
@@ -631,96 +629,43 @@ pub fn DynamicSelect(
         on_change.call(val);
     };
     
-    // Handle adding new option
-    let handle_add_option = move |_: web_sys::MouseEvent| {
-        let new_text = new_option_text.get().trim().to_string();
-        if !new_text.is_empty() {
+    // Handle adding a new option from typed text
+    let handle_create_value = move |new_value: String| {
+        let trimmed = new_value.trim().to_string();
+        if !trimmed.is_empty() {
             // Add to local options
             set_current_options.update(|opts| {
-                if !opts.contains(&new_text) {
-                    opts.push(new_text.clone());
+                if !opts.contains(&trimmed) {
+                    opts.push(trimmed.clone());
                 }
             });
             // Select the new option
-            set_selected_value.set(Some(new_text.clone()));
-            on_change.call(new_text);
+            set_selected_value.set(Some(trimmed.clone()));
+            on_change.call(trimmed);
             
             // TODO: Call API to persist the new option
-            // if let Some(fid) = field_id.clone() {
+            // if let Some(fid) = _field_id.clone() {
             //     spawn_local(async move {
             //         // PATCH /meta/fields/{field_id}
             //     });
             // }
         }
-        set_show_prompt.set(false);
-        set_new_option_text.set(String::new());
     };
     
     view! {
         <div class="dynamic-select">
-            {move || {
-                if show_prompt.get() {
-                    view! {
-                        <div class="dynamic-select-prompt">
-                            <input
-                                type="text"
-                                class="field-input"
-                                placeholder="Enter new option..."
-                                prop:value=move || new_option_text.get()
-                                on:input=move |ev| set_new_option_text.set(event_target_value(&ev))
-                                on:keydown=move |ev: web_sys::KeyboardEvent| {
-                                    if ev.key() == "Enter" {
-                                        ev.prevent_default();
-                                        // Trigger add option logic
-                                        let new_text = new_option_text.get().trim().to_string();
-                                        if !new_text.is_empty() {
-                                            set_current_options.update(|opts| {
-                                                if !opts.contains(&new_text) {
-                                                    opts.push(new_text.clone());
-                                                }
-                                            });
-                                            set_selected_value.set(Some(new_text.clone()));
-                                            on_change.call(new_text);
-                                        }
-                                        set_show_prompt.set(false);
-                                        set_new_option_text.set(String::new());
-                                    } else if ev.key() == "Escape" {
-                                        set_show_prompt.set(false);
-                                    }
-                                }
-                            />
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-primary"
-                                on:click=handle_add_option
-                            >
-                                "Add"
-                            </button>
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-secondary"
-                                on:click=move |_| set_show_prompt.set(false)
-                            >
-                                "Cancel"
-                            </button>
-                        </div>
-                    }.into_view()
-                } else {
-                    view! {
-                        <SmartSelect
-                            options=select_options()
-                            value=selected_value.get().unwrap_or_default()
-                            on_change=handle_change
-                            allow_search=true
-                            allow_create=allow_create
-                            create_label="+ Add New Option".to_string()
-                            on_create=move |_| set_show_prompt.set(true)
-                            placeholder=placeholder.clone().unwrap_or_default()
-                            disabled=disabled
-                        />
-                    }.into_view()
-                }
-            }}
+            <SmartSelect
+                options=select_options()
+                value=selected_value.get().unwrap_or_default()
+                on_change=handle_change
+                allow_search=true
+                allow_create=allow_create
+                create_label="+ Add New Option".to_string()
+                on_create_value=handle_create_value
+                placeholder=placeholder.clone().unwrap_or_default()
+                disabled=disabled
+            />
         </div>
     }
 }
+

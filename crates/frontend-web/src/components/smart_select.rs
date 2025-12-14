@@ -5,6 +5,7 @@
 //! - "+ Add New" inline creation button
 //! - Keyboard navigation
 //! - Custom styling
+//! - Optional icons/images per option
 
 use leptos::*;
 
@@ -13,6 +14,8 @@ use leptos::*;
 pub struct SelectOption {
     pub value: String,
     pub label: String,
+    /// Optional icon URL or emoji
+    pub icon: Option<String>,
 }
 
 impl SelectOption {
@@ -20,6 +23,15 @@ impl SelectOption {
         Self {
             value: value.into(),
             label: label.into(),
+            icon: None,
+        }
+    }
+    
+    pub fn with_icon(value: impl Into<String>, label: impl Into<String>, icon: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            label: label.into(),
+            icon: Some(icon.into()),
         }
     }
 }
@@ -39,8 +51,10 @@ pub fn SmartSelect(
     #[prop(optional, default = false)] allow_create: bool,
     /// Label for the create button (e.g., "+ Add New Property")
     #[prop(optional, default = String::from("+ Add New"))] create_label: String,
-    /// Callback when "Add New" is clicked
+    /// Callback when "Add New" is clicked (opens modal)
     #[prop(optional, into)] on_create: Option<Callback<()>>,
+    /// Callback with the typed text when creating inline (e.g., "+ Add 'Twitter Ads'")
+    #[prop(optional, into)] on_create_value: Option<Callback<String>>,
     /// Placeholder text
     #[prop(optional, default = String::from("-- Select --"))] placeholder: String,
     /// Whether the field is disabled
@@ -219,6 +233,7 @@ pub fn SmartSelect(
                                 opts.into_iter().enumerate().map(|(idx, opt)| {
                                     let opt_value_click = opt.value.clone();
                                     let opt_label = opt.label.clone();
+                                    let opt_icon = opt.icon.clone();
                                     let is_selected = value_stored.get_value().as_ref() == Some(&opt.value);
                                     
                                     // Compute option class
@@ -243,7 +258,10 @@ pub fn SmartSelect(
                                                 set_focused_index.set(Some(idx));
                                             }
                                         >
-                                            {opt_label}
+                                            {opt_icon.map(|icon| view! {
+                                                <span class="smart-select__option-icon">{icon}</span>
+                                            })}
+                                            <span class="smart-select__option-label">{opt_label}</span>
                                         </div>
                                     }
                                 }).collect_view()
@@ -254,15 +272,54 @@ pub fn SmartSelect(
                     // Add New button (sticky footer)
                     {allow_create.then(|| {
                         let label = create_label.clone();
+                        let on_create_clone = on_create.clone();
+                        let on_create_value_clone = on_create_value.clone();
+                        
                         view! {
                             <div class="smart-select__create">
-                                <button
-                                    type="button"
-                                    class="smart-select__create-btn"
-                                    on:click=handle_create
-                                >
-                                    {label}
-                                </button>
+                                // Show "+ Add 'typed text'" when user types a new value
+                                {move || {
+                                    let query = search_query.get();
+                                    let trimmed = query.trim();
+                                    let opts = options_stored.get_value();
+                                    let exact_match = opts.iter().any(|o| 
+                                        o.label.to_lowercase() == trimmed.to_lowercase()
+                                    );
+                                    
+                                    if !trimmed.is_empty() && !exact_match && on_create_value_clone.is_some() {
+                                        let typed_text = trimmed.to_string();
+                                        let typed_text_display = typed_text.clone();
+                                        let typed_text_click = typed_text.clone();
+                                        let callback = on_create_value_clone.clone();
+                                        view! {
+                                            <button
+                                                type="button"
+                                                class="smart-select__create-btn smart-select__create-btn--inline"
+                                                on:click=move |_| {
+                                                    if let Some(ref cb) = callback {
+                                                        cb.call(typed_text_click.clone());
+                                                    }
+                                                    set_is_open.set(false);
+                                                    set_search_query.set(String::new());
+                                                }
+                                            >
+                                                {format!("+ Add \"{}\"", typed_text_display)}
+                                            </button>
+                                        }.into_view()
+                                    } else {
+                                        // Show standard create button
+                                        let label_inner = label.clone();
+                                        view! {
+                                            <button
+                                                type="button"
+                                                class="smart-select__create-btn"
+                                                on:click=handle_create
+                                            >
+                                                {label_inner}
+                                            </button>
+                                        }.into_view()
+                                    }
+                                }}
                             </div>
                         }
                     })}
