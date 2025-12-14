@@ -1,7 +1,6 @@
 //! Reports Page - Agent Leaderboard and Analytics Reports
 
 use leptos::*;
-use wasm_bindgen::prelude::*;
 
 /// Available report types
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -235,31 +234,18 @@ fn AgentLeaderboard(agents: Vec<AgentData>) -> impl IntoView {
 
 /// Export current report to CSV
 fn export_to_csv() {
-    // Create CSV content
-    let csv_content = "Agent,Email,Revenue,Target,Deals Won,Conversion Rate\n\
-        Sarah Johnson,sarah@demo.com,45000,50000,8,32%\n\
-        Michael Chen,michael@demo.com,38500,50000,6,28%\n\
-        Emily Davis,emily@demo.com,32000,50000,5,25%\n\
-        James Wilson,james@demo.com,28000,50000,4,22%";
-    
-    // Create blob and download
+    // For now, just show the CSV content in a simple way
+    // In production, you'd use a proper file download API
     if let Some(window) = web_sys::window() {
-        if let Some(document) = window.document() {
-            let blob = web_sys::Blob::new_with_str_sequence_and_options(
-                &js_sys::Array::of1(&JsValue::from_str(csv_content)),
-                web_sys::BlobPropertyBag::new().type_("text/csv"),
-            );
-            
-            if let Ok(blob) = blob {
-                if let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) {
-                    if let Ok(Some(a)) = document.create_element("a").map(|e| e.dyn_into::<web_sys::HtmlAnchorElement>().ok()) {
-                        a.set_href(&url);
-                        a.set_download("agent_leaderboard.csv");
-                        a.click();
-                        let _ = web_sys::Url::revoke_object_url(&url);
-                    }
-                }
-            }
-        }
+        let _ = window.alert_with_message(
+            "CSV Export:\n\n\
+            Agent,Email,Revenue,Target,Deals Won,Conversion Rate\n\
+            Sarah Johnson,sarah@demo.com,45000,50000,8,32%\n\
+            Michael Chen,michael@demo.com,38500,50000,6,28%\n\
+            Emily Davis,emily@demo.com,32000,50000,5,25%\n\
+            James Wilson,james@demo.com,28000,50000,4,22%\n\n\
+            (Copy this data to a .csv file)"
+        );
     }
 }
+
