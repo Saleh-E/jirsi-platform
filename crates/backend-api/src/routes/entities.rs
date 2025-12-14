@@ -71,6 +71,7 @@ async fn list_records(
         "viewing" => query_viewings(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         "offer" => query_offers(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         "contract" => query_contracts(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
+        "task" => query_tasks(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
         _ => (Vec::new(), 0),
     };
 
@@ -503,6 +504,71 @@ async fn query_contracts(
     Ok((data, total))
 }
 
+async fn query_tasks(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    limit: i32,
+    offset: i32,
+    search: Option<&str>,
+) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
+    use sqlx::Row;
+    
+    let search_pattern = search.map(|s| format!("%{}%", s));
+    
+    let count_sql = if search.is_some() {
+        "SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1 AND deleted_at IS NULL AND title ILIKE $2"
+    } else {
+        "SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1 AND deleted_at IS NULL"
+    };
+    
+    let count_row = if let Some(ref pattern) = search_pattern {
+        sqlx::query(count_sql).bind(tenant_id).bind(pattern).fetch_one(pool).await
+    } else {
+        sqlx::query(count_sql).bind(tenant_id).fetch_one(pool).await
+    }.map_err(|e| ApiError::Internal(e.to_string()))?;
+    let total: i64 = count_row.try_get("count").unwrap_or(0);
+
+    let rows = if let Some(ref pattern) = search_pattern {
+        sqlx::query(
+            r#"SELECT id, title, description, status, priority, due_date, completed_at, assigned_to, created_at
+               FROM tasks WHERE tenant_id = $1 AND deleted_at IS NULL AND title ILIKE $4
+               ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
+        )
+        .bind(tenant_id)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .bind(pattern)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query(
+            r#"SELECT id, title, description, status, priority, due_date, completed_at, assigned_to, created_at
+               FROM tasks WHERE tenant_id = $1 AND deleted_at IS NULL
+               ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
+        )
+        .bind(tenant_id)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .fetch_all(pool)
+        .await
+    }.map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
+        serde_json::json!({
+            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
+            "title": row.try_get::<String, _>("title").unwrap_or_default(),
+            "description": row.try_get::<Option<String>, _>("description").ok().flatten(),
+            "status": row.try_get::<Option<String>, _>("status").ok().flatten().unwrap_or("pending".to_string()),
+            "priority": row.try_get::<Option<String>, _>("priority").ok().flatten().unwrap_or("medium".to_string()),
+            "due_date": row.try_get::<Option<chrono::NaiveDate>, _>("due_date").ok().flatten(),
+            "completed_at": row.try_get::<Option<chrono::DateTime<Utc>>, _>("completed_at").ok().flatten(),
+            "assigned_to": row.try_get::<Option<Uuid>, _>("assigned_to").ok().flatten(),
+        })
+    }).collect();
+
+    Ok((data, total))
+}
+
 async fn create_record(
     State(state): State<Arc<AppState>>,
     Path(entity_type): Path<String>,
@@ -612,6 +678,28 @@ async fn create_record(
             .bind(data.get("rent_amount").and_then(|v| v.as_f64()))
             .bind(data.get("currency").and_then(|v| v.as_str()).unwrap_or("USD"))
             .bind(data.get("description").and_then(|v| v.as_str()))
+            .bind(now)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "task" => {
+            let due_date: Option<chrono::NaiveDate> = data.get("due_date")
+                .and_then(|v| v.as_str())
+                .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+            
+            sqlx::query(
+                r#"INSERT INTO tasks (id, tenant_id, title, description, status, priority, due_date, created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(data.get("title").and_then(|v| v.as_str()).unwrap_or(""))
+            .bind(data.get("description").and_then(|v| v.as_str()))
+            .bind(data.get("status").and_then(|v| v.as_str()).unwrap_or("pending"))
+            .bind(data.get("priority").and_then(|v| v.as_str()).unwrap_or("medium"))
+            .bind(due_date)
             .bind(now)
             .bind(now)
             .execute(&state.pool)
