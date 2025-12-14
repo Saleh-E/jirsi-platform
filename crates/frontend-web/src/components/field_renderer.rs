@@ -440,3 +440,287 @@ fn render_edit_input(
     }
 }
 
+// ============================================================
+// Smart Input Components for Inline Creation
+// ============================================================
+
+use crate::components::smart_select::{SmartSelect, SelectOption};
+use crate::components::create_modal::CreateModal;
+use crate::api::{fetch_entity_list, API_BASE, TENANT_ID};
+
+/// Created record info returned from CreateModal
+#[derive(Clone, Debug)]
+pub struct CreatedRecord {
+    pub id: String,
+    pub display_name: String,
+}
+
+/// LinkInput - Smart select for Link fields with inline creation
+/// Fetches records from target entity and allows creating new ones
+#[component]
+pub fn LinkInput(
+    /// Target entity type (e.g., "property", "contact")
+    target_entity: String,
+    /// Target entity label for display
+    #[prop(optional)] target_label: Option<String>,
+    /// Currently selected value (UUID)
+    #[prop(optional)] value: Option<String>,
+    /// Callback when selection changes
+    #[prop(into)] on_change: Callback<String>,
+    /// Placeholder text
+    #[prop(optional)] placeholder: Option<String>,
+    /// Whether the field is disabled
+    #[prop(optional)] disabled: bool,
+) -> impl IntoView {
+    // State
+    let (options, set_options) = create_signal::<Vec<SelectOption>>(Vec::new());
+    let (loading, set_loading) = create_signal(true);
+    let (show_modal, set_show_modal) = create_signal(false);
+    let (selected_value, set_selected_value) = create_signal(value.clone());
+    
+    let target_entity_stored = store_value(target_entity.clone());
+    let target_label_display = target_label.clone().unwrap_or_else(|| {
+        // Capitalize entity name for label
+        let mut chars = target_entity.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+        }
+    });
+    let target_label_stored = store_value(target_label_display.clone());
+    
+    // Fetch records on mount
+    let fetch_target = target_entity.clone();
+    create_effect(move |_| {
+        let entity = fetch_target.clone();
+        spawn_local(async move {
+            set_loading.set(true);
+            match fetch_entity_list(&entity).await {
+                Ok(records) => {
+                    let opts: Vec<SelectOption> = records.data.iter().filter_map(|r: &serde_json::Value| {
+                        let id = r.get("id")?.as_str()?.to_string();
+                        // Try common display fields
+                        let label = r.get("name")
+                            .or_else(|| r.get("title"))
+                            .or_else(|| r.get("first_name"))
+                            .and_then(|v: &serde_json::Value| v.as_str())
+                            .map(|s: &str| {
+                                // Combine first_name + last_name if available
+                                if let Some(last) = r.get("last_name").and_then(|v: &serde_json::Value| v.as_str()) {
+                                    format!("{} {}", s, last)
+                                } else {
+                                    s.to_string()
+                                }
+                            })
+                            .unwrap_or_else(|| id[..8.min(id.len())].to_string());
+                        Some(SelectOption::new(id, label))
+                    }).collect();
+                    set_options.set(opts);
+                    set_loading.set(false);
+                }
+                Err(_) => {
+                    set_loading.set(false);
+                }
+            }
+        });
+    });
+    
+    // Handle selection change
+    let handle_change = move |val: String| {
+        set_selected_value.set(Some(val.clone()));
+        on_change.call(val);
+    };
+    
+    // Handle new record created
+    let handle_created = move |id: String| {
+        // Immediately select the new record
+        set_selected_value.set(Some(id.clone()));
+        on_change.call(id.clone());
+        set_show_modal.set(false);
+        
+        // Refresh the options list
+        let entity = target_entity_stored.get_value();
+        spawn_local(async move {
+            if let Ok(records) = fetch_entity_list(&entity).await {
+                let opts: Vec<SelectOption> = records.data.iter().filter_map(|r: &serde_json::Value| {
+                    let id = r.get("id")?.as_str()?.to_string();
+                    let label = r.get("name")
+                        .or_else(|| r.get("title"))
+                        .or_else(|| r.get("first_name"))
+                        .and_then(|v: &serde_json::Value| v.as_str())
+                        .map(|s: &str| s.to_string())
+                        .unwrap_or_else(|| id[..8.min(id.len())].to_string());
+                    Some(SelectOption::new(id, label))
+                }).collect();
+                set_options.set(opts);
+            }
+        });
+    };
+    
+    view! {
+        <div class="link-input">
+            {move || {
+                if loading.get() {
+                    view! { <span class="link-input-loading">"Loading..."</span> }.into_view()
+                } else {
+                    let create_label_text = format!("+ Add New {}", target_label_stored.get_value());
+                    view! {
+                        <SmartSelect
+                            options=options.get()
+                            value=selected_value.get().unwrap_or_default()
+                            on_change=handle_change
+                            allow_search=true
+                            allow_create=true
+                            create_label=create_label_text
+                            on_create=move |_| set_show_modal.set(true)
+                            placeholder=placeholder.clone().unwrap_or_default()
+                            disabled=disabled
+                        />
+                    }.into_view()
+                }
+            }}
+            
+            // Create Modal (stacked)
+            {move || show_modal.get().then(|| {
+                let entity = target_entity_stored.get_value();
+                let label = target_label_stored.get_value();
+                view! {
+                    <CreateModal
+                        entity_type=entity
+                        entity_label=label
+                        on_close=move |_| set_show_modal.set(false)
+                        on_created=handle_created
+                    />
+                }
+            })}
+        </div>
+    }
+}
+
+/// DynamicSelect - Smart select for Select fields with option to add new choices
+#[component]
+pub fn DynamicSelect(
+    /// Available options
+    options: Vec<String>,
+    /// Currently selected value
+    #[prop(optional)] value: Option<String>,
+    /// Callback when selection changes
+    #[prop(into)] on_change: Callback<String>,
+    /// Field ID for updating options via API
+    #[prop(optional)] field_id: Option<String>,
+    /// Allow adding new options
+    #[prop(optional, default = true)] allow_create: bool,
+    /// Placeholder text
+    #[prop(optional)] placeholder: Option<String>,
+    /// Whether the field is disabled
+    #[prop(optional)] disabled: bool,
+) -> impl IntoView {
+    let (current_options, set_current_options) = create_signal(options.clone());
+    let (selected_value, set_selected_value) = create_signal(value.clone());
+    let (show_prompt, set_show_prompt) = create_signal(false);
+    let (new_option_text, set_new_option_text) = create_signal(String::new());
+    
+    // Convert string options to SelectOption
+    let select_options = move || {
+        current_options.get().into_iter().map(|s| SelectOption::new(s.clone(), s)).collect::<Vec<_>>()
+    };
+    
+    // Handle selection
+    let handle_change = move |val: String| {
+        set_selected_value.set(Some(val.clone()));
+        on_change.call(val);
+    };
+    
+    // Handle adding new option
+    let handle_add_option = move |_: web_sys::MouseEvent| {
+        let new_text = new_option_text.get().trim().to_string();
+        if !new_text.is_empty() {
+            // Add to local options
+            set_current_options.update(|opts| {
+                if !opts.contains(&new_text) {
+                    opts.push(new_text.clone());
+                }
+            });
+            // Select the new option
+            set_selected_value.set(Some(new_text.clone()));
+            on_change.call(new_text);
+            
+            // TODO: Call API to persist the new option
+            // if let Some(fid) = field_id.clone() {
+            //     spawn_local(async move {
+            //         // PATCH /meta/fields/{field_id}
+            //     });
+            // }
+        }
+        set_show_prompt.set(false);
+        set_new_option_text.set(String::new());
+    };
+    
+    view! {
+        <div class="dynamic-select">
+            {move || {
+                if show_prompt.get() {
+                    view! {
+                        <div class="dynamic-select-prompt">
+                            <input
+                                type="text"
+                                class="field-input"
+                                placeholder="Enter new option..."
+                                prop:value=move || new_option_text.get()
+                                on:input=move |ev| set_new_option_text.set(event_target_value(&ev))
+                                on:keydown=move |ev: web_sys::KeyboardEvent| {
+                                    if ev.key() == "Enter" {
+                                        ev.prevent_default();
+                                        // Trigger add option logic
+                                        let new_text = new_option_text.get().trim().to_string();
+                                        if !new_text.is_empty() {
+                                            set_current_options.update(|opts| {
+                                                if !opts.contains(&new_text) {
+                                                    opts.push(new_text.clone());
+                                                }
+                                            });
+                                            set_selected_value.set(Some(new_text.clone()));
+                                            on_change.call(new_text);
+                                        }
+                                        set_show_prompt.set(false);
+                                        set_new_option_text.set(String::new());
+                                    } else if ev.key() == "Escape" {
+                                        set_show_prompt.set(false);
+                                    }
+                                }
+                            />
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-primary"
+                                on:click=handle_add_option
+                            >
+                                "Add"
+                            </button>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-secondary"
+                                on:click=move |_| set_show_prompt.set(false)
+                            >
+                                "Cancel"
+                            </button>
+                        </div>
+                    }.into_view()
+                } else {
+                    view! {
+                        <SmartSelect
+                            options=select_options()
+                            value=selected_value.get().unwrap_or_default()
+                            on_change=handle_change
+                            allow_search=true
+                            allow_create=allow_create
+                            create_label="+ Add New Option".to_string()
+                            on_create=move |_| set_show_prompt.set(true)
+                            placeholder=placeholder.clone().unwrap_or_default()
+                            disabled=disabled
+                        />
+                    }.into_view()
+                }
+            }}
+        </div>
+    }
+}

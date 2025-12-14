@@ -12,4 +12,5 @@ pub mod map;
 pub mod view_switcher;
 pub mod create_modal;
 pub mod canvas;
+pub mod smart_select;
 
