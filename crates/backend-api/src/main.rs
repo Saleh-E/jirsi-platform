@@ -6,6 +6,7 @@ use axum::{
     extract::State,
     Json,
     response::IntoResponse,
+    middleware as axum_middleware,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
@@ -19,6 +20,7 @@ mod routes;
 mod state;
 mod error;
 mod seed;
+mod middleware;
 
 use state::AppState;
 
@@ -52,13 +54,22 @@ async fn main() -> anyhow::Result<()> {
     // Create app state
     let state = Arc::new(AppState::new(pool));
 
+    // Build public routes with tenant middleware
+    let public_routes = routes::public::routes()
+        .layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            middleware::tenant::resolve_tenant,
+        ));
+
     // Build router
     let app = Router::new()
         // Health check
         .route("/health", get(health_check))
         // Seed endpoint (dev only)
         .route("/seed", post(seed_data))
-        // API routes
+        // Public routes (with tenant resolution middleware)
+        .nest("/public", public_routes)
+        // API routes (authenticated)
         .nest("/api/v1", routes::api_routes())
         // Add state
         .with_state(state)

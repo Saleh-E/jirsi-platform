@@ -14,6 +14,7 @@ pub mod tasks;
 pub mod views;
 pub mod properties;
 pub mod workflows;
+pub mod public;
 
 /// Build all API routes
 pub fn api_routes() -> Router<Arc<AppState>> {
