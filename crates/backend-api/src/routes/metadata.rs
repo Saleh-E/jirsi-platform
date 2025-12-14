@@ -91,6 +91,7 @@ async fn get_views(
 
 /// Request body for creating a personal view
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // Fields used in future view creation logic
 pub struct CreateViewRequest {
     pub name: String,
     pub label: String,

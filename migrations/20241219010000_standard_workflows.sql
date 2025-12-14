@@ -1,6 +1,28 @@
 -- Phase 3: Standard Workflows and Agent Stats
 -- Seeds the "Bible" workflows for CRM and Real Estate automation
 
+-- Create workflows table if not exists
+CREATE TABLE IF NOT EXISTS workflows (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    trigger_type VARCHAR(100) NOT NULL, -- 'record_created', 'field_changed', 'form_submitted'
+    trigger_entity VARCHAR(100) NOT NULL,
+    trigger_config JSONB NOT NULL DEFAULT '{}',
+    conditions JSONB NOT NULL DEFAULT '[]',
+    actions JSONB NOT NULL DEFAULT '[]',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+-- Index for finding workflows by trigger
+CREATE INDEX IF NOT EXISTS idx_workflows_trigger 
+ON workflows (tenant_id, trigger_type, trigger_entity) 
+WHERE is_active = true AND deleted_at IS NULL;
+
 -- Use our demo tenant
 DO $$
 DECLARE
@@ -153,8 +175,7 @@ VALUES (
 
 -- Create agent_daily_stats EntityType (if not exists)
 INSERT INTO entity_types (
-    id, tenant_id, app_id, name, label, 
-    has_activities, has_tasks, has_custom_fields, show_in_nav, is_searchable,
+    id, tenant_id, app_id, name, label, label_plural, flags,
     created_at, updated_at
 )
 VALUES (
@@ -163,43 +184,44 @@ VALUES (
     'crm',
     'agent_daily_stats',
     'Agent Daily Stats',
-    false, false, false, false, false,
+    'Agent Daily Stats',
+    '{"has_activities": false, "has_tasks": false, "show_in_nav": false, "is_searchable": false}'::jsonb,
     NOW(), NOW()
 ) ON CONFLICT (tenant_id, name) DO NOTHING;
 
 -- Agent Stats Fields
-INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, sort_order, is_required, in_list_view, is_searchable, created_at, updated_at)
+INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, sort_order, is_required, show_in_list, is_searchable, created_at, updated_at)
 VALUES 
     -- user_id (Link to User)
     ('f0000100-0000-0000-0000-000000000001', demo_tenant_id, 'e0000001-0000-0000-0000-000000000100', 'user_id', 'Agent', 
-     '{"type": "Link", "config": {"target_entity": "user"}}'::jsonb, 1, true, true, false, NOW(), NOW()),
+     'link', 1, true, true, false, NOW(), NOW()),
     
     -- date (Date)
     ('f0000100-0000-0000-0000-000000000002', demo_tenant_id, 'e0000001-0000-0000-0000-000000000100', 'date', 'Date',
-     '{"type": "Date"}'::jsonb, 2, true, true, false, NOW(), NOW()),
+     'date', 2, true, true, false, NOW(), NOW()),
     
     -- calls_count (Number)
     ('f0000100-0000-0000-0000-000000000003', demo_tenant_id, 'e0000001-0000-0000-0000-000000000100', 'calls_count', 'Calls Made',
-     '{"type": "Number", "config": {"decimals": 0}}'::jsonb, 3, false, true, false, NOW(), NOW()),
+     'number', 3, false, true, false, NOW(), NOW()),
     
     -- deals_won (Number)
     ('f0000100-0000-0000-0000-000000000004', demo_tenant_id, 'e0000001-0000-0000-0000-000000000100', 'deals_won', 'Deals Won',
-     '{"type": "Number", "config": {"decimals": 0}}'::jsonb, 4, false, true, false, NOW(), NOW()),
+     'number', 4, false, true, false, NOW(), NOW()),
     
     -- viewings_completed (Number)
     ('f0000100-0000-0000-0000-000000000005', demo_tenant_id, 'e0000001-0000-0000-0000-000000000100', 'viewings_completed', 'Viewings Completed',
-     '{"type": "Number", "config": {"decimals": 0}}'::jsonb, 5, false, true, false, NOW(), NOW()),
+     'number', 5, false, true, false, NOW(), NOW()),
     
     -- commission_earned (Money)
     ('f0000100-0000-0000-0000-000000000006', demo_tenant_id, 'e0000001-0000-0000-0000-000000000100', 'commission_earned', 'Commission Earned',
-     '{"type": "Money", "config": {"currency_code": "USD"}}'::jsonb, 6, false, true, false, NOW(), NOW())
+     'money', 6, false, true, false, NOW(), NOW())
 
-ON CONFLICT (tenant_id, entity_type_id, name) DO NOTHING;
+ON CONFLICT (entity_type_id, name) DO NOTHING;
 
 -- Create default view for Agent Stats
 INSERT INTO view_defs (id, tenant_id, entity_type_id, name, label, view_type, is_default, is_system, columns, created_at, updated_at)
 VALUES (
-    'v0000100-0000-0000-0000-000000000001',
+    'a0000100-0000-0000-0000-000000000001',
     demo_tenant_id,
     'e0000001-0000-0000-0000-000000000100',
     'agent_performance',
@@ -216,7 +238,7 @@ VALUES (
     ]'::jsonb,
     NOW(),
     NOW()
-) ON CONFLICT (tenant_id, entity_type_id, name) DO NOTHING;
+) ON CONFLICT (id) DO NOTHING;
 
 END $$;
 

@@ -29,6 +29,7 @@ pub struct WorkflowAction {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)] // old_values used in future comparison logic
 pub struct WorkflowContext {
     pub tenant_id: Uuid,
     pub entity_type: String,
