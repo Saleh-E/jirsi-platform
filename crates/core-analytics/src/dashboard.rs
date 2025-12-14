@@ -4,6 +4,7 @@ use sqlx::{PgPool, Row};
 use serde::{Deserialize, Serialize};
 use chrono::{NaiveDate, Utc, Datelike};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Dashboard KPI response
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -109,9 +110,9 @@ pub async fn get_total_leads(
     let row = sqlx::query(
         r#"
         SELECT COUNT(*) as count
-        FROM contact
-        WHERE tenant_id = $1
-          AND is_lead = true
+        FROM contacts
+        WHERE tenant_id = $1::uuid
+          AND lifecycle_stage = 'lead'
           AND created_at >= $2
           AND created_at <= $3
         "#
@@ -133,8 +134,8 @@ pub async fn get_ongoing_deals(
     let row = sqlx::query(
         r#"
         SELECT COUNT(*) as count
-        FROM deal
-        WHERE tenant_id = $1
+        FROM deals
+        WHERE tenant_id = $1::uuid
           AND stage IS NOT NULL
           AND stage NOT IN ('Won', 'Lost', 'Closed Won', 'Closed Lost')
         "#
@@ -155,8 +156,8 @@ pub async fn get_total_deals(
     let row = sqlx::query(
         r#"
         SELECT COUNT(*) as count
-        FROM deal
-        WHERE tenant_id = $1
+        FROM deals
+        WHERE tenant_id = $1::uuid
           AND created_at >= $2
           AND created_at <= $3
         "#
@@ -170,7 +171,7 @@ pub async fn get_total_deals(
     Ok(row.get::<i64, _>("count"))
 }
 
-/// Get forecasted revenue (deal_value * probability for open deals)
+/// Get forecasted revenue (amount * probability for open deals)
 pub async fn get_forecasted_revenue(
     pool: &PgPool,
     tenant_id: &str,
@@ -178,10 +179,10 @@ pub async fn get_forecasted_revenue(
     let row = sqlx::query(
         r#"
         SELECT COALESCE(SUM(
-            COALESCE(deal_value, 0) * COALESCE(probability, 50) / 100.0
-        ), 0) as forecast
-        FROM deal
-        WHERE tenant_id = $1
+            COALESCE(amount, 0) * COALESCE(probability, 50) / 100.0
+        ), 0)::float8 as forecast
+        FROM deals
+        WHERE tenant_id = $1::uuid
           AND stage IS NOT NULL
           AND stage NOT IN ('Won', 'Lost', 'Closed Won', 'Closed Lost')
         "#
@@ -208,8 +209,8 @@ pub async fn get_win_rate(
                 * 100.0,
                 0
             ) as win_rate
-        FROM deal
-        WHERE tenant_id = $1
+        FROM deals
+        WHERE tenant_id = $1::uuid
           AND created_at >= $2
           AND created_at <= $3
         "#
@@ -236,15 +237,15 @@ pub async fn get_sales_trend(
         ),
         lead_counts AS (
             SELECT DATE(created_at) as date, COUNT(*) as leads
-            FROM contact
-            WHERE tenant_id = $1 AND is_lead = true
+            FROM contacts
+            WHERE tenant_id = $1::uuid AND lifecycle_stage = 'lead'
               AND created_at >= $2 AND created_at <= $3
             GROUP BY DATE(created_at)
         ),
         deal_counts AS (
             SELECT DATE(created_at) as date, COUNT(*) as deals
-            FROM deal
-            WHERE tenant_id = $1
+            FROM deals
+            WHERE tenant_id = $1::uuid
               AND created_at >= $2 AND created_at <= $3
             GROUP BY DATE(created_at)
         )
@@ -287,8 +288,8 @@ pub async fn get_funnel_conversion(
         SELECT 
             COALESCE(stage, 'New') as stage,
             COUNT(*) as count
-        FROM deal
-        WHERE tenant_id = $1
+        FROM deals
+        WHERE tenant_id = $1::uuid
         GROUP BY stage
         "#
     )
@@ -322,15 +323,16 @@ pub async fn get_recent_activities(
     let rows = sqlx::query(
         r#"
         SELECT 
-            id,
-            action,
-            entity_type as entity,
-            entity_name,
-            COALESCE(user_name, 'System') as user_name,
-            created_at
-        FROM activity_log
-        WHERE tenant_id = $1
-        ORDER BY created_at DESC
+            a.id::text,
+            a.activity_type as action,
+            COALESCE(a.entity_type, 'Unknown') as entity,
+            COALESCE(a.title, 'Untitled') as entity_name,
+            COALESCE(u.email, 'System') as user_name,
+            a.created_at
+        FROM activity_log a
+        LEFT JOIN users u ON a.performed_by = u.id
+        WHERE a.tenant_id = $1::uuid
+        ORDER BY a.created_at DESC
         LIMIT $2
         "#
     )
@@ -441,3 +443,6 @@ pub async fn get_dashboard(
         recent_activities,
     })
 }
+
+
+
