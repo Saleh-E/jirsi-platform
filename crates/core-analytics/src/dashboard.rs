@@ -5,22 +5,39 @@ use serde::{Deserialize, Serialize};
 use chrono::{NaiveDate, Utc, Datelike};
 use std::collections::HashMap;
 use uuid::Uuid;
+use crate::targets::{get_target_for_user, MetricType};
 
-/// Dashboard KPI response
+/// A single KPI result with optional target and progress
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct KpiResult {
+    pub value: f64,
+    pub target: Option<f64>,
+    pub progress_percent: Option<f64>,
+    pub trend_percent: f64,
+    pub previous_value: f64,
+}
+
+/// Dashboard KPI response with targets
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct DashboardKpis {
     pub total_leads: i64,
     pub total_leads_prev: i64,
     pub leads_trend: f64,
+    pub leads_target: Option<f64>,
+    pub leads_progress: Option<f64>,
     
     pub total_deals: i64,
     pub ongoing_deals: i64,
     pub total_deals_prev: i64,
     pub deals_trend: f64,
+    pub deals_target: Option<f64>,
+    pub deals_progress: Option<f64>,
     
     pub forecasted_revenue: f64,
     pub forecasted_revenue_prev: f64,
     pub revenue_trend: f64,
+    pub revenue_target: Option<f64>,
+    pub revenue_progress: Option<f64>,
     
     pub win_rate: f64,
     pub win_rate_prev: f64,
@@ -62,6 +79,7 @@ pub struct DashboardResponse {
     pub recent_activities: Vec<ActivityItem>,
 }
 
+
 /// Date range for queries
 #[derive(Clone, Debug)]
 pub struct DateRange {
@@ -70,6 +88,33 @@ pub struct DateRange {
 }
 
 impl DateRange {
+    pub fn today() -> Self {
+        let today = Utc::now().date_naive();
+        Self { from: today, to: today }
+    }
+    
+    pub fn yesterday() -> Self {
+        let today = Utc::now().date_naive();
+        let yesterday = today.pred_opt().unwrap();
+        Self { from: yesterday, to: yesterday }
+    }
+    
+    pub fn this_week() -> Self {
+        let today = Utc::now().date_naive();
+        let days_from_monday = today.weekday().num_days_from_monday();
+        let from = today - chrono::Duration::days(days_from_monday as i64);
+        Self { from, to: today }
+    }
+    
+    pub fn last_week() -> Self {
+        let today = Utc::now().date_naive();
+        let days_from_monday = today.weekday().num_days_from_monday();
+        let this_monday = today - chrono::Duration::days(days_from_monday as i64);
+        let last_monday = this_monday - chrono::Duration::days(7);
+        let last_sunday = this_monday - chrono::Duration::days(1);
+        Self { from: last_monday, to: last_sunday }
+    }
+    
     pub fn this_month() -> Self {
         let today = Utc::now().date_naive();
         let from = NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap();
@@ -94,12 +139,39 @@ impl DateRange {
         Self { from, to: today }
     }
     
+    pub fn last_quarter() -> Self {
+        let today = Utc::now().date_naive();
+        let current_quarter = (today.month() - 1) / 3;
+        let (year, quarter) = if current_quarter == 0 {
+            (today.year() - 1, 3)
+        } else {
+            (today.year(), current_quarter - 1)
+        };
+        let from_month = quarter * 3 + 1;
+        let from = NaiveDate::from_ymd_opt(year, from_month, 1).unwrap();
+        let to = NaiveDate::from_ymd_opt(
+            if quarter == 3 { year + 1 } else { year },
+            if quarter == 3 { 1 } else { from_month + 3 },
+            1
+        ).unwrap().pred_opt().unwrap();
+        Self { from, to }
+    }
+    
     pub fn this_year() -> Self {
         let today = Utc::now().date_naive();
         let from = NaiveDate::from_ymd_opt(today.year(), 1, 1).unwrap();
         Self { from, to: today }
     }
+    
+    pub fn last_year() -> Self {
+        let today = Utc::now().date_naive();
+        let last_year = today.year() - 1;
+        let from = NaiveDate::from_ymd_opt(last_year, 1, 1).unwrap();
+        let to = NaiveDate::from_ymd_opt(last_year, 12, 31).unwrap();
+        Self { from, to }
+    }
 }
+
 
 /// Get total leads count for a date range
 pub async fn get_total_leads(
@@ -376,7 +448,7 @@ fn calculate_trend(current: f64, previous: f64) -> f64 {
     }
 }
 
-/// Get full dashboard data
+/// Get full dashboard data with targets
 pub async fn get_dashboard(
     pool: &PgPool,
     tenant_id: &str,
@@ -384,13 +456,15 @@ pub async fn get_dashboard(
 ) -> Result<DashboardResponse, sqlx::Error> {
     // Determine date ranges
     let (current_range, prev_range) = match range_name {
+        "today" => (DateRange::today(), DateRange::yesterday()),
+        "this_week" | "week" => (DateRange::this_week(), DateRange::last_week()),
         "this_month" | "month" => (DateRange::this_month(), DateRange::last_month()),
-        "this_quarter" | "quarter" => (DateRange::this_quarter(), DateRange::this_month()),
-        "this_year" | "year" => (DateRange::this_year(), DateRange::this_quarter()),
+        "this_quarter" | "quarter" => (DateRange::this_quarter(), DateRange::last_quarter()),
+        "this_year" | "year" => (DateRange::this_year(), DateRange::last_year()),
         _ => (DateRange::this_month(), DateRange::last_month()),
     };
     
-    // Fetch all KPIs in parallel (tokio::join! for better performance)
+    // Fetch all KPIs in parallel
     let (
         total_leads,
         total_leads_prev,
@@ -417,6 +491,18 @@ pub async fn get_dashboard(
         get_recent_activities(pool, tenant_id, 10),
     )?;
     
+    // Fetch targets (optional - don't fail if tables don't exist)
+    let (leads_target, deals_target, revenue_target) = (
+        get_target_for_user(pool, tenant_id, None, MetricType::LeadsCreated, current_range.from, current_range.to).await.ok().flatten(),
+        get_target_for_user(pool, tenant_id, None, MetricType::DealsWon, current_range.from, current_range.to).await.ok().flatten(),
+        get_target_for_user(pool, tenant_id, None, MetricType::Revenue, current_range.from, current_range.to).await.ok().flatten(),
+    );
+    
+    // Calculate progress percentages
+    let leads_progress = leads_target.map(|t| if t > 0.0 { (total_leads as f64 / t * 100.0).min(200.0) } else { 0.0 });
+    let deals_progress = deals_target.map(|t| if t > 0.0 { (ongoing_deals as f64 / t * 100.0).min(200.0) } else { 0.0 });
+    let revenue_progress = revenue_target.map(|t| if t > 0.0 { (forecasted_revenue / t * 100.0).min(200.0) } else { 0.0 });
+    
     // Calculate trends
     let leads_trend = calculate_trend(total_leads as f64, total_leads_prev as f64);
     let deals_trend = calculate_trend(total_deals as f64, total_deals_prev as f64);
@@ -427,13 +513,19 @@ pub async fn get_dashboard(
             total_leads,
             total_leads_prev,
             leads_trend,
+            leads_target,
+            leads_progress,
             total_deals,
             ongoing_deals,
             total_deals_prev,
             deals_trend,
+            deals_target,
+            deals_progress,
             forecasted_revenue,
-            forecasted_revenue_prev: 0.0, // Would need another query
+            forecasted_revenue_prev: 0.0,
             revenue_trend: 0.0,
+            revenue_target,
+            revenue_progress,
             win_rate,
             win_rate_prev,
             win_rate_trend,

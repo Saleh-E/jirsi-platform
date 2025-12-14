@@ -504,7 +504,7 @@ pub async fn create_interaction(
 // ANALYTICS API FUNCTIONS (Dashboard)
 // ============================================================================
 
-/// Dashboard KPI data
+/// Dashboard KPI data with targets
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DashboardKpis {
     #[serde(default)]
@@ -514,6 +514,10 @@ pub struct DashboardKpis {
     #[serde(default)]
     pub leads_trend: f64,
     #[serde(default)]
+    pub leads_target: Option<f64>,
+    #[serde(default)]
+    pub leads_progress: Option<f64>,
+    #[serde(default)]
     pub total_deals: i64,
     #[serde(default)]
     pub ongoing_deals: i64,
@@ -522,11 +526,19 @@ pub struct DashboardKpis {
     #[serde(default)]
     pub deals_trend: f64,
     #[serde(default)]
+    pub deals_target: Option<f64>,
+    #[serde(default)]
+    pub deals_progress: Option<f64>,
+    #[serde(default)]
     pub forecasted_revenue: f64,
     #[serde(default)]
     pub forecasted_revenue_prev: f64,
     #[serde(default)]
     pub revenue_trend: f64,
+    #[serde(default)]
+    pub revenue_target: Option<f64>,
+    #[serde(default)]
+    pub revenue_progress: Option<f64>,
     #[serde(default)]
     pub win_rate: f64,
     #[serde(default)]
