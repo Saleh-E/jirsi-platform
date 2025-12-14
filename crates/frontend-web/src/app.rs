@@ -3,7 +3,7 @@
 use leptos::*;
 use leptos_router::*;
 
-use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage};
+use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage, ProfilePage, SettingsPage};
 use crate::pages::public::{listings::PublicListingsPage, detail::PublicDetailPage};
 use crate::components::shell::Shell;
 use crate::layouts::public_layout::PublicLayout;
@@ -25,6 +25,8 @@ pub fn App() -> impl IntoView {
                 // App routes (authenticated)
                 <Route path="/" view=Shell>
                     <Route path="" view=HomePage/>
+                    <Route path="/app/profile" view=ProfilePage/>
+                    <Route path="/app/settings" view=SettingsPage/>
                     <Route path="/app/:app/entity/:entity" view=EntityListPage/>
                     <Route path="/app/:app/entity/:entity/:id" view=EntityDetailPage/>
                 </Route>

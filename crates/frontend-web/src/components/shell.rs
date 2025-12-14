@@ -2,6 +2,7 @@
 
 use leptos::*;
 use leptos_router::*;
+use crate::context::theme::ThemeToggle;
 
 /// Main application shell with sidebar and topbar
 #[component]
@@ -61,21 +62,24 @@ pub fn Shell() -> impl IntoView {
                     <div class="search-bar">
                         <input type="text" placeholder="Search..." class="search-input"/>
                     </div>
-                    <div class="user-menu-container">
-                        <button class="user-btn" on:click=move |_| set_show_user_menu.update(|v| *v = !*v)>
-                            {user_email}
-                            <span class="arrow">"▼"</span>
-                        </button>
-                        {move || show_user_menu.get().then(|| view! {
-                            <div class="user-dropdown">
-                                <a href="/profile" class="dropdown-item">"Profile"</a>
-                                <a href="/settings" class="dropdown-item">"Settings"</a>
-                                <hr/>
-                                <button class="dropdown-item logout" on:click=on_logout.clone()>
-                                    "Logout"
-                                </button>
-                            </div>
-                        })}
+                    <div class="topbar-actions">
+                        <ThemeToggle/>
+                        <div class="user-menu-container">
+                            <button class="user-btn" on:click=move |_| set_show_user_menu.update(|v| *v = !*v)>
+                                {user_email}
+                                <span class="arrow">"▼"</span>
+                            </button>
+                            {move || show_user_menu.get().then(|| view! {
+                                <div class="user-dropdown">
+                                    <a href="/app/profile" class="dropdown-item">"Profile"</a>
+                                    <a href="/app/settings" class="dropdown-item">"Settings"</a>
+                                    <hr/>
+                                    <button class="dropdown-item logout" on:click=on_logout.clone()>
+                                        "Logout"
+                                    </button>
+                                </div>
+                            })}
+                        </div>
                     </div>
                 </header>
                 <div class="content">
@@ -85,3 +89,4 @@ pub fn Shell() -> impl IntoView {
         </div>
     }
 }
+
