@@ -499,3 +499,102 @@ pub async fn create_interaction(
     });
     post_json(&url, &body).await
 }
+
+// ============================================================================
+// ANALYTICS API FUNCTIONS (Dashboard)
+// ============================================================================
+
+/// Dashboard KPI data
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DashboardKpis {
+    #[serde(default)]
+    pub total_leads: i64,
+    #[serde(default)]
+    pub total_leads_prev: i64,
+    #[serde(default)]
+    pub leads_trend: f64,
+    #[serde(default)]
+    pub total_deals: i64,
+    #[serde(default)]
+    pub ongoing_deals: i64,
+    #[serde(default)]
+    pub total_deals_prev: i64,
+    #[serde(default)]
+    pub deals_trend: f64,
+    #[serde(default)]
+    pub forecasted_revenue: f64,
+    #[serde(default)]
+    pub forecasted_revenue_prev: f64,
+    #[serde(default)]
+    pub revenue_trend: f64,
+    #[serde(default)]
+    pub win_rate: f64,
+    #[serde(default)]
+    pub win_rate_prev: f64,
+    #[serde(default)]
+    pub win_rate_trend: f64,
+}
+
+/// Sales trend data point
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesTrendPoint {
+    pub date: String,
+    pub leads: i64,
+    pub deals: i64,
+}
+
+/// Funnel stage data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunnelStage {
+    pub stage: String,
+    pub count: i64,
+}
+
+/// Activity item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActivityItem {
+    pub id: String,
+    pub action: String,
+    pub entity: String,
+    pub entity_name: String,
+    pub user: String,
+    pub timestamp: String,
+}
+
+/// Full dashboard response from API
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DashboardResponse {
+    #[serde(default)]
+    pub kpis: DashboardKpis,
+    #[serde(default)]
+    pub sales_trend: Vec<SalesTrendPoint>,
+    #[serde(default)]
+    pub funnel_data: Vec<FunnelStage>,
+    #[serde(default)]
+    pub recent_activities: Vec<ActivityItem>,
+}
+
+/// API wrapper response
+#[derive(Debug, Clone, Deserialize)]
+pub struct ApiResponse<T> {
+    pub success: bool,
+    pub data: Option<T>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// Fetch dashboard data from analytics API
+pub async fn fetch_dashboard(range: &str) -> Result<DashboardResponse, String> {
+    let url = format!(
+        "http://localhost:3000/api/v1/analytics/dashboard?tenant_id={}&range={}",
+        TENANT_ID, range
+    );
+    
+    let response: ApiResponse<DashboardResponse> = fetch_json(&url).await?;
+    
+    if response.success {
+        Ok(response.data.unwrap_or_default())
+    } else {
+        Err(response.error.unwrap_or_else(|| "Unknown error".to_string()))
+    }
+}

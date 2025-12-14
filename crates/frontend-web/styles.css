@@ -2772,3 +2772,139 @@ select:focus {
     font-size: 0.75rem;
     color: var(--text-muted);
 }
+
+/* ============================================ */
+/* SKELETON LOADERS */
+/* ============================================ */
+
+.dashboard-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.skeleton-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    height: 140px;
+    overflow: hidden;
+    position: relative;
+}
+
+.skeleton-chart {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    height: 300px;
+    overflow: hidden;
+    position: relative;
+}
+
+.skeleton-chart--small {
+    height: 250px;
+}
+
+.skeleton-activity {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    height: 200px;
+    overflow: hidden;
+    position: relative;
+}
+
+.skeleton-shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.05) 50%,
+        transparent 100%
+    );
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* ============================================ */
+/* DASHBOARD ERROR STATE */
+/* ============================================ */
+
+.dashboard-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+}
+
+.dashboard-error .error-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.dashboard-error h3 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.dashboard-error .error-message {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    max-width: 400px;
+}
+
+/* ============================================ */
+/* EMPTY STATES */
+/* ============================================ */
+
+.chart-empty,
+.activity-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.chart-empty-icon,
+.activity-empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.chart-empty p,
+.activity-empty p {
+    font-size: 0.875rem;
+}
+
+/* ============================================ */
+/* CHART LAYOUT FIXES */
+/* ============================================ */
+
+.dashboard-chart--wide {
+    grid-column: 1 / 2;
+}
+
+@media (min-width: 900px) {
+    .dashboard-charts {
+        grid-template-columns: 2fr 1fr;
+    }
+    
+    .dashboard-chart--wide {
+        grid-column: 1 / 2;
+    }
+}
