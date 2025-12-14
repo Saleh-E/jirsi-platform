@@ -143,7 +143,8 @@ impl NodeHandler for SendEmailHandler {
     }
 }
 
-/// Condition If handler
+/// Condition If handler - evaluates conditions on record data
+/// Supports: equals, not_equals, greater_than, less_than, >=, <=, contains, is_null, changed_to
 pub struct ConditionIfHandler;
 
 #[async_trait]
@@ -152,7 +153,7 @@ impl NodeHandler for ConditionIfHandler {
         &self,
         node: &NodeDef,
         inputs: HashMap<String, Value>,
-        _context: &mut ExecutionContext,
+        context: &mut ExecutionContext,
     ) -> Result<Value, NodeEngineError> {
         let condition_field = node.config.get("field")
             .and_then(|v| v.as_str())
@@ -164,29 +165,145 @@ impl NodeHandler for ConditionIfHandler {
         
         let compare_value = node.config.get("value").cloned().unwrap_or(Value::Null);
         
+        // Get current value from input data
         let input_value = inputs.get("data")
             .and_then(|v| v.get(condition_field))
             .cloned()
             .unwrap_or(Value::Null);
         
+        // Get old value for change detection (from trigger context)
+        let old_value = context.values.get("$trigger")
+            .and_then(|t| t.get("old_values"))
+            .and_then(|old| old.get(condition_field))
+            .cloned();
+        
         let result = match operator {
-            "equals" => input_value == compare_value,
-            "not_equals" => input_value != compare_value,
-            "is_null" => input_value.is_null(),
-            "is_not_null" => !input_value.is_null(),
+            // Equality operators
+            "equals" | "eq" | "==" => input_value == compare_value,
+            "not_equals" | "neq" | "!=" => input_value != compare_value,
+            
+            // Numeric comparison operators
+            "greater_than" | "gt" | ">" => {
+                compare_numeric(&input_value, &compare_value, |a, b| a > b)
+            }
+            "less_than" | "lt" | "<" => {
+                compare_numeric(&input_value, &compare_value, |a, b| a < b)
+            }
+            "greater_than_or_equal" | "gte" | ">=" => {
+                compare_numeric(&input_value, &compare_value, |a, b| a >= b)
+            }
+            "less_than_or_equal" | "lte" | "<=" => {
+                compare_numeric(&input_value, &compare_value, |a, b| a <= b)
+            }
+            
+            // Changed to - checks if field value changed TO a specific value
+            "changed_to" => {
+                let changed = if let Some(old) = &old_value {
+                    // Value changed FROM something else TO compare_value
+                    *old != compare_value && input_value == compare_value
+                } else {
+                    // No old value means this is a create, check if new value matches
+                    input_value == compare_value
+                };
+                changed
+            }
+            
+            // Changed from - checks if field value changed FROM a specific value
+            "changed_from" => {
+                if let Some(old) = &old_value {
+                    *old == compare_value && input_value != compare_value
+                } else {
+                    false
+                }
+            }
+            
+            // Changed - checks if field value changed at all
+            "changed" => {
+                if let Some(old) = &old_value {
+                    *old != input_value
+                } else {
+                    true // Created = changed
+                }
+            }
+            
+            // Null checks
+            "is_null" | "null" => input_value.is_null(),
+            "is_not_null" | "not_null" => !input_value.is_null(),
+            
+            // String operators
             "contains" => {
                 input_value.as_str()
                     .map(|s| s.contains(compare_value.as_str().unwrap_or("")))
                     .unwrap_or(false)
             }
+            "starts_with" => {
+                input_value.as_str()
+                    .map(|s| s.starts_with(compare_value.as_str().unwrap_or("")))
+                    .unwrap_or(false)
+            }
+            "ends_with" => {
+                input_value.as_str()
+                    .map(|s| s.ends_with(compare_value.as_str().unwrap_or("")))
+                    .unwrap_or(false)
+            }
+            
+            // In list
+            "in" => {
+                if let Some(arr) = compare_value.as_array() {
+                    arr.contains(&input_value)
+                } else {
+                    false
+                }
+            }
+            "not_in" => {
+                if let Some(arr) = compare_value.as_array() {
+                    !arr.contains(&input_value)
+                } else {
+                    true
+                }
+            }
+            
             _ => false,
         };
+        
+        tracing::debug!(
+            field = condition_field,
+            operator = operator,
+            result = result,
+            "Condition evaluated"
+        );
         
         Ok(serde_json::json!({
             "condition": result,
             "field": condition_field,
-            "operator": operator
+            "operator": operator,
+            "current_value": input_value,
+            "compare_value": compare_value,
+            "old_value": old_value
         }))
+    }
+}
+
+/// Helper function for numeric comparisons
+fn compare_numeric<F>(a: &Value, b: &Value, cmp: F) -> bool 
+where
+    F: Fn(f64, f64) -> bool
+{
+    let a_num = value_to_f64(a);
+    let b_num = value_to_f64(b);
+    
+    match (a_num, b_num) {
+        (Some(a), Some(b)) => cmp(a, b),
+        _ => false,
+    }
+}
+
+/// Convert JSON value to f64 for numeric comparison
+fn value_to_f64(v: &Value) -> Option<f64> {
+    match v {
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.parse::<f64>().ok(),
+        _ => None,
     }
 }
 

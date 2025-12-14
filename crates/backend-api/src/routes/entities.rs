@@ -621,16 +621,22 @@ async fn create_record(
         _ => return Err(ApiError::NotFound(format!("Entity type {} not supported for create", entity_type))),
     }
 
-    // Trigger workflows for record_created
-    let _ = execute_triggered_workflows(
-        &state.pool,
-        query.tenant_id,
-        "record_created",
-        &entity_type,
-        id,
-        None,
-        data.clone(),
-    ).await;
+    // Trigger workflows asynchronously (fire and forget - don't block HTTP response)
+    let pool = state.pool.clone();
+    let tenant = query.tenant_id;
+    let et = entity_type.clone();
+    let new_data = data.clone();
+    tokio::spawn(async move {
+        let _ = execute_triggered_workflows(
+            &pool,
+            tenant,
+            "record_created",
+            &et,
+            id,
+            None,
+            new_data,
+        ).await;
+    });
 
     Ok(Json(serde_json::json!({ "id": id, "created": true })))
 }
@@ -789,16 +795,22 @@ async fn update_record(
         _ => return Err(ApiError::NotFound(format!("Entity type {} not supported for update", entity_type))),
     }
 
-    // Trigger workflows for field_changed
-    let _ = execute_triggered_workflows(
-        &state.pool,
-        query.tenant_id,
-        "field_changed",
-        &entity_type,
-        id,
-        None, // TODO: fetch old_values before update for comparison
-        data.clone(),
-    ).await;
+    // Trigger workflows asynchronously (fire and forget - don't block HTTP response)
+    let pool = state.pool.clone();
+    let tenant = query.tenant_id;
+    let et = entity_type.clone();
+    let new_data = data.clone();
+    tokio::spawn(async move {
+        let _ = execute_triggered_workflows(
+            &pool,
+            tenant,
+            "field_changed",
+            &et,
+            id,
+            None, // TODO: fetch old_values before update for comparison
+            new_data,
+        ).await;
+    });
 
     Ok(Json(serde_json::json!({ "id": id, "updated": true })))
 }
