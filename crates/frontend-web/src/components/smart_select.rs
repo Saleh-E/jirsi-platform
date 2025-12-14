@@ -6,16 +6,27 @@
 //! - Keyboard navigation
 //! - Custom styling
 //! - Optional icons/images per option
+//! - Multi-select with chips
+//! - Async option loading with debounce
 
 use leptos::*;
+
+/// Icon type for SelectOption - can be emoji/text or image URL
+#[derive(Clone, Debug, PartialEq)]
+pub enum IconType {
+    /// Text/emoji icon (e.g., "🔥")
+    Text(String),
+    /// Image URL
+    Image(String),
+}
 
 /// A single option in the SmartSelect dropdown
 #[derive(Clone, Debug, PartialEq)]
 pub struct SelectOption {
     pub value: String,
     pub label: String,
-    /// Optional icon URL or emoji
-    pub icon: Option<String>,
+    /// Optional icon - can be emoji or image URL
+    pub icon: Option<IconType>,
 }
 
 impl SelectOption {
@@ -27,11 +38,21 @@ impl SelectOption {
         }
     }
     
+    /// Create option with text/emoji icon
     pub fn with_icon(value: impl Into<String>, label: impl Into<String>, icon: impl Into<String>) -> Self {
         Self {
             value: value.into(),
             label: label.into(),
-            icon: Some(icon.into()),
+            icon: Some(IconType::Text(icon.into())),
+        }
+    }
+    
+    /// Create option with image URL icon
+    pub fn with_image(value: impl Into<String>, label: impl Into<String>, image_url: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            label: label.into(),
+            icon: Some(IconType::Image(image_url.into())),
         }
     }
 }
@@ -258,8 +279,13 @@ pub fn SmartSelect(
                                                 set_focused_index.set(Some(idx));
                                             }
                                         >
-                                            {opt_icon.map(|icon| view! {
-                                                <span class="smart-select__option-icon">{icon}</span>
+                                            {opt_icon.map(|icon| match icon {
+                                                IconType::Text(text) => view! {
+                                                    <span class="smart-select__option-icon">{text}</span>
+                                                }.into_view(),
+                                                IconType::Image(url) => view! {
+                                                    <img class="smart-select__option-img" src=url alt="" />
+                                                }.into_view(),
                                             })}
                                             <span class="smart-select__option-label">{opt_label}</span>
                                         </div>
@@ -497,4 +523,318 @@ pub const SMART_SELECT_STYLES: &str = r#"
     bottom: 0;
     z-index: 999;
 }
+
+/* Image icons */
+.smart-select__option-img {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    object-fit: cover;
+    margin-right: 0.5rem;
+}
+
+/* Multi-select chips */
+.multi-select__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    padding: 0.25rem 0;
+}
+
+.multi-select__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--accent-color-soft, #7c3aed20);
+    border: 1px solid var(--accent-color, #7c3aed);
+    border-radius: 16px;
+    font-size: 0.8125rem;
+    color: var(--accent-color, #7c3aed);
+}
+
+.multi-select__chip-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    background: var(--accent-color, #7c3aed);
+    color: white;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1;
+    transition: opacity 0.2s;
+}
+
+.multi-select__chip-remove:hover {
+    opacity: 0.8;
+}
+
+.multi-select__add-btn {
+    padding: 0.25rem 0.625rem;
+    background: transparent;
+    border: 1px dashed var(--border-color, #3a3a4a);
+    border-radius: 16px;
+    color: var(--text-muted, #888);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    transition: all 0.2s;
+}
+
+.multi-select__add-btn:hover {
+    border-color: var(--accent-color, #7c3aed);
+    color: var(--accent-color, #7c3aed);
+}
 "#;
+
+/// Multi Select - A searchable dropdown for selecting multiple values with chips
+#[component]
+pub fn MultiSelect(
+    /// Available options to select from
+    options: Vec<SelectOption>,
+    /// Currently selected values
+    #[prop(optional, default = Vec::new())] values: Vec<String>,
+    /// Callback when selection changes
+    #[prop(into)] on_change: Callback<Vec<String>>,
+    /// Enable search/filter input
+    #[prop(optional, default = true)] allow_search: bool,
+    /// Enable "+ Add New" button
+    #[prop(optional, default = false)] allow_create: bool,
+    /// Label for the create button
+    #[prop(optional, default = String::from("+ Add New"))] create_label: String,
+    /// Callback when "Add New" is clicked
+    #[prop(optional, into)] on_create: Option<Callback<()>>,
+    /// Callback with typed text for inline creation
+    #[prop(optional, into)] on_create_value: Option<Callback<String>>,
+    /// Placeholder text
+    #[prop(optional, default = String::from("Select options..."))] placeholder: String,
+    /// Whether the field is disabled
+    #[prop(optional)] disabled: bool,
+) -> impl IntoView {
+    // State
+    let (is_open, set_is_open) = create_signal(false);
+    let (search_query, set_search_query) = create_signal(String::new());
+    let (selected_values, set_selected_values) = create_signal(values.clone());
+    
+    // Store options
+    let options_stored = store_value(options.clone());
+    
+    // Get labels for selected values
+    let selected_labels = move || {
+        let vals = selected_values.get();
+        let opts = options_stored.get_value();
+        vals.iter().filter_map(|v| {
+            opts.iter().find(|o| &o.value == v).map(|o| (v.clone(), o.label.clone()))
+        }).collect::<Vec<_>>()
+    };
+    
+    // Filter available options (exclude already selected)
+    let available_options = move || {
+        let query = search_query.get().to_lowercase();
+        let selected = selected_values.get();
+        options_stored.get_value()
+            .into_iter()
+            .filter(|o| !selected.contains(&o.value))
+            .filter(|o| query.is_empty() || o.label.to_lowercase().contains(&query))
+            .collect::<Vec<_>>()
+    };
+    
+    // Add a value
+    let add_value = move |val: String| {
+        set_selected_values.update(|vals| {
+            if !vals.contains(&val) {
+                vals.push(val);
+            }
+        });
+        on_change.call(selected_values.get());
+        set_search_query.set(String::new());
+    };
+    
+    // Remove a value
+    let remove_value = move |val: String| {
+        set_selected_values.update(|vals| {
+            vals.retain(|v| v != &val);
+        });
+        on_change.call(selected_values.get());
+    };
+    
+    // Handle create
+    let on_create_clone = on_create.clone();
+    let handle_create = move |_: web_sys::MouseEvent| {
+        if let Some(ref callback) = on_create_clone {
+            callback.call(());
+        }
+        set_is_open.set(false);
+    };
+    
+    view! {
+        <div class={move || {
+            let mut classes = vec!["smart-select".to_string(), "multi-select".to_string()];
+            if is_open.get() {
+                classes.push("smart-select--open".to_string());
+            }
+            if disabled {
+                classes.push("smart-select--disabled".to_string());
+            }
+            classes.join(" ")
+        }}>
+            // Chips display
+            <div class="multi-select__chips">
+                {move || selected_labels().into_iter().map(|(val, label)| {
+                    let val_remove = val.clone();
+                    view! {
+                        <span class="multi-select__chip">
+                            {label}
+                            <button
+                                type="button"
+                                class="multi-select__chip-remove"
+                                on:click=move |_| remove_value(val_remove.clone())
+                            >
+                                "×"
+                            </button>
+                        </span>
+                    }
+                }).collect_view()}
+                
+                // Add button to open dropdown
+                <button
+                    type="button"
+                    class="multi-select__add-btn"
+                    on:click=move |_| {
+                        if !disabled {
+                            set_is_open.set(true);
+                        }
+                    }
+                    disabled=disabled
+                >
+                    {move || if selected_values.get().is_empty() { placeholder.clone() } else { "+ Add".to_string() }}
+                </button>
+            </div>
+            
+            // Dropdown
+            {move || is_open.get().then(|| {
+                let on_create_value_clone = on_create_value.clone();
+                view! {
+                    <div class="smart-select__dropdown">
+                        // Search input
+                        {allow_search.then(|| view! {
+                            <div class="smart-select__search-wrapper">
+                                <input
+                                    type="text"
+                                    class="smart-select__search"
+                                    placeholder="Search..."
+                                    prop:value=move || search_query.get()
+                                    on:input=move |ev| set_search_query.set(event_target_value(&ev))
+                                />
+                            </div>
+                        })}
+                        
+                        // Options
+                        <div class="smart-select__options">
+                            {move || {
+                                let opts = available_options();
+                                if opts.is_empty() {
+                                    view! {
+                                        <div class="smart-select__empty">
+                                            "No more options"
+                                        </div>
+                                    }.into_view()
+                                } else {
+                                    opts.into_iter().map(|opt| {
+                                        let opt_value = opt.value.clone();
+                                        let opt_label = opt.label.clone();
+                                        let opt_icon = opt.icon.clone();
+                                        view! {
+                                            <div
+                                                class="smart-select__option"
+                                                on:click=move |_| {
+                                                    add_value(opt_value.clone());
+                                                }
+                                            >
+                                                {opt_icon.map(|icon| match icon {
+                                                    IconType::Text(text) => view! {
+                                                        <span class="smart-select__option-icon">{text}</span>
+                                                    }.into_view(),
+                                                    IconType::Image(url) => view! {
+                                                        <img class="smart-select__option-img" src=url alt="" />
+                                                    }.into_view(),
+                                                })}
+                                                <span class="smart-select__option-label">{opt_label}</span>
+                                            </div>
+                                        }
+                                    }).collect_view()
+                                }
+                            }}
+                        </div>
+                        
+                        // Create button
+                        {allow_create.then(|| {
+                            let label = create_label.clone();
+                            let on_create_value_inner = on_create_value_clone.clone();
+                            view! {
+                                <div class="smart-select__create">
+                                    {move || {
+                                        let query = search_query.get();
+                                        let trimmed = query.trim();
+                                        let opts = options_stored.get_value();
+                                        let exact_match = opts.iter().any(|o| 
+                                            o.label.to_lowercase() == trimmed.to_lowercase()
+                                        );
+                                        
+                                        if !trimmed.is_empty() && !exact_match && on_create_value_inner.is_some() {
+                                            let typed_text = trimmed.to_string();
+                                            let typed_text_click = typed_text.clone();
+                                            let callback = on_create_value_inner.clone();
+                                            view! {
+                                                <button
+                                                    type="button"
+                                                    class="smart-select__create-btn"
+                                                    on:click=move |_| {
+                                                        if let Some(ref cb) = callback {
+                                                            cb.call(typed_text_click.clone());
+                                                        }
+                                                        set_is_open.set(false);
+                                                        set_search_query.set(String::new());
+                                                    }
+                                                >
+                                                    {format!("+ Add \"{}\"", typed_text)}
+                                                </button>
+                                            }.into_view()
+                                        } else {
+                                            let label_inner = label.clone();
+                                            view! {
+                                                <button
+                                                    type="button"
+                                                    class="smart-select__create-btn"
+                                                    on:click=handle_create
+                                                >
+                                                    {label_inner}
+                                                </button>
+                                            }.into_view()
+                                        }
+                                    }}
+                                </div>
+                            }
+                        })}
+                    </div>
+                }
+            })}
+            
+            // Backdrop
+            {move || is_open.get().then(|| view! {
+                <div 
+                    class="smart-select__backdrop"
+                    on:click=move |_| {
+                        set_is_open.set(false);
+                        set_search_query.set(String::new());
+                    }
+                />
+            })}
+        </div>
+    }
+}
+

@@ -447,6 +447,7 @@ fn render_edit_input(
 use crate::components::smart_select::{SmartSelect, SelectOption};
 use crate::components::create_modal::CreateModal;
 use crate::api::{fetch_entity_list, API_BASE, TENANT_ID};
+use wasm_bindgen::JsCast;
 
 /// Created record info returned from CreateModal
 #[derive(Clone, Debug)]
@@ -606,8 +607,8 @@ pub fn DynamicSelect(
     #[prop(optional)] value: Option<String>,
     /// Callback when selection changes
     #[prop(into)] on_change: Callback<String>,
-    /// Field ID for updating options via API (future use)
-    #[prop(optional)] _field_id: Option<String>,
+    /// Field ID for updating options via API
+    #[prop(optional)] field_id: Option<String>,
     /// Allow adding new options
     #[prop(optional, default = true)] allow_create: bool,
     /// Placeholder text
@@ -617,6 +618,7 @@ pub fn DynamicSelect(
 ) -> impl IntoView {
     let (current_options, set_current_options) = create_signal(options.clone());
     let (selected_value, set_selected_value) = create_signal(value.clone());
+    let field_id_stored = store_value(field_id);
     
     // Convert string options to SelectOption
     let select_options = move || {
@@ -633,7 +635,7 @@ pub fn DynamicSelect(
     let handle_create_value = move |new_value: String| {
         let trimmed = new_value.trim().to_string();
         if !trimmed.is_empty() {
-            // Add to local options
+            // Add to local options immediately
             set_current_options.update(|opts| {
                 if !opts.contains(&trimmed) {
                     opts.push(trimmed.clone());
@@ -641,14 +643,65 @@ pub fn DynamicSelect(
             });
             // Select the new option
             set_selected_value.set(Some(trimmed.clone()));
-            on_change.call(trimmed);
+            on_change.call(trimmed.clone());
             
-            // TODO: Call API to persist the new option
-            // if let Some(fid) = _field_id.clone() {
-            //     spawn_local(async move {
-            //         // PATCH /meta/fields/{field_id}
-            //     });
-            // }
+            // Persist to API if field_id is provided
+            if let Some(fid) = field_id_stored.get_value() {
+                let new_opt = trimmed.clone();
+                let all_opts = current_options.get();
+                spawn_local(async move {
+                    // Build the options array as JSON
+                    let options_json: Vec<serde_json::Value> = all_opts.iter()
+                        .map(|s| serde_json::Value::String(s.clone()))
+                        .collect();
+                    
+                    let body = serde_json::json!({
+                        "options": options_json
+                    });
+                    
+                    let url = format!("{}/meta/fields/{}?tenant_id={}", API_BASE, fid, TENANT_ID);
+                    
+                    // Make PATCH request
+                    let window = match web_sys::window() {
+                        Some(w) => w,
+                        None => {
+                            web_sys::console::error_1(&"No window available".into());
+                            return;
+                        }
+                    };
+                    
+                    let opts = web_sys::RequestInit::new();
+                    opts.set_method("PATCH");
+                    opts.set_mode(web_sys::RequestMode::Cors);
+                    opts.set_body(&wasm_bindgen::JsValue::from_str(&body.to_string()));
+                    
+                    match web_sys::Request::new_with_str_and_init(&url, &opts) {
+                        Ok(request) => {
+                            if let Err(_e) = request.headers().set("Content-Type", "application/json") {
+                                web_sys::console::error_1(&"Failed to set header".into());
+                                return;
+                            }
+                            
+                            match wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await {
+                                Ok(resp) => {
+                                    let resp: web_sys::Response = resp.dyn_into().unwrap();
+                                    if resp.ok() {
+                                        web_sys::console::log_1(&format!("Saved new option '{}' to field {}", new_opt, fid).into());
+                                    } else {
+                                        web_sys::console::error_1(&format!("Failed to save option: HTTP {}", resp.status()).into());
+                                    }
+                                }
+                                Err(_e) => {
+                                    web_sys::console::error_1(&"Fetch error".into());
+                                }
+                            }
+                        }
+                        Err(_e) => {
+                            web_sys::console::error_1(&"Request error".into());
+                        }
+                    }
+                });
+            }
         }
     };
     
@@ -669,3 +722,187 @@ pub fn DynamicSelect(
     }
 }
 
+/// AsyncLinkInput - Link input with debounced async option loading
+/// Fetches options as user types with debounce to reduce API calls
+#[component]
+pub fn AsyncLinkInput(
+    /// Target entity type to fetch
+    target_entity: String,
+    /// Label for the target entity
+    #[prop(optional)] target_label: Option<String>,
+    /// Currently selected value (ID)
+    #[prop(optional)] value: Option<String>,
+    /// Callback when selection changes
+    #[prop(into)] on_change: Callback<String>,
+    /// Debounce delay in milliseconds
+    #[prop(optional, default = 300)] debounce_ms: u32,
+    /// Placeholder text
+    #[prop(optional)] placeholder: Option<String>,
+    /// Whether the field is disabled
+    #[prop(optional)] disabled: bool,
+) -> impl IntoView {
+    let target_entity_stored = store_value(target_entity.clone());
+    let target_label_stored = store_value(target_label.clone().unwrap_or_else(|| target_entity.clone()));
+    
+    let (options, set_options) = create_signal::<Vec<SelectOption>>(Vec::new());
+    let (selected_value, set_selected_value) = create_signal(value.clone());
+    let (loading, set_loading) = create_signal(false);
+    let (show_modal, set_show_modal) = create_signal(false);
+    let (search_query, set_search_query) = create_signal(String::new());
+    let (debounce_handle, set_debounce_handle) = create_signal::<Option<i32>>(None);
+    
+    // Initial fetch
+    let entity_for_fetch = target_entity.clone();
+    create_effect(move |_| {
+        let entity = entity_for_fetch.clone();
+        spawn_local(async move {
+            set_loading.set(true);
+            if let Ok(records) = fetch_entity_list(&entity).await {
+                let opts: Vec<SelectOption> = records.data.iter().filter_map(|r: &serde_json::Value| {
+                    let id = r.get("id")?.as_str()?.to_string();
+                    let label = r.get("name")
+                        .or_else(|| r.get("title"))
+                        .or_else(|| r.get("first_name"))
+                        .and_then(|v: &serde_json::Value| v.as_str())
+                        .map(|s: &str| {
+                            if let Some(last) = r.get("last_name").and_then(|v: &serde_json::Value| v.as_str()) {
+                                format!("{} {}", s, last)
+                            } else {
+                                s.to_string()
+                            }
+                        })
+                        .unwrap_or_else(|| id[..8.min(id.len())].to_string());
+                    Some(SelectOption::new(id, label))
+                }).collect();
+                set_options.set(opts);
+                set_loading.set(false);
+            }
+        });
+    });
+    
+    // Debounced search function
+    let debounce_search = move |query: String| {
+        // Cancel previous timeout
+        if let Some(handle) = debounce_handle.get() {
+            if let Some(window) = web_sys::window() {
+                window.clear_timeout_with_handle(handle);
+            }
+        }
+        
+        set_search_query.set(query.clone());
+        
+        // Set new timeout
+        if let Some(window) = web_sys::window() {
+            let entity = target_entity_stored.get_value();
+            let callback = wasm_bindgen::closure::Closure::once_into_js(move || {
+                spawn_local(async move {
+                    set_loading.set(true);
+                    // Add search query parameter if backend supports it
+                    let url = if query.is_empty() {
+                        format!("{}/entities/{}?tenant_id={}", API_BASE, entity, TENANT_ID)
+                    } else {
+                        format!("{}/entities/{}?tenant_id={}&search={}", API_BASE, entity, TENANT_ID, query)
+                    };
+                    
+                    // Fetch with search
+                    match crate::api::fetch_json::<crate::api::GenericListResponse>(&url).await {
+                        Ok(records) => {
+                            let opts: Vec<SelectOption> = records.data.iter().filter_map(|r: &serde_json::Value| {
+                                let id = r.get("id")?.as_str()?.to_string();
+                                let label = r.get("name")
+                                    .or_else(|| r.get("title"))
+                                    .or_else(|| r.get("first_name"))
+                                    .and_then(|v: &serde_json::Value| v.as_str())
+                                    .map(|s: &str| s.to_string())
+                                    .unwrap_or_else(|| id[..8.min(id.len())].to_string());
+                                Some(SelectOption::new(id, label))
+                            }).collect();
+                            set_options.set(opts);
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(&format!("Search fetch error: {}", e).into());
+                        }
+                    }
+                    set_loading.set(false);
+                });
+            });
+            
+            if let Ok(handle) = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                callback.as_ref().unchecked_ref(),
+                debounce_ms as i32,
+            ) {
+                set_debounce_handle.set(Some(handle));
+            }
+        }
+    };
+    
+    // Handle selection
+    let handle_change = move |val: String| {
+        set_selected_value.set(Some(val.clone()));
+        on_change.call(val);
+    };
+    
+    // Handle record creation
+    let handle_created = move |id: String| {
+        set_selected_value.set(Some(id.clone()));
+        on_change.call(id.clone());
+        set_show_modal.set(false);
+        
+        // Refresh options
+        let entity = target_entity_stored.get_value();
+        spawn_local(async move {
+            if let Ok(records) = fetch_entity_list(&entity).await {
+                let opts: Vec<SelectOption> = records.data.iter().filter_map(|r: &serde_json::Value| {
+                    let id = r.get("id")?.as_str()?.to_string();
+                    let label = r.get("name")
+                        .or_else(|| r.get("title"))
+                        .or_else(|| r.get("first_name"))
+                        .and_then(|v: &serde_json::Value| v.as_str())
+                        .map(|s: &str| s.to_string())
+                        .unwrap_or_else(|| id[..8.min(id.len())].to_string());
+                    Some(SelectOption::new(id, label))
+                }).collect();
+                set_options.set(opts);
+            }
+        });
+    };
+    
+    view! {
+        <div class="async-link-input">
+            {move || {
+                if loading.get() && options.get().is_empty() {
+                    view! { <span class="link-input-loading">"Loading..."</span> }.into_view()
+                } else {
+                    let create_label_text = format!("+ Add New {}", target_label_stored.get_value());
+                    view! {
+                        <SmartSelect
+                            options=options.get()
+                            value=selected_value.get().unwrap_or_default()
+                            on_change=handle_change
+                            allow_search=true
+                            allow_create=true
+                            create_label=create_label_text
+                            on_create=move |_| set_show_modal.set(true)
+                            placeholder=placeholder.clone().unwrap_or_default()
+                            disabled=disabled
+                        />
+                    }.into_view()
+                }
+            }}
+            
+            // Create Modal
+            {move || show_modal.get().then(|| {
+                let entity = target_entity_stored.get_value();
+                let label = target_label_stored.get_value();
+                view! {
+                    <CreateModal
+                        entity_type=entity
+                        entity_label=label
+                        on_close=move |_| set_show_modal.set(false)
+                        on_created=handle_created
+                    />
+                }
+            })}
+        </div>
+    }
+}
