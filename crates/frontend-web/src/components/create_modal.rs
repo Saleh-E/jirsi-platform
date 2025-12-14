@@ -109,7 +109,7 @@ pub fn CreateModal(
                                             let field_name = field.name.clone();
                                             let field_name_change = field.name.clone();
                                             let field_label = field.label.clone();
-                                            let field_type = field.field_type.clone();
+                                            let field_type = field.get_field_type();
                                             let is_required = field.is_required;
                                             let placeholder = field.placeholder.clone().unwrap_or_default();
                                             

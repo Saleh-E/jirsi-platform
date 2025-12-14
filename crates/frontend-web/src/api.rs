@@ -175,15 +175,38 @@ pub struct FieldDef {
     pub id: String,
     pub name: String,
     pub label: String,
-    pub field_type: String,
+    pub field_type: serde_json::Value,  // Can be string or object like {"type": "Text"}
     pub is_required: bool,
+    #[serde(default)]
     pub show_in_list: bool,
+    #[serde(default)]
     pub show_in_card: bool,
+    #[serde(default)]
     pub is_readonly: bool,
+    #[serde(default)]
     pub sort_order: i32,
+    #[serde(default)]
     pub options: Option<serde_json::Value>,
+    #[serde(default)]
     pub placeholder: Option<String>,
+    #[serde(default)]
     pub help_text: Option<String>,
+}
+
+impl FieldDef {
+    /// Get field type as string, handling both "Text" and {"type": "Text"} formats
+    pub fn get_field_type(&self) -> String {
+        if let Some(s) = self.field_type.as_str() {
+            s.to_string()
+        } else if let Some(obj) = self.field_type.as_object() {
+            obj.get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("text")
+                .to_string()
+        } else {
+            "text".to_string()
+        }
+    }
 }
 
 // ============================================================================

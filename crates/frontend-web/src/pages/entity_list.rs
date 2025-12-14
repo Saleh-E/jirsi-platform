@@ -258,7 +258,7 @@ pub fn EntityListPage() -> impl IntoView {
                                                     <tr class="clickable-row">
                                                         {cols.iter().map(|f| {
                                                             let value = row.get(&f.name)
-                                                                .map(|v| format_field_value(v, &f.field_type))
+                                                                .map(|v| format_field_value(v, &f.get_field_type()))
                                                                 .unwrap_or_default();
                                                             view! { <td>{value}</td> }
                                                         }).collect_view()}
@@ -293,7 +293,7 @@ pub fn EntityListPage() -> impl IntoView {
                                 {cols.iter().filter(|f| !f.is_readonly).map(|field| {
                                     let field_name = field.name.clone();
                                     let field_label = field.label.clone();
-                                    let field_type = field.field_type.clone();
+                                    let field_type = field.get_field_type();
                                     let is_required = field.is_required;
                                     let placeholder = field.placeholder.clone().unwrap_or_default();
                                     let options = field.options.clone();

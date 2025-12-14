@@ -200,7 +200,7 @@ fn DetailsTab(fields: Vec<FieldDef>, record: serde_json::Value) -> impl IntoView
             <div class="field-grid">
                 {fields.into_iter().map(|field| {
                     let value = record.get(&field.name)
-                        .map(|v| format_field_display(v, &field.field_type))
+                        .map(|v| format_field_display(v, &field.get_field_type()))
                         .unwrap_or_else(|| "—".to_string());
                     
                     view! {
@@ -268,7 +268,7 @@ fn EditForm(
                     {fields.into_iter().filter(|f| !f.is_readonly).map(|field| {
                         let field_name = field.name.clone();
                         let field_label = field.label.clone();
-                        let field_type = field.field_type.clone();
+                        let field_type = field.get_field_type();
                         let is_required = field.is_required;
                         let placeholder = field.placeholder.clone().unwrap_or_default();
                         let options = field.options.clone();

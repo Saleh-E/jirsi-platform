@@ -14,7 +14,7 @@ pub fn FieldValueRenderer(
     value: serde_json::Value,
     #[prop(optional)] editable: bool,
 ) -> impl IntoView {
-    let field_type = field.field_type.clone();
+    let field_type = field.get_field_type();
     
     view! {
         {move || {
@@ -222,7 +222,7 @@ pub fn EditableFieldValue(
 ) -> impl IntoView {
     let (editing, set_editing) = create_signal(false);
     let (current_value, set_current_value) = create_signal(value.clone());
-    let field_type = field.field_type.clone();
+    let field_type = field.get_field_type();
     let field_type_for_edit = field_type.clone();
     
     view! {
