@@ -597,48 +597,63 @@ pub async fn fetch_dashboard(range: &str) -> Result<DashboardResponse, String> {
                 Ok(response.data.unwrap_or_default())
             } else {
                 // API returned error, use mock data
-                Ok(mock_dashboard_data())
+                Ok(mock_dashboard_data(range))
             }
         }
         Err(_) => {
             // Network error - fallback to mock data for development
-            Ok(mock_dashboard_data())
+            Ok(mock_dashboard_data(range))
         }
     }
 }
 
 /// Mock dashboard data for development when API is unavailable
-fn mock_dashboard_data() -> DashboardResponse {
+/// Returns different data based on range for a realistic demo
+fn mock_dashboard_data(range: &str) -> DashboardResponse {
+    // Vary the multiplier based on range for realistic effect
+    let (leads_mult, deals_mult, trend_dates) = match range {
+        "today" => (0.05, 0.02, vec!["9AM", "10AM", "11AM", "12PM", "1PM", "2PM"]),
+        "this_week" => (0.3, 0.15, vec!["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]),
+        "this_month" => (1.0, 1.0, vec!["Week 1", "Week 2", "Week 3", "Week 4"]),
+        "this_quarter" => (3.0, 2.5, vec!["Jan", "Feb", "Mar"]),
+        "this_year" => (12.0, 10.0, vec!["Q1", "Q2", "Q3", "Q4"]),
+        _ => (1.0, 1.0, vec!["Jan", "Feb", "Mar", "Apr", "May", "Jun"]),
+    };
+    
+    let base_leads = 156.0;
+    let base_deals = 28.0;
+    let base_revenue = 1_250_000.0;
+    
     DashboardResponse {
         kpis: DashboardKpis {
-            total_leads: 156,
-            total_leads_prev: 138,
+            total_leads: (base_leads * leads_mult) as i64,
+            total_leads_prev: (base_leads * leads_mult * 0.88) as i64,
             leads_trend: 13.0,
-            total_deals: 42,
-            ongoing_deals: 28,
-            total_deals_prev: 38,
+            total_deals: (42.0 * deals_mult) as i64,
+            ongoing_deals: (base_deals * deals_mult) as i64,
+            total_deals_prev: (38.0 * deals_mult) as i64,
             deals_trend: 10.5,
-            forecasted_revenue: 1_250_000.0,
-            forecasted_revenue_prev: 980_000.0,
+            forecasted_revenue: base_revenue * deals_mult,
+            forecasted_revenue_prev: base_revenue * deals_mult * 0.78,
             revenue_trend: 27.5,
             win_rate: 68.5,
             win_rate_prev: 62.0,
             win_rate_trend: 6.5,
         },
-        sales_trend: vec![
-            SalesTrendPoint { date: "Jan".to_string(), leads: 45, deals: 12 },
-            SalesTrendPoint { date: "Feb".to_string(), leads: 52, deals: 15 },
-            SalesTrendPoint { date: "Mar".to_string(), leads: 48, deals: 14 },
-            SalesTrendPoint { date: "Apr".to_string(), leads: 61, deals: 18 },
-            SalesTrendPoint { date: "May".to_string(), leads: 55, deals: 16 },
-            SalesTrendPoint { date: "Jun".to_string(), leads: 72, deals: 22 },
-        ],
+        sales_trend: trend_dates.iter().enumerate().map(|(i, date)| {
+            let base = 40 + (i * 5) as i64;
+            SalesTrendPoint { 
+                date: date.to_string(), 
+                leads: (base as f64 * leads_mult * 0.3) as i64 + 5, 
+                deals: (base as f64 * deals_mult * 0.1) as i64 + 2,
+            }
+        }).collect(),
         funnel_data: vec![
-            FunnelStage { stage: "New".to_string(), count: 45 },
-            FunnelStage { stage: "Qualified".to_string(), count: 32 },
-            FunnelStage { stage: "Proposal".to_string(), count: 18 },
-            FunnelStage { stage: "Negotiation".to_string(), count: 12 },
-            FunnelStage { stage: "Won".to_string(), count: 8 },
+            FunnelStage { stage: "New".to_string(), count: (45.0 * deals_mult) as i64 },
+            FunnelStage { stage: "Qualified".to_string(), count: (32.0 * deals_mult) as i64 },
+            FunnelStage { stage: "Proposal".to_string(), count: (18.0 * deals_mult) as i64 },
+            FunnelStage { stage: "Negotiation".to_string(), count: (12.0 * deals_mult) as i64 },
+            FunnelStage { stage: "Won".to_string(), count: (8.0 * deals_mult) as i64 },
         ],
         recent_activities: vec![
             ActivityItem {
