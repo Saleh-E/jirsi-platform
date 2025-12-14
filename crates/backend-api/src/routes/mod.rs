@@ -15,6 +15,7 @@ pub mod views;
 pub mod properties;
 pub mod workflows;
 pub mod public;
+pub mod analytics;
 
 /// Build all API routes
 pub fn api_routes() -> Router<Arc<AppState>> {
@@ -35,4 +36,6 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         .nest("/views", views::routes())
         // Properties routes (Phase 3 - real estate)
         .merge(properties::router())
+        // Analytics routes (dashboard)
+        .nest("/analytics", analytics::routes())
 }
