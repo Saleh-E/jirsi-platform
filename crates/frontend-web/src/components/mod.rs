@@ -14,3 +14,5 @@ pub mod create_modal;
 pub mod canvas;
 pub mod smart_select;
 pub mod public;
+pub mod stat_card;
+pub mod chart;

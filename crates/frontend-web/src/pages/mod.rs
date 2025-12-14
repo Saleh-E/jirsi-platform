@@ -7,6 +7,7 @@ pub mod login;
 pub mod public;
 pub mod profile;
 pub mod settings;
+pub mod dashboard;
 
 pub use home::HomePage;
 pub use entity_list::EntityListPage;
@@ -14,3 +15,4 @@ pub use entity_detail::EntityDetailPage;
 pub use login::LoginPage;
 pub use profile::ProfilePage;
 pub use settings::SettingsPage;
+pub use dashboard::DashboardPage;
