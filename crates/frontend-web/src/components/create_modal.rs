@@ -1,8 +1,8 @@
 //! Generic Create Modal - Metadata-driven form in a modal for creating new records
 
 use leptos::*;
-use serde::{Deserialize, Serialize};
 use crate::api::{fetch_field_defs, post_json, FieldDef, API_BASE, TENANT_ID};
+use crate::components::field_renderer::{LinkInput, DynamicSelect};
 
 #[component]
 pub fn CreateModal(
@@ -130,18 +130,46 @@ pub fn CreateModal(
                                                                 }
                                                             ></textarea>
                                                         }.into_view(),
-                                                        "select" => view! {
-                                                            <select
-                                                                class="field-input"
-                                                                required=is_required
-                                                                on:change=move |ev| {
-                                                                    update_field(field_name_change.clone(), event_target_value(&ev));
-                                                                }
-                                                            >
-                                                                <option value="">{"-- Select --"}</option>
-                                                                // Options would come from field.options
-                                                            </select>
-                                                        }.into_view(),
+                                                        "select" => {
+                                                            // Get options from field and convert to Vec<String>
+                                                            let options: Vec<String> = field.options.as_ref()
+                                                                .and_then(|v| v.as_array())
+                                                                .map(|arr| arr.iter()
+                                                                    .filter_map(|v| v.as_str().map(String::from))
+                                                                    .collect())
+                                                                .unwrap_or_default();
+                                                            let field_name_select = field_name_change.clone();
+                                                            let on_select_change = move |val: String| {
+                                                                update_field(field_name_select.clone(), val);
+                                                            };
+                                                            view! {
+                                                                <DynamicSelect
+                                                                    options=options
+                                                                    on_change=on_select_change
+                                                                    allow_create=true
+                                                                    placeholder="-- Select --".to_string()
+                                                                />
+                                                            }.into_view()
+                                                        },
+                                                        "link" => {
+                                                            // Get target entity from field options (stored as JSON with target_entity key)
+                                                            let target = field.options.as_ref()
+                                                                .and_then(|v: &serde_json::Value| v.get("target_entity"))
+                                                                .and_then(|v: &serde_json::Value| v.as_str())
+                                                                .unwrap_or("contact")
+                                                                .to_string();
+                                                            let field_name_link = field_name_change.clone();
+                                                            let on_link_change = move |id: String| {
+                                                                update_field(field_name_link.clone(), id);
+                                                            };
+                                                            view! {
+                                                                <LinkInput
+                                                                    target_entity=target
+                                                                    on_change=on_link_change
+                                                                    placeholder="Select or create...".to_string()
+                                                                />
+                                                            }.into_view()
+                                                        },
                                                         "boolean" => view! {
                                                             <input
                                                                 type="checkbox"
