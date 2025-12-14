@@ -12,20 +12,31 @@ pub fn DashboardPage() -> impl IntoView {
     // Date range state
     let (date_range, set_date_range) = create_signal("this_month".to_string());
     
-    // Get user name from localStorage
+    // Get user name from localStorage (try multiple keys)
     let user_name = web_sys::window()
         .and_then(|w| w.local_storage().ok())
         .flatten()
-        .and_then(|s| s.get_item("user_email").ok())
-        .flatten()
-        .map(|email| {
-            let name = email.split('@').next().unwrap_or("User");
-            let parts: Vec<&str> = name.split('.').collect();
-            if parts.len() >= 2 {
-                format!("{} {}", capitalize(parts[0]), capitalize(parts[1]))
-            } else {
-                capitalize(name)
+        .and_then(|s| {
+            // Try user_first_name first
+            if let Ok(Some(first)) = s.get_item("user_first_name") {
+                if !first.is_empty() {
+                    let last = s.get_item("user_last_name").ok().flatten().unwrap_or_default();
+                    return Some(format!("{} {}", capitalize(&first), capitalize(&last)).trim().to_string());
+                }
             }
+            // Then try user_email
+            if let Ok(Some(email)) = s.get_item("user_email") {
+                if !email.is_empty() {
+                    let name = email.split('@').next().unwrap_or("User");
+                    let parts: Vec<&str> = name.split('.').collect();
+                    if parts.len() >= 2 {
+                        return Some(format!("{} {}", capitalize(parts[0]), capitalize(parts[1])));
+                    } else {
+                        return Some(capitalize(name));
+                    }
+                }
+            }
+            None
         })
         .unwrap_or_else(|| "User".to_string());
     
