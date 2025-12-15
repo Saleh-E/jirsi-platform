@@ -1,9 +1,589 @@
-//! Database seeding for development
+//! Database seeding for development and new tenant onboarding
 
 use chrono::Utc;
 use core_auth::password::hash_password;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
+
+// ============================================================================
+// PUBLIC API: New Tenant Seeding (Transactional)
+// ============================================================================
+
+/// Seeds all required data for a new tenant within a transaction.
+/// If any step fails, the entire operation is rolled back.
+/// 
+/// This is the main entry point for tenant onboarding.
+pub async fn seed_new_tenant(tenant_id: Uuid, pool: &PgPool) -> Result<(), SeedError> {
+    let mut tx = pool.begin().await?;
+    
+    // Seed in order of dependencies
+    seed_entity_metadata_tx(&mut tx, tenant_id).await?;
+    seed_associations_tx(&mut tx, tenant_id).await?;
+    seed_views_tx(&mut tx, tenant_id).await?;
+    seed_standard_workflows_tx(&mut tx, tenant_id).await?;
+    seed_property_entity_tx(&mut tx, tenant_id).await?;
+    
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Error type for seeding operations
+#[derive(Debug)]
+pub enum SeedError {
+    Database(sqlx::Error),
+    PasswordHash(String),
+}
+
+impl From<sqlx::Error> for SeedError {
+    fn from(e: sqlx::Error) -> Self {
+        SeedError::Database(e)
+    }
+}
+
+impl std::fmt::Display for SeedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SeedError::Database(e) => write!(f, "Database error: {}", e),
+            SeedError::PasswordHash(e) => write!(f, "Password hash error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for SeedError {}
+
+// ============================================================================
+// TRANSACTIONAL SEEDERS (for new tenant onboarding)
+// ============================================================================
+
+/// Seed entity types and field definitions within a transaction
+async fn seed_entity_metadata_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let now = Utc::now();
+
+    // Create Contact entity type
+    let contact_id = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO entity_types (id, tenant_id, app_id, name, label, label_plural, icon, flags, created_at, updated_at)
+        VALUES ($1, $2, 'crm', 'contact', 'Contact', 'Contacts', 'user', $3, $4, $5)
+        "#
+    )
+    .bind(contact_id)
+    .bind(tenant_id)
+    .bind(serde_json::json!({"has_activities": true, "has_tasks": true, "is_searchable": true, "show_in_nav": true}))
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // Contact fields
+    seed_field_tx(tx, tenant_id, contact_id, "first_name", "First Name", "text", true, true, 1).await?;
+    seed_field_tx(tx, tenant_id, contact_id, "last_name", "Last Name", "text", true, true, 2).await?;
+    seed_field_tx(tx, tenant_id, contact_id, "email", "Email", "email", false, true, 3).await?;
+    seed_field_tx(tx, tenant_id, contact_id, "phone", "Phone", "phone", false, true, 4).await?;
+    seed_field_tx(tx, tenant_id, contact_id, "lifecycle_stage", "Lifecycle Stage", "select", false, true, 5).await?;
+
+    // Create Company entity type
+    let company_id = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO entity_types (id, tenant_id, app_id, name, label, label_plural, icon, flags, created_at, updated_at)
+        VALUES ($1, $2, 'crm', 'company', 'Company', 'Companies', 'building', $3, $4, $5)
+        "#
+    )
+    .bind(company_id)
+    .bind(tenant_id)
+    .bind(serde_json::json!({"has_activities": true, "has_tasks": true, "is_searchable": true, "show_in_nav": true}))
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // Company fields
+    seed_field_tx(tx, tenant_id, company_id, "name", "Company Name", "text", true, true, 1).await?;
+    seed_field_tx(tx, tenant_id, company_id, "domain", "Domain", "url", false, true, 2).await?;
+    seed_field_tx(tx, tenant_id, company_id, "industry", "Industry", "select", false, true, 3).await?;
+    seed_field_tx(tx, tenant_id, company_id, "phone", "Phone", "phone", false, true, 4).await?;
+
+    // Create Deal entity type
+    let deal_id = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO entity_types (id, tenant_id, app_id, name, label, label_plural, icon, flags, created_at, updated_at)
+        VALUES ($1, $2, 'crm', 'deal', 'Deal', 'Deals', 'dollar-sign', $3, $4, $5)
+        "#
+    )
+    .bind(deal_id)
+    .bind(tenant_id)
+    .bind(serde_json::json!({"has_pipeline": true, "has_activities": true, "is_searchable": true, "show_in_nav": true}))
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // Deal fields
+    seed_field_tx(tx, tenant_id, deal_id, "name", "Deal Name", "text", true, true, 1).await?;
+    seed_field_tx(tx, tenant_id, deal_id, "amount", "Amount", "money", false, true, 2).await?;
+    seed_field_tx(tx, tenant_id, deal_id, "stage", "Stage", "select", true, true, 3).await?;
+    seed_field_tx(tx, tenant_id, deal_id, "expected_close_date", "Expected Close", "date", false, true, 4).await?;
+
+    Ok(())
+}
+
+/// Seed Property entity type for Real Estate
+async fn seed_property_entity_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let now = Utc::now();
+
+    // Create Property entity type
+    let property_id = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO entity_types (id, tenant_id, app_id, name, label, label_plural, icon, flags, created_at, updated_at)
+        VALUES ($1, $2, 'real_estate', 'property', 'Property', 'Properties', 'home', $3, $4, $5)
+        "#
+    )
+    .bind(property_id)
+    .bind(tenant_id)
+    .bind(serde_json::json!({"has_activities": true, "has_tasks": true, "is_searchable": true, "show_in_nav": true, "has_map": true}))
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // Property fields
+    seed_field_tx(tx, tenant_id, property_id, "title", "Title", "text", true, true, 1).await?;
+    seed_field_tx(tx, tenant_id, property_id, "price", "Price", "money", true, true, 2).await?;
+    seed_field_tx(tx, tenant_id, property_id, "status", "Status", "select", true, true, 3).await?;
+    seed_field_tx(tx, tenant_id, property_id, "property_type", "Property Type", "select", false, true, 4).await?;
+    seed_field_tx(tx, tenant_id, property_id, "bedrooms", "Bedrooms", "number", false, true, 5).await?;
+    seed_field_tx(tx, tenant_id, property_id, "bathrooms", "Bathrooms", "number", false, true, 6).await?;
+    seed_field_tx(tx, tenant_id, property_id, "area_sqm", "Area (sqm)", "number", false, true, 7).await?;
+    seed_field_tx(tx, tenant_id, property_id, "address", "Address", "text", false, true, 8).await?;
+    seed_field_tx(tx, tenant_id, property_id, "city", "City", "text", false, true, 9).await?;
+    seed_field_tx(tx, tenant_id, property_id, "description", "Description", "textarea", false, false, 10).await?;
+
+    Ok(())
+}
+
+/// Helper to seed a single field definition within a transaction
+async fn seed_field_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    entity_type_id: Uuid,
+    name: &str,
+    label: &str,
+    field_type: &str,
+    is_required: bool,
+    show_in_list: bool,
+    sort_order: i32,
+) -> Result<(), sqlx::Error> {
+    let now = Utc::now();
+    let id = Uuid::new_v4();
+    
+    sqlx::query(
+        r#"
+        INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, is_required, show_in_list, sort_order, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        "#
+    )
+    .bind(id)
+    .bind(tenant_id)
+    .bind(entity_type_id)
+    .bind(name)
+    .bind(label)
+    .bind(field_type)
+    .bind(is_required)
+    .bind(show_in_list)
+    .bind(sort_order)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Seed association definitions within a transaction
+async fn seed_associations_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let now = Utc::now();
+
+    // Contact ↔ Company (many contacts can work at one company)
+    sqlx::query(
+        r#"
+        INSERT INTO association_defs (id, tenant_id, source_entity, target_entity, name, label_source, label_target, cardinality, source_role, target_role, allow_primary, cascade_delete, created_at, updated_at)
+        VALUES ($1, $2, 'contact', 'company', 'contact_company', 'Company', 'Contacts', 'many_to_one', 'employee', 'employer', true, false, $3, $4)
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(tenant_id)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // Deal ↔ Contact (deals can be linked to multiple contacts)
+    sqlx::query(
+        r#"
+        INSERT INTO association_defs (id, tenant_id, source_entity, target_entity, name, label_source, label_target, cardinality, source_role, target_role, allow_primary, cascade_delete, created_at, updated_at)
+        VALUES ($1, $2, 'deal', 'contact', 'deal_contact', 'Contacts', 'Deals', 'many_to_many', NULL, NULL, true, false, $3, $4)
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(tenant_id)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // Deal ↔ Company
+    sqlx::query(
+        r#"
+        INSERT INTO association_defs (id, tenant_id, source_entity, target_entity, name, label_source, label_target, cardinality, source_role, target_role, allow_primary, cascade_delete, created_at, updated_at)
+        VALUES ($1, $2, 'deal', 'company', 'deal_company', 'Company', 'Deals', 'many_to_one', NULL, NULL, true, false, $3, $4)
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(tenant_id)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // Contact ↔ Property (buyer interest)
+    sqlx::query(
+        r#"
+        INSERT INTO association_defs (id, tenant_id, source_entity, target_entity, name, label_source, label_target, cardinality, source_role, target_role, allow_primary, cascade_delete, created_at, updated_at)
+        VALUES ($1, $2, 'contact', 'property', 'contact_property', 'Properties', 'Interested Contacts', 'many_to_many', 'buyer', NULL, false, false, $3, $4)
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(tenant_id)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Seed view definitions within a transaction
+async fn seed_views_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    use sqlx::Row;
+    let now = Utc::now();
+
+    // Get entity type IDs
+    let contact_id: Option<Uuid> = sqlx::query("SELECT id FROM entity_types WHERE tenant_id = $1 AND name = 'contact'")
+        .bind(tenant_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .map(|row| row.try_get("id").unwrap_or_default());
+    
+    let deal_id: Option<Uuid> = sqlx::query("SELECT id FROM entity_types WHERE tenant_id = $1 AND name = 'deal'")
+        .bind(tenant_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .map(|row| row.try_get("id").unwrap_or_default());
+
+    let company_id: Option<Uuid> = sqlx::query("SELECT id FROM entity_types WHERE tenant_id = $1 AND name = 'company'")
+        .bind(tenant_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .map(|row| row.try_get("id").unwrap_or_default());
+
+    let property_id: Option<Uuid> = sqlx::query("SELECT id FROM entity_types WHERE tenant_id = $1 AND name = 'property'")
+        .bind(tenant_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .map(|row| row.try_get("id").unwrap_or_default());
+
+    // Contact - Default Table View
+    if let Some(entity_id) = contact_id {
+        let columns = serde_json::json!([
+            {"field": "first_name", "width": "150", "visible": true, "sort_order": 1},
+            {"field": "last_name", "width": "150", "visible": true, "sort_order": 2},
+            {"field": "email", "width": "200", "visible": true, "sort_order": 3},
+            {"field": "phone", "width": "150", "visible": true, "sort_order": 4}
+        ]);
+
+        sqlx::query(
+            r#"
+            INSERT INTO view_defs (id, tenant_id, entity_type_id, name, label, view_type, is_default, is_system, columns, filters, sort, settings, created_at, updated_at)
+            VALUES ($1, $2, $3, 'default_table', 'All Contacts', 'table', true, true, $4, '[]', '[]', '{}', $5, $6)
+            "#
+        )
+        .bind(Uuid::new_v4())
+        .bind(tenant_id)
+        .bind(entity_id)
+        .bind(columns)
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    // Company - Default Table View
+    if let Some(entity_id) = company_id {
+        let columns = serde_json::json!([
+            {"field": "name", "width": "200", "visible": true, "sort_order": 1},
+            {"field": "domain", "width": "150", "visible": true, "sort_order": 2},
+            {"field": "industry", "width": "150", "visible": true, "sort_order": 3}
+        ]);
+
+        sqlx::query(
+            r#"
+            INSERT INTO view_defs (id, tenant_id, entity_type_id, name, label, view_type, is_default, is_system, columns, filters, sort, settings, created_at, updated_at)
+            VALUES ($1, $2, $3, 'default_table', 'All Companies', 'table', true, true, $4, '[]', '[]', '{}', $5, $6)
+            "#
+        )
+        .bind(Uuid::new_v4())
+        .bind(tenant_id)
+        .bind(entity_id)
+        .bind(columns)
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    // Deal - Kanban View (Pipeline)
+    if let Some(entity_id) = deal_id {
+        let kanban_settings = serde_json::json!({
+            "group_by_field": "stage",
+            "title_field": "name",
+            "description_field": null,
+            "card_fields": ["amount", "expected_close_date"],
+            "allow_drag": true
+        });
+
+        // Kanban view
+        sqlx::query(
+            r#"
+            INSERT INTO view_defs (id, tenant_id, entity_type_id, name, label, view_type, is_default, is_system, columns, filters, sort, settings, created_at, updated_at)
+            VALUES ($1, $2, $3, 'pipeline', 'Pipeline', 'kanban', true, true, '[]', '[]', '[]', $4, $5, $6)
+            "#
+        )
+        .bind(Uuid::new_v4())
+        .bind(tenant_id)
+        .bind(entity_id)
+        .bind(kanban_settings)
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+
+        // Also add a table view for deals
+        let table_columns = serde_json::json!([
+            {"field": "name", "width": "200", "visible": true, "sort_order": 1},
+            {"field": "amount", "width": "120", "visible": true, "sort_order": 2},
+            {"field": "stage", "width": "120", "visible": true, "sort_order": 3},
+            {"field": "expected_close_date", "width": "150", "visible": true, "sort_order": 4}
+        ]);
+
+        sqlx::query(
+            r#"
+            INSERT INTO view_defs (id, tenant_id, entity_type_id, name, label, view_type, is_default, is_system, columns, filters, sort, settings, created_at, updated_at)
+            VALUES ($1, $2, $3, 'deals_table', 'All Deals', 'table', false, true, $4, '[]', '[]', '{}', $5, $6)
+            "#
+        )
+        .bind(Uuid::new_v4())
+        .bind(tenant_id)
+        .bind(entity_id)
+        .bind(table_columns)
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    // Property - Table and Map Views
+    if let Some(entity_id) = property_id {
+        let columns = serde_json::json!([
+            {"field": "title", "width": "200", "visible": true, "sort_order": 1},
+            {"field": "price", "width": "120", "visible": true, "sort_order": 2},
+            {"field": "status", "width": "100", "visible": true, "sort_order": 3},
+            {"field": "property_type", "width": "120", "visible": true, "sort_order": 4},
+            {"field": "city", "width": "120", "visible": true, "sort_order": 5}
+        ]);
+
+        sqlx::query(
+            r#"
+            INSERT INTO view_defs (id, tenant_id, entity_type_id, name, label, view_type, is_default, is_system, columns, filters, sort, settings, created_at, updated_at)
+            VALUES ($1, $2, $3, 'default_table', 'All Properties', 'table', true, true, $4, '[]', '[]', '{}', $5, $6)
+            "#
+        )
+        .bind(Uuid::new_v4())
+        .bind(tenant_id)
+        .bind(entity_id)
+        .bind(columns)
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+
+        // Map view for properties
+        let map_settings = serde_json::json!({
+            "lat_field": "latitude",
+            "lng_field": "longitude",
+            "title_field": "title",
+            "popup_fields": ["price", "status", "property_type"]
+        });
+
+        sqlx::query(
+            r#"
+            INSERT INTO view_defs (id, tenant_id, entity_type_id, name, label, view_type, is_default, is_system, columns, filters, sort, settings, created_at, updated_at)
+            VALUES ($1, $2, $3, 'map_view', 'Map View', 'map', false, true, '[]', '[]', '[]', $4, $5, $6)
+            "#
+        )
+        .bind(Uuid::new_v4())
+        .bind(tenant_id)
+        .bind(entity_id)
+        .bind(map_settings)
+        .bind(now)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    Ok(())
+}
+
+/// Seed standard workflows within a transaction
+async fn seed_standard_workflows_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let now = Utc::now();
+
+    // WORKFLOW 1: New Lead Intake (CRM)
+    let lead_intake_actions = serde_json::json!([
+        {
+            "type": "create_task",
+            "config": {
+                "title": "Follow up with new lead",
+                "due_in_hours": 24,
+                "assign_to": "record_owner"
+            }
+        },
+        {
+            "type": "send_notification",
+            "config": {
+                "channel": "in_app",
+                "message": "New lead created: {{record.first_name}} {{record.last_name}}"
+            }
+        }
+    ]);
+
+    sqlx::query(
+        r#"
+        INSERT INTO workflow_defs (id, tenant_id, name, description, is_active, is_system, trigger_type, trigger_entity, conditions, actions, created_at, updated_at)
+        VALUES ($1, $2, 'New Lead Intake', 'Automatically creates follow-up task when a new contact is created', true, true, 'record_created', 'contact', '{}', $3, $4, $5)
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(tenant_id)
+    .bind(lead_intake_actions)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // WORKFLOW 2: Deal Won (CRM)
+    let deal_won_conditions = serde_json::json!({
+        "field": "stage",
+        "operator": "equals",
+        "value": "closed_won"
+    });
+
+    let deal_won_actions = serde_json::json!([
+        {
+            "type": "update_record",
+            "config": {
+                "entity": "contact",
+                "field": "lifecycle_stage",
+                "value": "customer"
+            }
+        },
+        {
+            "type": "send_notification",
+            "config": {
+                "channel": "in_app",
+                "message": "🎉 Deal won: {{record.name}} for {{record.amount}}"
+            }
+        }
+    ]);
+
+    sqlx::query(
+        r#"
+        INSERT INTO workflow_defs (id, tenant_id, name, description, is_active, is_system, trigger_type, trigger_entity, conditions, actions, created_at, updated_at)
+        VALUES ($1, $2, 'Deal Won', 'Updates contact lifecycle and sends celebration notification', true, true, 'field_changed', 'deal', $3, $4, $5, $6)
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(tenant_id)
+    .bind(deal_won_conditions)
+    .bind(deal_won_actions)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    // WORKFLOW 3: Offer Accepted (Real Estate)
+    let offer_conditions = serde_json::json!({
+        "field": "status",
+        "operator": "equals",
+        "value": "offer_accepted"
+    });
+
+    let offer_actions = serde_json::json!([
+        {
+            "type": "create_task",
+            "config": {
+                "title": "Prepare sales contract",
+                "due_in_hours": 48,
+                "assign_to": "record_owner"
+            }
+        },
+        {
+            "type": "send_notification",
+            "config": {
+                "channel": "in_app",
+                "message": "Offer accepted on {{record.title}}! Next: Prepare contract."
+            }
+        }
+    ]);
+
+    sqlx::query(
+        r#"
+        INSERT INTO workflow_defs (id, tenant_id, name, description, is_active, is_system, trigger_type, trigger_entity, conditions, actions, created_at, updated_at)
+        VALUES ($1, $2, 'Offer Accepted', 'Creates contract preparation task when offer is accepted', true, true, 'field_changed', 'property', $3, $4, $5, $6)
+        "#
+    )
+    .bind(Uuid::new_v4())
+    .bind(tenant_id)
+    .bind(offer_conditions)
+    .bind(offer_actions)
+    .bind(now)
+    .bind(now)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+// ============================================================================
+// DEVELOPMENT SEEDING (existing functionality)
+// ============================================================================
 
 /// Seed the database with sample data for development
 pub async fn seed_database(pool: &PgPool) -> Result<SeedResult, sqlx::Error> {
@@ -99,7 +679,7 @@ pub async fn seed_database(pool: &PgPool) -> Result<SeedResult, sqlx::Error> {
     })
 }
 
-/// Seed entity types and field definitions
+/// Seed entity types and field definitions (non-transactional, for dev seeding)
 async fn seed_entity_metadata(pool: &PgPool, tenant_id: Uuid) -> Result<(), sqlx::Error> {
     use sqlx::Row;
     let now = Utc::now();

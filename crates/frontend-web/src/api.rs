@@ -213,8 +213,8 @@ impl FieldDef {
 // HTTP HELPERS
 // ============================================================================
 
-/// POST helper for making POST requests with JSON body
-pub async fn post_json<T: for<'de> Deserialize<'de>>(url: &str, body: &serde_json::Value) -> Result<T, String> {
+/// POST helper for making POST requests with JSON body (accepts any Serialize type)
+pub async fn post_json<B: Serialize, T: for<'de> Deserialize<'de>>(url: &str, body: &B) -> Result<T, String> {
     let window = web_sys::window().ok_or("no window")?;
 
     let opts = RequestInit::new();
@@ -297,6 +297,43 @@ pub async fn delete_request(url: &str) -> Result<serde_json::Value, String> {
 
     let request = Request::new_with_str_and_init(url, &opts)
         .map_err(|e| format!("Request error: {:?}", e))?;
+
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch error: {:?}", e))?;
+
+    let resp: Response = resp_value.dyn_into()
+        .map_err(|_| "response conversion error")?;
+
+    if !resp.ok() {
+        return Err(format!("HTTP error: {}", resp.status()));
+    }
+
+    let json = JsFuture::from(resp.json().map_err(|e| format!("JSON parse error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("JSON await error: {:?}", e))?;
+
+    serde_wasm_bindgen::from_value(json)
+        .map_err(|e| format!("Deserialize error: {:?}", e))
+}
+
+/// PATCH helper for making PATCH requests with generic Serialize body
+pub async fn patch_json<B: Serialize, T: for<'de> Deserialize<'de>>(url: &str, body: &B) -> Result<T, String> {
+    let window = web_sys::window().ok_or("no window")?;
+
+    let opts = RequestInit::new();
+    opts.set_method("PATCH");
+    opts.set_mode(RequestMode::Cors);
+    
+    let body_str = serde_json::to_string(body).map_err(|e| format!("Serialize error: {}", e))?;
+    opts.set_body(&JsValue::from_str(&body_str));
+
+    let request = Request::new_with_str_and_init(url, &opts)
+        .map_err(|e| format!("Request error: {:?}", e))?;
+
+    request.headers()
+        .set("Content-Type", "application/json")
+        .map_err(|e| format!("Header error: {:?}", e))?;
 
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
         .await

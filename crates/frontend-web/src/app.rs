@@ -3,7 +3,7 @@
 use leptos::*;
 use leptos_router::*;
 
-use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage, ProfilePage, SettingsPage, ReportsPage, InboxPage};
+use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage, RegisterPage, ProfilePage, SettingsPage, ReportsPage, InboxPage};
 use crate::pages::dashboard::DashboardPage;
 use crate::pages::public::{listings::PublicListingsPage, detail::PublicDetailPage};
 use crate::components::shell::Shell;
@@ -20,8 +20,9 @@ pub fn App() -> impl IntoView {
                     <Route path=":id" view=PublicDetailPage/>
                 </Route>
                 
-                // Auth routes
+                // Auth routes (public)
                 <Route path="/login" view=LoginPage/>
+                <Route path="/register" view=RegisterPage/>
                 
                 // App routes (authenticated) - explicit routes BEFORE dynamic
                 <Route path="/" view=Shell>

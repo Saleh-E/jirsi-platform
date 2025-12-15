@@ -63,7 +63,7 @@ pub fn CreateModal(
             
             let url = format!("{}/entities/{}?tenant_id={}", API_BASE, et, TENANT_ID);
             
-            match post_json::<serde_json::Value>(&url, &serde_json::Value::Object(json_data)).await {
+            match post_json::<_, serde_json::Value>(&url, &serde_json::Value::Object(json_data)).await {
                 Ok(response) => {
                     if let Some(id) = response.get("id").and_then(|v| v.as_str()) {
                         on_created.call(id.to_string());

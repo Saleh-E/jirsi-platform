@@ -17,12 +17,15 @@ pub mod workflows;
 pub mod public;
 pub mod analytics;
 pub mod inbox;
+pub mod tenant;
 
 /// Build all API routes
 pub fn api_routes() -> Router<Arc<AppState>> {
     Router::new()
-        // Auth routes (public - login, register, logout)
+        // Auth routes (public - login, register, logout, register-tenant)
         .nest("/auth", auth::routes())
+        // Tenant settings routes
+        .nest("/tenant", tenant::routes())
         // Metadata routes (authentication enforced via extractors in handlers)
         .nest("/metadata", metadata::routes())
         // Entity CRUD routes (authentication enforced via extractors in handlers)
@@ -42,3 +45,4 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         // Inbox routes (unified messaging)
         .nest("/inbox", inbox::routes())
 }
+
