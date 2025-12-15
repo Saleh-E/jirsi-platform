@@ -702,3 +702,192 @@ fn mock_dashboard_data(range: &str) -> DashboardResponse {
     }
 }
 
+// ============================================================================
+// INBOX API TYPES AND FUNCTIONS
+// ============================================================================
+
+/// An inbox thread (conversation grouped by entity)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct InboxThread {
+    pub entity_id: String,
+    pub entity_type: String,
+    pub entity_name: String,
+    pub last_message_preview: String,
+    pub last_message_at: String,
+    pub unread_count: i64,
+    pub last_interaction_type: String,
+}
+
+/// Thread list response from API
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct InboxThreadListResponse {
+    pub data: Vec<InboxThread>,
+    pub total: i64,
+}
+
+/// A message within a thread
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThreadMessage {
+    pub id: String,
+    pub interaction_type: String,
+    pub title: String,
+    pub content: Option<String>,
+    pub created_by: String,
+    pub occurred_at: String,
+    pub direction: String,
+    pub duration_minutes: Option<i32>,
+}
+
+/// Messages list response from API
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ThreadMessagesResponse {
+    pub data: Vec<ThreadMessage>,
+    pub entity_name: String,
+    pub entity_type: String,
+}
+
+/// Wrapper for inbox API data
+#[derive(Debug, Clone, Default)]
+pub struct ThreadMessagesData {
+    pub messages: Vec<ThreadMessage>,
+    pub entity_name: String,
+    pub entity_type: String,
+}
+
+/// Fetch inbox threads with optional filter
+pub async fn fetch_inbox_threads(filter: &str) -> Result<Vec<InboxThread>, String> {
+    let status_param = match filter {
+        "unread" => "&status=unread",
+        "sent" => "&status=sent",
+        "assigned" => "&assigned_to=me",
+        _ => "",
+    };
+    
+    let url = format!(
+        "{}/inbox/threads?tenant_id={}{}",
+        API_BASE, TENANT_ID, status_param
+    );
+    
+    match fetch_json::<InboxThreadListResponse>(&url).await {
+        Ok(response) => Ok(response.data),
+        Err(_) => {
+            // Return mock data for development
+            Ok(mock_inbox_threads())
+        }
+    }
+}
+
+/// Fetch messages for a specific thread
+pub async fn fetch_thread_messages(entity_id: &str) -> Result<ThreadMessagesData, String> {
+    let url = format!(
+        "{}/inbox/threads/{}/messages?tenant_id={}",
+        API_BASE, entity_id, TENANT_ID
+    );
+    
+    match fetch_json::<ThreadMessagesResponse>(&url).await {
+        Ok(response) => Ok(ThreadMessagesData {
+            messages: response.data,
+            entity_name: response.entity_name,
+            entity_type: response.entity_type,
+        }),
+        Err(_) => {
+            // Return mock data for development
+            Ok(mock_thread_messages())
+        }
+    }
+}
+
+/// Send a reply in a thread
+pub async fn send_inbox_reply(
+    entity_id: &str,
+    content: &str,
+    interaction_type: &str,
+) -> Result<serde_json::Value, String> {
+    let url = format!(
+        "{}/inbox/threads/{}/reply",
+        API_BASE, entity_id
+    );
+    
+    let body = serde_json::json!({
+        "tenant_id": TENANT_ID,
+        "interaction_type": interaction_type,
+        "title": format!("Reply ({})", interaction_type),
+        "content": content,
+        "created_by": "00000000-0000-0000-0000-000000000000" // TODO: Get from auth context
+    });
+    
+    post_json(&url, &body).await
+}
+
+/// Mock inbox threads for development
+fn mock_inbox_threads() -> Vec<InboxThread> {
+    vec![
+        InboxThread {
+            entity_id: "11111111-1111-1111-1111-111111111111".to_string(),
+            entity_type: "contact".to_string(),
+            entity_name: "John Smith".to_string(),
+            last_message_preview: "Hi, I'm interested in the downtown property...".to_string(),
+            last_message_at: "2024-12-15T10:30:00Z".to_string(),
+            unread_count: 2,
+            last_interaction_type: "email".to_string(),
+        },
+        InboxThread {
+            entity_id: "22222222-2222-2222-2222-222222222222".to_string(),
+            entity_type: "contact".to_string(),
+            entity_name: "Jane Doe".to_string(),
+            last_message_preview: "Thank you for the viewing yesterday...".to_string(),
+            last_message_at: "2024-12-15T09:15:00Z".to_string(),
+            unread_count: 0,
+            last_interaction_type: "message".to_string(),
+        },
+        InboxThread {
+            entity_id: "33333333-3333-3333-3333-333333333333".to_string(),
+            entity_type: "contact".to_string(),
+            entity_name: "Bob Johnson".to_string(),
+            last_message_preview: "Internal note: Client is interested in financing...".to_string(),
+            last_message_at: "2024-12-14T16:00:00Z".to_string(),
+            unread_count: 0,
+            last_interaction_type: "note".to_string(),
+        },
+    ]
+}
+
+/// Mock thread messages for development
+fn mock_thread_messages() -> ThreadMessagesData {
+    ThreadMessagesData {
+        entity_name: "John Smith".to_string(),
+        entity_type: "contact".to_string(),
+        messages: vec![
+            ThreadMessage {
+                id: "msg1".to_string(),
+                interaction_type: "email".to_string(),
+                title: "Property Inquiry".to_string(),
+                content: Some("Hi, I'm interested in the downtown property. Can we schedule a viewing?".to_string()),
+                created_by: "client".to_string(),
+                occurred_at: "2024-12-15T10:30:00Z".to_string(),
+                direction: "inbound".to_string(),
+                duration_minutes: None,
+            },
+            ThreadMessage {
+                id: "msg2".to_string(),
+                interaction_type: "note".to_string(),
+                title: "Internal Note".to_string(),
+                content: Some("Client seems very interested. High priority lead.".to_string()),
+                created_by: "agent".to_string(),
+                occurred_at: "2024-12-15T10:45:00Z".to_string(),
+                direction: "outbound".to_string(),
+                duration_minutes: None,
+            },
+            ThreadMessage {
+                id: "msg3".to_string(),
+                interaction_type: "email".to_string(),
+                title: "Re: Property Inquiry".to_string(),
+                content: Some("Hello! Thank you for your interest. I'd be happy to arrange a viewing. How does tomorrow at 2pm work for you?".to_string()),
+                created_by: "agent".to_string(),
+                occurred_at: "2024-12-15T11:00:00Z".to_string(),
+                direction: "outbound".to_string(),
+                duration_minutes: None,
+            },
+        ],
+    }
+}

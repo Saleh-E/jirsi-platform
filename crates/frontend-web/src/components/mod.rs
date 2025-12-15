@@ -16,3 +16,6 @@ pub mod smart_select;
 pub mod public;
 pub mod stat_card;
 pub mod chart;
+pub mod inbox_thread_list;
+pub mod message_bubble;
+pub mod composer;

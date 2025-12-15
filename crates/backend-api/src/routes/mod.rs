@@ -16,6 +16,7 @@ pub mod properties;
 pub mod workflows;
 pub mod public;
 pub mod analytics;
+pub mod inbox;
 
 /// Build all API routes
 pub fn api_routes() -> Router<Arc<AppState>> {
@@ -38,4 +39,6 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         .merge(properties::router())
         // Analytics routes (dashboard)
         .nest("/analytics", analytics::routes())
+        // Inbox routes (unified messaging)
+        .nest("/inbox", inbox::routes())
 }

@@ -40,6 +40,7 @@ pub fn Shell() -> impl IntoView {
                 </div>
                 <nav class="sidebar-nav">
                     <a href="/" class="nav-item">"Dashboard"</a>
+                    <a href="/app/inbox" class="nav-item inbox-nav">"📬 Inbox"</a>
                     <div class="nav-section">
                         <span class="nav-section-title">"CRM"</span>
                         <a href="/app/crm/entity/contact" class="nav-item">"Contacts"</a>
