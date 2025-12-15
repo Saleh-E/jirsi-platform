@@ -47,7 +47,6 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
 CREATE INDEX IF NOT EXISTS idx_webhook_logs_tenant_time 
     ON webhook_logs(tenant_id, processed_at DESC);
 
--- Cleanup old logs (keep 30 days)
+-- Index for cleanup queries (without partial index since NOW() is not IMMUTABLE)
 CREATE INDEX IF NOT EXISTS idx_webhook_logs_cleanup 
-    ON webhook_logs(processed_at) 
-    WHERE processed_at < NOW() - INTERVAL '30 days';
+    ON webhook_logs(processed_at);
