@@ -5145,3 +5145,340 @@ select:focus {
     font-size: 0.75rem;
     color: var(--text-muted);
 }
+
+/* =====================================================
+   Phase 14 Part 2: Action Bar & Editable Table
+   ===================================================== */
+
+/* Action Bar */
+.action-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-content);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.action-bar-group {
+    position: relative;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: var(--transition-fast);
+}
+
+.action-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.action-btn.active {
+    background: rgba(79, 70, 229, 0.15);
+    color: var(--primary);
+    border-color: var(--primary);
+}
+
+.action-btn .icon {
+    font-size: 1rem;
+}
+
+.action-btn .badge {
+    background: var(--primary);
+    color: white;
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 10px;
+    font-weight: 600;
+    margin-left: 0.25rem;
+}
+
+.action-bar-spacer {
+    flex: 1;
+}
+
+/* Density buttons */
+.density-group {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.density-btn {
+    padding: 0.375rem 0.5rem;
+    border: none;
+    border-radius: 0;
+}
+
+.density-btn:not(:last-child) {
+    border-right: 1px solid var(--border);
+}
+
+.density-icon {
+    font-size: 0.875rem;
+}
+
+/* Action Dropdowns */
+.action-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 0.5rem;
+    background: var(--bg-content);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    min-width: 280px;
+    z-index: 100;
+    overflow: hidden;
+}
+
+.dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.dropdown-header h4 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.btn-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.dropdown-body {
+    padding: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Filter styles */
+.active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.filter-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(79, 70, 229, 0.15);
+    border: 1px solid var(--primary);
+    border-radius: 16px;
+    font-size: 0.75rem;
+    color: var(--primary);
+}
+
+.chip-remove {
+    background: transparent;
+    border: none;
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    line-height: 1;
+    padding: 0;
+}
+
+.add-filter {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.filter-select,
+.filter-input {
+    flex: 1;
+    min-width: 100px;
+    padding: 0.5rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+}
+
+/* Sort options */
+.sort-option {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: var(--transition-fast);
+}
+
+.sort-option:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sort-option.active {
+    background: rgba(79, 70, 229, 0.15);
+    color: var(--primary);
+}
+
+/* Column options */
+.column-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.column-option input {
+    accent-color: var(--primary);
+}
+
+/* Editable Table */
+.editable-table-wrapper {
+    background: var(--bg-content);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.editable-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.editable-table thead {
+    position: sticky;
+    top: 0;
+    background: var(--bg-sidebar);
+    z-index: 10;
+}
+
+.editable-table .table-header {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+}
+
+.editable-table .table-row {
+    transition: var(--transition-fast);
+}
+
+.editable-table .table-row:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.editable-table .table-cell {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.875rem;
+}
+
+.editable-table .table-cell.editable {
+    cursor: pointer;
+    position: relative;
+}
+
+.editable-table .table-cell.editable:hover {
+    background: rgba(79, 70, 229, 0.05);
+}
+
+.editable-table .table-cell.editable::after {
+    content: '✏️';
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    font-size: 0.75rem;
+    transition: var(--transition-fast);
+}
+
+.editable-table .table-cell.editable:hover::after {
+    opacity: 0.5;
+}
+
+.action-cell {
+    width: 48px;
+    text-align: center;
+}
+
+.row-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: var(--transition-fast);
+}
+
+.row-action-btn:hover {
+    background: rgba(79, 70, 229, 0.15);
+    color: var(--primary);
+}
+
+/* Density variants */
+.density-compact .table-header,
+.density-compact .table-cell {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+}
+
+.density-spacious .table-header,
+.density-spacious .table-cell {
+    padding: 1rem 1.25rem;
+}
+
+/* Readonly value */
+.readonly-value {
+    color: var(--text-muted);
+}
+
+/* Empty state */
+.editable-table-wrapper .empty-state {
+    padding: 3rem;
+    text-align: center;
+}
+
+.editable-table-wrapper .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}

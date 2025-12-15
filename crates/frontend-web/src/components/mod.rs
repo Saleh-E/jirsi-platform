@@ -21,3 +21,6 @@ pub mod message_bubble;
 pub mod composer;
 pub mod workflow;
 pub mod toast;
+pub mod action_bar;
+pub mod editable_table;
+
