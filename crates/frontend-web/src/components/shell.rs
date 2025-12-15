@@ -284,7 +284,7 @@ pub fn Shell() -> impl IntoView {
                     // Configuration Section
                     <NavSection title="Configuration" icon="⚙️" expanded=false>
                         <NavItem href="/app/settings" icon="🔧" label="Settings" />
-                        <NavItem href="/app/workflows" icon="🔄" label="Workflows" />
+                        <NavItem href="/app/settings/workflows" icon="🔄" label="Workflows" />
                         <NavItem href="/app/users" icon="👥" label="Users" />
                     </NavSection>
                 </nav>
@@ -503,20 +503,106 @@ struct SearchResult {
     url: String,
 }
 
-// Search API call
+// Search API call - searches across contacts, deals, properties
 async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
+    use crate::api::{API_BASE, TENANT_ID};
+    
+    let mut results = vec![];
+    let q = query.to_lowercase();
+    
+    // Search contacts
+    let contacts_url = format!("{}/entity/contact?tenant_id={}", API_BASE, TENANT_ID);
+    if let Ok(contacts) = fetch_search_results(&contacts_url).await {
+        for contact in contacts {
+            let name = contact.get("name")
+                .or_else(|| contact.get("first_name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let email = contact.get("email")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let phone = contact.get("phone")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let id = contact.get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            
+            // Check if query matches
+            if name.to_lowercase().contains(&q) || 
+               email.to_lowercase().contains(&q) || 
+               phone.contains(&q) {
+                results.push(SearchResult {
+                    entity_type: "Contacts".to_string(),
+                    icon: "👤",
+                    title: name.to_string(),
+                    subtitle: email.to_string(),
+                    url: format!("/app/crm/entity/contact/{}", id),
+                });
+            }
+        }
+    }
+    
+    // Search deals
+    let deals_url = format!("{}/entity/deal?tenant_id={}", API_BASE, TENANT_ID);
+    if let Ok(deals) = fetch_search_results(&deals_url).await {
+        for deal in deals {
+            let title = deal.get("title")
+                .or_else(|| deal.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let id = deal.get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            
+            if title.to_lowercase().contains(&q) {
+                results.push(SearchResult {
+                    entity_type: "Deals".to_string(),
+                    icon: "�",
+                    title: title.to_string(),
+                    subtitle: "".to_string(),
+                    url: format!("/app/crm/entity/deal/{}", id),
+                });
+            }
+        }
+    }
+    
+    // Search properties
+    let props_url = format!("{}/entity/property?tenant_id={}", API_BASE, TENANT_ID);
+    if let Ok(props) = fetch_search_results(&props_url).await {
+        for prop in props {
+            let title = prop.get("title")
+                .or_else(|| prop.get("address"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let id = prop.get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            
+            if title.to_lowercase().contains(&q) {
+                results.push(SearchResult {
+                    entity_type: "Properties".to_string(),
+                    icon: "🏠",
+                    title: title.to_string(),
+                    subtitle: "".to_string(),
+                    url: format!("/app/realestate/entity/property/{}", id),
+                });
+            }
+        }
+    }
+    
+    Ok(results)
+}
+
+async fn fetch_search_results(url: &str) -> Result<Vec<serde_json::Value>, String> {
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;
     use web_sys::{Request, RequestInit, Response};
     
-    let api_base = crate::api::API_BASE;
-    let tenant_id = crate::api::TENANT_ID;
-    let url = format!("{}/search?q={}&tenant_id={}", api_base, query, tenant_id);
-    
     let opts = RequestInit::new();
     opts.set_method("GET");
     
-    let request = Request::new_with_str_and_init(&url, &opts)
+    let request = Request::new_with_str_and_init(url, &opts)
         .map_err(|_| "Failed to create request")?;
     
     // Get session token
@@ -537,55 +623,24 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
     let resp: Response = resp_value.dyn_into().map_err(|_| "Invalid response")?;
     
     if !resp.ok() {
-        // Return mock results for demo
-        return Ok(mock_search_results(query));
+        return Ok(vec![]);
     }
     
-    let json = JsFuture::from(resp.json().map_err(|_| "JSON error")?)
+    let text = JsFuture::from(resp.text().map_err(|_| "Text error")?)
         .await
+        .map_err(|_| "Text await error")?;
+    
+    let text_str = text.as_string().unwrap_or_default();
+    
+    // Parse response - expecting { "data": [...] }
+    let parsed: serde_json::Value = serde_json::from_str(&text_str)
         .map_err(|_| "JSON parse error")?;
     
-    // Parse response
-    // For now return mock data
-    Ok(mock_search_results(query))
+    let data = parsed.get("data")
+        .and_then(|d| d.as_array())
+        .cloned()
+        .unwrap_or_default();
+    
+    Ok(data)
 }
 
-fn mock_search_results(query: &str) -> Vec<SearchResult> {
-    let q = query.to_lowercase();
-    let mut results = vec![];
-    
-    // Mock contacts
-    if "john".contains(&q) || q.contains("john") {
-        results.push(SearchResult {
-            entity_type: "Contacts".to_string(),
-            icon: "👤",
-            title: "John Smith".to_string(),
-            subtitle: "john@example.com".to_string(),
-            url: "/app/crm/entity/contact".to_string(),
-        });
-    }
-    
-    // Mock deals
-    if "enterprise".contains(&q) || q.contains("deal") {
-        results.push(SearchResult {
-            entity_type: "Deals".to_string(),
-            icon: "💰",
-            title: "Enterprise Deal".to_string(),
-            subtitle: "$50,000 - Negotiation".to_string(),
-            url: "/app/crm/entity/deal".to_string(),
-        });
-    }
-    
-    // Mock properties
-    if "villa".contains(&q) || q.contains("property") {
-        results.push(SearchResult {
-            entity_type: "Properties".to_string(),
-            icon: "🏠",
-            title: "Luxury Villa".to_string(),
-            subtitle: "123 Palm Beach, FL".to_string(),
-            url: "/app/realestate/entity/property".to_string(),
-        });
-    }
-    
-    results
-}
