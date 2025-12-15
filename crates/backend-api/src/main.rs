@@ -69,6 +69,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/seed", post(seed_data))
         // Public routes (with tenant resolution middleware)
         .nest("/public", public_routes)
+        // Webhook routes (public, no auth, signature validated)
+        .merge(routes::webhooks::routes())
         // API routes (authenticated)
         .nest("/api/v1", routes::api_routes())
         // Add state

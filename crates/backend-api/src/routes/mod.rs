@@ -19,6 +19,8 @@ pub mod public;
 pub mod analytics;
 pub mod inbox;
 pub mod tenant;
+pub mod webhooks;
+pub mod integrations;
 
 /// Build all API routes
 pub fn api_routes() -> Router<Arc<AppState>> {
@@ -47,6 +49,8 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         .nest("/inbox", inbox::routes())
         // Workflow graph routes (visual editor)
         .nest("/workflows", workflow_graph::routes())
+        // Integration settings routes
+        .merge(integrations::routes())
 }
 
 

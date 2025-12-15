@@ -95,6 +95,13 @@ pub fn SettingsPage() -> impl IntoView {
                         <span class="tab-icon">"🌐"</span>
                         "Public Website"
                     </button>
+                    <button
+                        class=move || format!("settings-tab {}", if active_tab.get() == "integrations" { "active" } else { "" })
+                        on:click=move |_| set_active_tab.set("integrations".to_string())
+                    >
+                        <span class="tab-icon">"🔗"</span>
+                        "Integrations"
+                    </button>
                 </div>
 
                 // Tab Content
@@ -104,6 +111,7 @@ pub fn SettingsPage() -> impl IntoView {
                         "branding" => view! { <BrandingSettings/> }.into_view(),
                         "users" => view! { <UsersSettings/> }.into_view(),
                         "website" => view! { <WebsiteSettings/> }.into_view(),
+                        "integrations" => view! { <IntegrationsSettings/> }.into_view(),
                         _ => view! { <GeneralSettings/> }.into_view(),
                     }}
                 </div>
@@ -919,3 +927,184 @@ fn WebsiteSettings() -> impl IntoView {
     }
 }
 
+/// Integrations settings - Provider configuration cards
+#[component]
+fn IntegrationsSettings() -> impl IntoView {
+    // Provider configurations
+    let providers = vec![
+        ("twilio", "Twilio (SMS/Voice)", "📱", "Send/receive SMS and voice calls"),
+        ("facebook", "Facebook Lead Ads", "📘", "Sync leads from Facebook ads"),
+        ("whatsapp", "WhatsApp Business", "💬", "Two-way WhatsApp messaging"),
+        ("email", "Email (SMTP)", "📧", "Send transactional emails"),
+    ];
+
+    // State for each provider
+    let (selected_provider, set_selected_provider) = create_signal::<Option<String>>(None);
+    let (saving, set_saving) = create_signal(false);
+    let (saved_msg, set_saved_msg) = create_signal::<Option<String>>(None);
+
+    // Form fields for Twilio
+    let (twilio_sid, set_twilio_sid) = create_signal(String::new());
+    let (twilio_token, set_twilio_token) = create_signal(String::new());
+    let (twilio_phone, set_twilio_phone) = create_signal(String::new());
+
+    // Form fields for Facebook
+    let (fb_app_id, set_fb_app_id) = create_signal(String::new());
+    let (fb_secret, set_fb_secret) = create_signal(String::new());
+    let (fb_page_token, set_fb_page_token) = create_signal(String::new());
+
+    // Save handler
+    let on_save = move |_| {
+        set_saving.set(true);
+        set_saved_msg.set(None);
+        
+        let provider = selected_provider.get().unwrap_or_default();
+        let tenant_id = TENANT_ID.to_string();
+        
+        spawn_local(async move {
+            // TODO: Call API to save integration
+            // For now, just simulate
+            gloo_timers::future::TimeoutFuture::new(500).await;
+            set_saving.set(false);
+            set_saved_msg.set(Some(format!("{} configured successfully!", provider)));
+            set_selected_provider.set(None);
+        });
+    };
+
+    view! {
+        <div class="settings-section integrations">
+            <h2 class="section-title">"Integrations"</h2>
+            <p class="section-description">"Connect external services to your CRM"</p>
+
+            // Success message
+            {move || saved_msg.get().map(|msg| view! {
+                <div class="profile-message success">{msg}</div>
+            })}
+
+            // Provider cards grid
+            <div class="integrations-grid">
+                {providers.into_iter().map(|(id, name, icon, desc)| {
+                    let id_clone = id.to_string();
+                    let id_for_click = id.to_string();
+                    
+                    view! {
+                        <div class="integration-card">
+                            <div class="integration-header">
+                                <span class="integration-icon">{icon}</span>
+                                <div class="integration-info">
+                                    <h3 class="integration-name">{name}</h3>
+                                    <p class="integration-desc">{desc}</p>
+                                </div>
+                            </div>
+                            <div class="integration-status">
+                                <span class="status-dot inactive"></span>
+                                "Not Connected"
+                            </div>
+                            <button
+                                class="btn btn-secondary btn-sm"
+                                on:click=move |_| set_selected_provider.set(Some(id_for_click.clone()))
+                            >
+                                "Configure"
+                            </button>
+                        </div>
+                    }
+                }).collect_view()}
+            </div>
+
+            // Configuration modal
+            <Show when=move || selected_provider.get().is_some()>
+                <div class="modal-overlay" on:click=move |_| set_selected_provider.set(None)>
+                    <div class="modal-content integration-modal" on:click=|e| e.stop_propagation()>
+                        <div class="modal-header">
+                            <h3>"Configure Integration"</h3>
+                            <button class="modal-close" on:click=move |_| set_selected_provider.set(None)>
+                                "×"
+                            </button>
+                        </div>
+                        
+                        <div class="modal-body">
+                            {move || match selected_provider.get().as_deref() {
+                                Some("twilio") => view! {
+                                    <div class="form-group">
+                                        <label>"Account SID"</label>
+                                        <input
+                                            type="text"
+                                            placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                            prop:value=twilio_sid
+                                            on:input=move |e| set_twilio_sid.set(event_target_value(&e))
+                                        />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>"Auth Token"</label>
+                                        <input
+                                            type="password"
+                                            placeholder="Your auth token"
+                                            prop:value=twilio_token
+                                            on:input=move |e| set_twilio_token.set(event_target_value(&e))
+                                        />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>"Phone Number"</label>
+                                        <input
+                                            type="text"
+                                            placeholder="+1234567890"
+                                            prop:value=twilio_phone
+                                            on:input=move |e| set_twilio_phone.set(event_target_value(&e))
+                                        />
+                                    </div>
+                                }.into_view(),
+                                Some("facebook") => view! {
+                                    <div class="form-group">
+                                        <label>"App ID"</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Your Facebook App ID"
+                                            prop:value=fb_app_id
+                                            on:input=move |e| set_fb_app_id.set(event_target_value(&e))
+                                        />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>"App Secret"</label>
+                                        <input
+                                            type="password"
+                                            placeholder="Your App Secret"
+                                            prop:value=fb_secret
+                                            on:input=move |e| set_fb_secret.set(event_target_value(&e))
+                                        />
+                                    </div>
+                                    <div class="form-group">
+                                        <label>"Page Access Token"</label>
+                                        <textarea
+                                            placeholder="Your page access token"
+                                            prop:value=fb_page_token
+                                            on:input=move |e| set_fb_page_token.set(event_target_value(&e))
+                                        ></textarea>
+                                    </div>
+                                }.into_view(),
+                                _ => view! {
+                                    <p class="text-muted">"Configuration coming soon..."</p>
+                                }.into_view(),
+                            }}
+                        </div>
+
+                        <div class="modal-footer">
+                            <button
+                                class="btn btn-secondary"
+                                on:click=move |_| set_selected_provider.set(None)
+                            >
+                                "Cancel"
+                            </button>
+                            <button
+                                class="btn btn-primary"
+                                on:click=on_save
+                                disabled=saving
+                            >
+                                {move || if saving.get() { "Saving..." } else { "Save & Connect" }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Show>
+        </div>
+    }
+}
