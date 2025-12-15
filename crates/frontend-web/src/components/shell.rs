@@ -355,6 +355,15 @@ fn CommandPalette(
     let navigate = use_navigate();
     let on_close_clone = on_close.clone();
     
+    // Create node ref for input auto-focus
+    let input_ref = create_node_ref::<leptos::html::Input>();
+    
+    // Auto-focus input when component mounts
+    create_effect(move |_| {
+        if let Some(input) = input_ref.get() {
+            let _ = input.focus();
+        }
+    });
     // Search handler with debounce
     create_effect(move |_| {
         let q = query.get();
@@ -419,7 +428,7 @@ fn CommandPalette(
                         prop:value=query
                         on:input=move |e| set_query.set(event_target_value(&e))
                         on:keydown=on_keydown
-                        autofocus
+                        node_ref=input_ref
                     />
                     {move || loading.get().then(|| view! {
                         <span class="loading-spinner">"⟳"</span>
@@ -511,7 +520,7 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
     let q = query.to_lowercase();
     
     // Search contacts
-    let contacts_url = format!("{}/entity/contact?tenant_id={}", API_BASE, TENANT_ID);
+    let contacts_url = format!("{}/entities/contact?tenant_id={}", API_BASE, TENANT_ID);
     if let Ok(contacts) = fetch_search_results(&contacts_url).await {
         for contact in contacts {
             let name = contact.get("name")
@@ -544,7 +553,7 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
     }
     
     // Search deals
-    let deals_url = format!("{}/entity/deal?tenant_id={}", API_BASE, TENANT_ID);
+    let deals_url = format!("{}/entities/deal?tenant_id={}", API_BASE, TENANT_ID);
     if let Ok(deals) = fetch_search_results(&deals_url).await {
         for deal in deals {
             let title = deal.get("title")
@@ -568,7 +577,7 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
     }
     
     // Search properties
-    let props_url = format!("{}/entity/property?tenant_id={}", API_BASE, TENANT_ID);
+    let props_url = format!("{}/entities/property?tenant_id={}", API_BASE, TENANT_ID);
     if let Ok(props) = fetch_search_results(&props_url).await {
         for prop in props {
             let title = prop.get("title")
@@ -597,13 +606,19 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
 async fn fetch_search_results(url: &str) -> Result<Vec<serde_json::Value>, String> {
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::JsFuture;
-    use web_sys::{Request, RequestInit, Response};
+    use web_sys::{Request, RequestInit, RequestMode, Response};
+    
+    logging::log!("Fetching search: {}", url);
     
     let opts = RequestInit::new();
     opts.set_method("GET");
+    opts.set_mode(RequestMode::Cors);
     
     let request = Request::new_with_str_and_init(url, &opts)
-        .map_err(|_| "Failed to create request")?;
+        .map_err(|e| {
+            logging::error!("Request create error: {:?}", e);
+            "Failed to create request"
+        })?;
     
     // Get session token
     let token = web_sys::window()
@@ -618,11 +633,17 @@ async fn fetch_search_results(url: &str) -> Result<Vec<serde_json::Value>, Strin
     let window = web_sys::window().ok_or("No window")?;
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
         .await
-        .map_err(|_| "Fetch failed")?;
+        .map_err(|e| {
+            logging::error!("Fetch error: {:?}", e);
+            "Fetch failed"
+        })?;
     
     let resp: Response = resp_value.dyn_into().map_err(|_| "Invalid response")?;
     
+    logging::log!("Response status: {}", resp.status());
+    
     if !resp.ok() {
+        logging::error!("Response not OK: {}", resp.status());
         return Ok(vec![]);
     }
     
@@ -631,15 +652,21 @@ async fn fetch_search_results(url: &str) -> Result<Vec<serde_json::Value>, Strin
         .map_err(|_| "Text await error")?;
     
     let text_str = text.as_string().unwrap_or_default();
+    logging::log!("Response text length: {}", text_str.len());
     
     // Parse response - expecting { "data": [...] }
     let parsed: serde_json::Value = serde_json::from_str(&text_str)
-        .map_err(|_| "JSON parse error")?;
+        .map_err(|e| {
+            logging::error!("JSON parse error: {:?}", e);
+            "JSON parse error"
+        })?;
     
     let data = parsed.get("data")
         .and_then(|d| d.as_array())
         .cloned()
         .unwrap_or_default();
+    
+    logging::log!("Found {} entities", data.len());
     
     Ok(data)
 }
