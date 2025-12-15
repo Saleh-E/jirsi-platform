@@ -11,6 +11,8 @@ pub mod settings;
 pub mod dashboard;
 pub mod reports;
 pub mod inbox;
+pub mod workflow_editor;
+pub mod workflow_list;
 
 pub use home::HomePage;
 pub use entity_list::EntityListPage;
@@ -22,4 +24,7 @@ pub use settings::SettingsPage;
 pub use dashboard::DashboardPage;
 pub use reports::ReportsPage;
 pub use inbox::InboxPage;
+pub use workflow_editor::WorkflowEditorPage;
+pub use workflow_list::WorkflowListPage;
+
 

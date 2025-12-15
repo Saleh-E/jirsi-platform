@@ -14,6 +14,7 @@ pub mod tasks;
 pub mod views;
 pub mod properties;
 pub mod workflows;
+pub mod workflow_graph;
 pub mod public;
 pub mod analytics;
 pub mod inbox;
@@ -44,5 +45,8 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         .nest("/analytics", analytics::routes())
         // Inbox routes (unified messaging)
         .nest("/inbox", inbox::routes())
+        // Workflow graph routes (visual editor)
+        .nest("/workflows", workflow_graph::routes())
 }
+
 

@@ -3,7 +3,7 @@
 use leptos::*;
 use leptos_router::*;
 
-use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage, RegisterPage, ProfilePage, SettingsPage, ReportsPage, InboxPage};
+use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage, RegisterPage, ProfilePage, SettingsPage, ReportsPage, InboxPage, WorkflowEditorPage, WorkflowListPage};
 use crate::pages::dashboard::DashboardPage;
 use crate::pages::public::{listings::PublicListingsPage, detail::PublicDetailPage};
 use crate::components::shell::Shell;
@@ -32,6 +32,8 @@ pub fn App() -> impl IntoView {
                     // Static app routes - MUST come before dynamic
                     <Route path="app/profile" view=ProfilePage/>
                     <Route path="app/settings" view=SettingsPage/>
+                    <Route path="app/settings/workflows" view=WorkflowListPage/>
+                    <Route path="app/settings/workflows/:id" view=WorkflowEditorPage/>
                     <Route path="app/dashboard" view=DashboardPage/>
                     <Route path="app/reports" view=ReportsPage/>
                     <Route path="app/inbox" view=InboxPage/>
@@ -44,3 +46,4 @@ pub fn App() -> impl IntoView {
         </Router>
     }
 }
+

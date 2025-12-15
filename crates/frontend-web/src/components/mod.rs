@@ -19,3 +19,5 @@ pub mod chart;
 pub mod inbox_thread_list;
 pub mod message_bubble;
 pub mod composer;
+pub mod workflow;
+
