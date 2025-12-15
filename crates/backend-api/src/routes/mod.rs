@@ -21,6 +21,7 @@ pub mod inbox;
 pub mod tenant;
 pub mod webhooks;
 pub mod integrations;
+pub mod ws;
 
 /// Build all API routes
 pub fn api_routes() -> Router<Arc<AppState>> {

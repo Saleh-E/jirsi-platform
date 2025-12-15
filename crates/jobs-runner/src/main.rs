@@ -7,6 +7,8 @@ use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod jobs;
+mod email;
+mod whatsapp;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

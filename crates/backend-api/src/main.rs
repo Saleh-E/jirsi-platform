@@ -71,6 +71,8 @@ async fn main() -> anyhow::Result<()> {
         .nest("/public", public_routes)
         // Webhook routes (public, no auth, signature validated)
         .merge(routes::webhooks::routes())
+        // WebSocket routes (real-time events)
+        .merge(routes::ws::routes())
         // API routes (authenticated)
         .nest("/api/v1", routes::api_routes())
         // Add state

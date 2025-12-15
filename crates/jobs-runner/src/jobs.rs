@@ -3,6 +3,9 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::email;
+use crate::whatsapp;
+
 /// Represents a job from the queue
 #[allow(dead_code)]
 struct Job {
@@ -54,7 +57,8 @@ pub async fn process_pending_jobs(pool: &PgPool) -> anyhow::Result<u32> {
         // Process based on job type
         let result = match job.job_type.as_str() {
             "node_graph_execution" => process_node_graph_job(pool, &job.payload).await,
-            "send_email" => process_email_job(pool, &job.payload).await,
+            "send_email" => email::process_email_job(pool, &job.payload).await,
+            "send_whatsapp" => whatsapp::process_whatsapp_job(pool, &job.payload).await,
             _ => {
                 tracing::warn!("Unknown job type: {}", job.job_type);
                 Ok(())
@@ -89,11 +93,5 @@ pub async fn process_pending_jobs(pool: &PgPool) -> anyhow::Result<u32> {
 async fn process_node_graph_job(_pool: &PgPool, payload: &serde_json::Value) -> anyhow::Result<()> {
     tracing::info!("Processing node graph job: {:?}", payload);
     // TODO: Execute node graph
-    Ok(())
-}
-
-async fn process_email_job(_pool: &PgPool, payload: &serde_json::Value) -> anyhow::Result<()> {
-    tracing::info!("Processing email job: {:?}", payload);
-    // TODO: Send email
     Ok(())
 }
