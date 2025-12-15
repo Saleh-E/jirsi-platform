@@ -79,13 +79,7 @@ fn NavItem(
 #[component]
 fn QuickCreateButton() -> impl IntoView {
     let (show_menu, set_show_menu) = create_signal(false);
-    let navigate = use_navigate();
-    
-    // Clone navigate for each button to avoid FnOnce issues
-    let nav_contact = navigate.clone();
-    let nav_deal = navigate.clone();
-    let nav_task = navigate.clone();
-    let nav_property = navigate.clone();
+    let (create_entity_type, set_create_entity_type) = create_signal::<Option<String>>(None);
     
     view! {
         <div class="quick-create-container">
@@ -97,37 +91,52 @@ fn QuickCreateButton() -> impl IntoView {
                 <span class="icon">"+"</span>
             </button>
             {move || show_menu.get().then(|| {
-                let nav_c = nav_contact.clone();
-                let nav_d = nav_deal.clone();
-                let nav_t = nav_task.clone();
-                let nav_p = nav_property.clone();
                 view! {
                     <div class="quick-create-menu">
                         <button class="menu-item" on:click=move |_| {
                             set_show_menu.set(false);
-                            nav_c("/app/crm/entity/contact?create=true", Default::default());
+                            set_create_entity_type.set(Some("contact".to_string()));
                         }>
                             <span>"👤"</span> "New Contact"
                         </button>
                         <button class="menu-item" on:click=move |_| {
                             set_show_menu.set(false);
-                            nav_d("/app/crm/entity/deal?create=true", Default::default());
+                            set_create_entity_type.set(Some("deal".to_string()));
                         }>
                             <span>"💰"</span> "New Deal"
                         </button>
                         <button class="menu-item" on:click=move |_| {
                             set_show_menu.set(false);
-                            nav_t("/app/crm/entity/task?create=true", Default::default());
+                            set_create_entity_type.set(Some("task".to_string()));
                         }>
                             <span>"✓"</span> "New Task"
                         </button>
                         <button class="menu-item" on:click=move |_| {
                             set_show_menu.set(false);
-                            nav_p("/app/realestate/entity/property?create=true", Default::default());
+                            set_create_entity_type.set(Some("property".to_string()));
                         }>
                             <span>"🏠"</span> "New Property"
                         </button>
                     </div>
+                }
+            })}
+            
+            // CreateModal - opens when an entity type is selected
+            {move || create_entity_type.get().map(|entity_type| {
+                let label = match entity_type.as_str() {
+                    "contact" => "Contact",
+                    "deal" => "Deal",
+                    "task" => "Task",
+                    "property" => "Property",
+                    _ => "Record",
+                };
+                view! {
+                    <crate::components::create_modal::CreateModal
+                        entity_type=entity_type.clone()
+                        entity_label=label.to_string()
+                        on_close=move |_| set_create_entity_type.set(None)
+                        on_created=move |_| set_create_entity_type.set(None)
+                    />
                 }
             })}
         </div>
