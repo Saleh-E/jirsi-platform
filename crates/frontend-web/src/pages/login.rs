@@ -98,17 +98,19 @@ async fn do_login(email: &str, password: &str) -> Result<(), String> {
     let body = serde_json::json!({
         "email": email,
         "password": password,
-        "subdomain": "demo"
+        "tenant_subdomain": "demo"
     });
 
     let opts = RequestInit::new();
     opts.set_method("POST");
     opts.set_body(&JsValue::from_str(&body.to_string()));
 
-    let request = Request::new_with_str_and_init(
-        "http://localhost:3000/api/v1/auth/login",
-        &opts
-    ).map_err(|e| format!("Request error: {:?}", e))?;
+    // Use the same API base as other endpoints
+    let api_base = crate::api::API_BASE;
+    let url = format!("{}/auth/login", api_base);
+    
+    let request = Request::new_with_str_and_init(&url, &opts)
+        .map_err(|e| format!("Request error: {:?}", e))?;
 
     request.headers()
         .set("Content-Type", "application/json")
@@ -122,8 +124,26 @@ async fn do_login(email: &str, password: &str) -> Result<(), String> {
         .map_err(|_| "response conversion error")?;
 
     if resp.ok() {
+        // Parse response body as text, then JSON
+        let text_promise = resp.text().map_err(|_| "text error")?;
+        let text_value = JsFuture::from(text_promise)
+            .await
+            .map_err(|_| "text parse error")?;
+        
+        if let Some(text) = text_value.as_string() {
+            // Parse JSON to extract token
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                if let Some(token) = json.get("token").and_then(|t| t.as_str()) {
+                    if let Some(storage) = window.local_storage().ok().flatten() {
+                        let _ = storage.set_item("session_token", token);
+                    }
+                }
+            }
+        }
+        
         Ok(())
     } else {
         Err("Invalid email or password".to_string())
     }
 }
+
