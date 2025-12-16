@@ -63,11 +63,45 @@ pub fn InboxPage() -> impl IntoView {
         set_selected_thread_id.set(Some(entity_id));
         set_selected_entity_type.set(Some(entity_type));
     };
+    
+    // Handle back navigation (for mobile)
+    let on_back = move |_| {
+        set_selected_thread_id.set(None);
+        set_selected_entity_type.set(None);
+    };
 
     view! {
         <div class="inbox-page">
+            // Mobile Filter Tabs (visible only on mobile via CSS)
+            <div class="inbox-mobile-tabs">
+                <button 
+                    class=move || if active_filter.get() == "all" { "mobile-tab active" } else { "mobile-tab" }
+                    on:click=move |_| set_active_filter.set("all".to_string())
+                >
+                    "All"
+                </button>
+                <button 
+                    class=move || if active_filter.get() == "unread" { "mobile-tab active" } else { "mobile-tab" }
+                    on:click=move |_| set_active_filter.set("unread".to_string())
+                >
+                    "Unread"
+                </button>
+                <button 
+                    class=move || if active_filter.get() == "assigned" { "mobile-tab active" } else { "mobile-tab" }
+                    on:click=move |_| set_active_filter.set("assigned".to_string())
+                >
+                    "Assigned"
+                </button>
+                <button 
+                    class=move || if active_filter.get() == "sent" { "mobile-tab active" } else { "mobile-tab" }
+                    on:click=move |_| set_active_filter.set("sent".to_string())
+                >
+                    "Sent"
+                </button>
+            </div>
+            
             <div class="inbox-layout">
-                // Pane 1: Filters
+                // Pane 1: Filters (desktop only)
                 <aside class="inbox-filters">
                     <h2 class="filters-title">"Inbox"</h2>
                     <nav class="filter-nav">
@@ -97,6 +131,7 @@ pub fn InboxPage() -> impl IntoView {
                         </button>
                     </nav>
                 </aside>
+                
                 
                 // Pane 2: Thread List
                 <div class="inbox-thread-list">
@@ -128,8 +163,11 @@ pub fn InboxPage() -> impl IntoView {
                         }
                     >
                         <div class="conversation-container">
-                            // Header
+                            // Header with back button
                             <header class="conversation-header">
+                                <button class="back-btn" on:click=on_back>
+                                    "← Back"
+                                </button>
                                 {move || {
                                     messages_resource.get().flatten().map(|msg_data| {
                                         let entity_type = selected_entity_type.get().unwrap_or_else(|| "contact".to_string());

@@ -6941,3 +6941,93 @@ a.mobile-card {
     }
 }
 
+/* ======================================
+   INBOX MOBILE TABS & BACK BUTTON
+   ====================================== */
+
+/* Mobile filter tabs - hidden on desktop */
+.inbox-mobile-tabs {
+    display: none;
+}
+
+@media screen and (max-width: 768px) {
+    /* Show mobile tabs */
+    .inbox-mobile-tabs {
+        display: flex !important;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: var(--bg-sidebar);
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .mobile-tab {
+        flex-shrink: 0;
+        padding: 0.5rem 1rem;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        cursor: pointer;
+        white-space: nowrap;
+        min-height: 36px;
+    }
+    
+    .mobile-tab.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    /* Back button - hidden on desktop */
+    .back-btn {
+        display: flex !important;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        background: transparent;
+        border: none;
+        color: var(--primary);
+        font-size: 0.9rem;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    
+    .back-btn:active {
+        opacity: 0.7;
+    }
+    
+    /* Update conversation header to use flexbox */
+    .conversation-header {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+        padding: 0.75rem !important;
+        background: var(--bg-sidebar) !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+    
+    .header-content {
+        flex: 1 !important;
+        min-width: 0;
+    }
+    
+    .entity-name {
+        font-size: 1rem !important;
+        margin: 0 !important;
+    }
+    
+    .go-to-record {
+        font-size: 0.8rem !important;
+    }
+}
+
+/* Desktop: hide back button */
+@media screen and (min-width: 769px) {
+    .back-btn {
+        display: none !important;
+    }
+}
+
