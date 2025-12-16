@@ -6801,3 +6801,143 @@ a.mobile-card {
     }
 }
 
+/* ======================================
+   MOBILE INBOX CONVERSATION VIEW
+   When a thread is selected, show conversation
+   ====================================== */
+@media screen and (max-width: 768px) {
+    /* Show conversation when thread is selected (has content) */
+    .inbox-conversation:has(.conversation-container) {
+        display: flex !important;
+        flex-direction: column !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 64px !important;
+        z-index: 900 !important;
+        background: var(--bg-main) !important;
+        width: 100% !important;
+        height: auto !important;
+    }
+    
+    .conversation-container {
+        display: flex !important;
+        flex-direction: column !important;
+        height: 100% !important;
+    }
+    
+    .conversation-header {
+        display: flex !important;
+        align-items: center !important;
+        padding: 1rem !important;
+        background: var(--bg-sidebar) !important;
+        border-bottom: 1px solid var(--border) !important;
+        gap: 1rem !important;
+    }
+    
+    /* Add back button functionality via CSS pseudo-element */
+    .conversation-header::before {
+        content: "← Back" !important;
+        color: var(--primary) !important;
+        font-size: 0.9rem !important;
+        cursor: pointer !important;
+        padding: 0.5rem !important;
+    }
+    
+    .header-content {
+        flex: 1 !important;
+    }
+    
+    .entity-name {
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+    }
+    
+    .go-to-record {
+        font-size: 0.85rem !important;
+        color: var(--primary) !important;
+    }
+    
+    /* Message list */
+    .message-list {
+        flex: 1 !important;
+        overflow-y: auto !important;
+        padding: 1rem !important;
+    }
+    
+    .messages-container {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 1rem !important;
+    }
+    
+    /* Message bubbles */
+    .message-bubble {
+        max-width: 85% !important;
+        padding: 0.75rem 1rem !important;
+        border-radius: 16px !important;
+        background: var(--bg-card) !important;
+    }
+    
+    .message-bubble.outgoing {
+        margin-left: auto !important;
+        background: var(--primary) !important;
+        color: white !important;
+    }
+    
+    /* Composer at bottom */
+    .composer-container {
+        padding: 0.5rem !important;
+        background: var(--bg-sidebar) !important;
+        border-top: 1px solid var(--border) !important;
+    }
+    
+    .composer {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+    }
+    
+    .composer-tabs {
+        display: flex !important;
+        gap: 0.5rem !important;
+    }
+    
+    .composer-tab {
+        padding: 0.5rem 1rem !important;
+        border-radius: 8px !important;
+        font-size: 0.85rem !important;
+    }
+    
+    .composer-tab.active {
+        background: var(--primary) !important;
+        color: white !important;
+    }
+    
+    .composer textarea {
+        width: 100% !important;
+        min-height: 60px !important;
+        background: var(--bg-main) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        padding: 0.75rem !important;
+        color: var(--text-primary) !important;
+        resize: none !important;
+    }
+    
+    .composer-actions {
+        display: flex !important;
+        justify-content: flex-end !important;
+    }
+    
+    .composer-actions button {
+        padding: 0.5rem 1.5rem !important;
+        background: var(--primary) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+    }
+}
+
