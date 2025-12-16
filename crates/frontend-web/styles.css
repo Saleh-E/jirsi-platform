@@ -7269,3 +7269,147 @@ a.mobile-card {
     display: none;
 }
 
+/* ======================================
+   SMART TABLE STYLES
+   ====================================== */
+
+.smart-table-wrapper {
+    overflow-x: auto;
+    background: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.smart-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.smart-table-header {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.header-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.smart-table-row {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+}
+
+.smart-table-row:hover {
+    background: var(--bg-sidebar);
+}
+
+.smart-table-cell {
+    padding: 0.625rem 1rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    position: relative;
+}
+
+.smart-table-cell:hover:not(.editing) {
+    background: rgba(79, 70, 229, 0.05);
+}
+
+.smart-table-cell.editing {
+    padding: 0.25rem;
+    background: var(--bg-main);
+}
+
+.cell-input {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--bg-main);
+    border: 2px solid var(--primary);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: inherit;
+    outline: none;
+}
+
+.cell-input:focus {
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+}
+
+.cell-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 300px;
+}
+
+/* Status badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.625rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.status-new {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
+.status-progress {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.status-won {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.status-lost {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.status-qualified {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+}
+
+.status-default {
+    background: rgba(107, 114, 128, 0.15);
+    color: #6b7280;
+}
+
+/* Links */
+.email-link,
+.phone-link {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.email-link:hover,
+.phone-link:hover {
+    text-decoration: underline;
+}
+
+/* Money display */
+.money-display {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--success);
+}
+
+/* Bool display */
+.bool-display {
+    color: var(--text-muted);
+}
+
