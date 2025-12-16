@@ -6515,3 +6515,129 @@ a.mobile-card {
     }
 }
 
+/* ======================================
+   INBOX THREAD LIST - ENSURE VISIBLE
+   ====================================== */
+@media (max-width: 768px) {
+    /* Make thread list visible */
+    .thread-list {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 100px !important;
+        background: var(--bg-main) !important;
+    }
+    
+    /* Thread items - ensure visible */
+    .thread-item {
+        display: flex !important;
+        align-items: center !important;
+        padding: 1rem !important;
+        gap: 0.75rem !important;
+        border-bottom: 1px solid var(--border) !important;
+        background: var(--bg-card) !important;
+        cursor: pointer;
+        min-height: 72px !important;
+    }
+    
+    .thread-item:active {
+        background: var(--bg-sidebar) !important;
+    }
+    
+    .thread-avatar {
+        width: 48px !important;
+        height: 48px !important;
+        border-radius: 50% !important;
+        background: var(--primary) !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    
+    .avatar-initial {
+        color: white !important;
+        font-size: 1.25rem !important;
+        font-weight: 600 !important;
+    }
+    
+    .thread-content {
+        flex: 1 !important;
+        min-width: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.25rem !important;
+    }
+    
+    .thread-header {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+    }
+    
+    .thread-name {
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+        font-size: 0.95rem !important;
+    }
+    
+    .thread-time {
+        font-size: 0.75rem !important;
+        color: var(--text-muted) !important;
+        flex-shrink: 0;
+    }
+    
+    .thread-preview {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+    }
+    
+    .thread-type-icon {
+        flex-shrink: 0;
+    }
+    
+    .thread-message {
+        color: var(--text-secondary) !important;
+        font-size: 0.875rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .thread-unread-badge {
+        background: var(--primary) !important;
+        color: white !important;
+        border-radius: 12px !important;
+        padding: 0.125rem 0.5rem !important;
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Empty state - visible */
+    .thread-list-empty {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 3rem 1rem !important;
+        text-align: center !important;
+        color: var(--text-muted) !important;
+        min-height: 200px !important;
+    }
+    
+    /* Loading state - visible */
+    .inbox-thread-list .loading {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 2rem !important;
+        color: var(--text-secondary) !important;
+        min-height: 100px !important;
+    }
+    
+    /* Conversaiton empty state */
+    .conversation-empty {
+        display: none !important;
+    }
+}
+
