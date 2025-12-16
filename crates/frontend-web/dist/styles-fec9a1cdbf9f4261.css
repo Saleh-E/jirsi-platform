@@ -6182,3 +6182,284 @@ a.mobile-card {
     }
 }
 
+/* ==============================================
+   FIXED MOBILE STYLES - PROPER SELECTORS
+   ============================================== */
+
+/* REPORTS PAGE - Mobile */
+@media (max-width: 768px) {
+    .reports-page {
+        flex-direction: column !important;
+        padding-bottom: 80px;
+    }
+    
+    /* Make sidebar horizontal tabs on mobile */
+    .reports-sidebar {
+        width: 100% !important;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border);
+        padding: 0.5rem !important;
+    }
+    
+    .reports-sidebar__title {
+        display: none;
+    }
+    
+    .reports-nav {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto;
+        gap: 0.5rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .reports-nav__item {
+        flex-shrink: 0;
+        padding: 0.5rem 1rem !important;
+        white-space: nowrap;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .reports-content {
+        padding: 1rem 0.5rem !important;
+    }
+    
+    /* Leaderboard table as cards on mobile */
+    .leaderboard-table {
+        display: block;
+    }
+    
+    .leaderboard-table thead {
+        display: none;
+    }
+    
+    .leaderboard-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .leaderboard-table tr {
+        display: flex;
+        flex-wrap: wrap;
+        padding: 1rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+    }
+    
+    .leaderboard-table td {
+        border: none !important;
+        padding: 0.25rem 0 !important;
+    }
+    
+    .leaderboard-table td.leaderboard-rank {
+        width: 40px;
+        font-size: 1.5rem;
+    }
+    
+    .leaderboard-table td:nth-child(2) {
+        flex: 1;
+    }
+    
+    .leaderboard-table td:nth-child(n+3) {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        padding-left: 40px !important;
+    }
+    
+    .leaderboard-progress {
+        flex: 1;
+    }
+}
+
+/* SETTINGS PAGE - Better Mobile Tabs */
+@media (max-width: 768px) {
+    .settings-page {
+        padding-bottom: 80px;
+    }
+    
+    .settings-header {
+        padding: 0.5rem;
+    }
+    
+    .settings-title {
+        font-size: 1.5rem !important;
+    }
+    
+    .settings-tabs {
+        display: flex !important;
+        overflow-x: auto !important;
+        padding: 0.5rem;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        background: var(--bg-dark);
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .settings-tab {
+        flex-shrink: 0 !important;
+        padding: 0.75rem 1rem !important;
+        white-space: nowrap;
+        border-radius: 8px;
+        min-height: 44px;
+        font-size: 0.875rem;
+    }
+    
+    .settings-content {
+        padding: 0.5rem !important;
+    }
+    
+    .settings-card {
+        padding: 1rem !important;
+        margin-bottom: 1rem;
+    }
+    
+    .settings-card__header {
+        flex-direction: column !important;
+        gap: 0.5rem;
+    }
+}
+
+/* INBOX PAGE - Mobile Fix */
+@media (max-width: 768px) {
+    .inbox-page {
+        height: calc(100vh - 140px);
+        padding-bottom: 80px;
+    }
+    
+    .inbox-layout {
+        flex-direction: column !important;
+        height: 100%;
+    }
+    
+    /* Hide filters on mobile, show thread list full width */
+    .inbox-filters {
+        display: none !important;
+    }
+    
+    .inbox-thread-list {
+        width: 100% !important;
+        flex: 1 !important;
+        border: none !important;
+        overflow-y: auto;
+    }
+    
+    /* Thread items */
+    .thread-item {
+        padding: 1rem !important;
+        border-bottom: 1px solid var(--border);
+        min-height: 72px;
+    }
+    
+    /* Hide conversation initially, show when selected */
+    .inbox-conversation {
+        display: none;
+    }
+    
+    .conversation-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--text-muted);
+    }
+    
+    .conversation-empty .empty-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+}
+
+/* WORKFLOW EDITOR - Mobile */
+@media (max-width: 768px) {
+    .workflow-editor-page {
+        flex-direction: column !important;
+        padding-bottom: 80px;
+    }
+    
+    .workflow-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.5rem !important;
+    }
+    
+    .workflow-header__title {
+        width: 100%;
+        font-size: 1rem !important;
+    }
+    
+    .workflow-editor-container {
+        flex-direction: column !important;
+        height: auto !important;
+    }
+    
+    /* Node palette as horizontal strip */
+    .node-palette,
+    .workflow-sidebar {
+        width: 100% !important;
+        height: auto !important;
+        max-height: 120px !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border);
+        padding: 0.5rem !important;
+    }
+    
+    .node-palette .palette-section {
+        flex-direction: row !important;
+        flex-shrink: 0;
+    }
+    
+    .node-palette .palette-title {
+        display: none;
+    }
+    
+    .node-palette .palette-item,
+    .palette-node {
+        flex-shrink: 0;
+        min-width: 80px;
+        padding: 0.5rem;
+        text-align: center;
+    }
+    
+    /* Canvas fills remaining space */
+    .workflow-canvas {
+        min-height: 50vh !important;
+        flex: 1;
+    }
+    
+    /* Inspector as bottom sheet */
+    .node-inspector {
+        position: fixed !important;
+        bottom: 64px;
+        left: 0;
+        right: 0;
+        width: 100% !important;
+        max-height: 50vh;
+        border-radius: 16px 16px 0 0;
+        z-index: 950;
+    }
+}
+
+/* General Mobile Typography */
+@media (max-width: 768px) {
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    h3 { font-size: 1rem !important; }
+    
+    /* Ensure no content is cut off */
+    .content {
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+}
+
