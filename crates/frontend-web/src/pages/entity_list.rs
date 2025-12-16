@@ -13,6 +13,7 @@ use crate::components::view_switcher::{ViewSwitcher, ViewDefResponse};
 use crate::components::kanban::{KanbanView, KanbanConfig};
 use crate::components::calendar::{CalendarView, CalendarConfig};
 use crate::components::map::{MapView, MapConfig};
+use crate::context::mobile::use_mobile;
 
 /// Main entity list page component
 #[component]
@@ -31,6 +32,10 @@ pub fn EntityListPage() -> impl IntoView {
     // View switching state
     let (current_view_type, set_current_view_type) = create_signal("table".to_string());
     let (current_view_settings, set_current_view_settings) = create_signal(serde_json::Value::Null);
+    
+    // Mobile context
+    let mobile_ctx = use_mobile();
+    let is_mobile = move || mobile_ctx.is_mobile.get();
     
     // Load metadata and data when entity type changes
     let entity_for_load = entity_type.clone();
@@ -230,53 +235,134 @@ pub fn EntityListPage() -> impl IntoView {
                         }.into_view()
                     },
                     _ => {
-                        // Default: Table view
+                        // Default: Table view (or Mobile Card view)
                         let cols = list_columns();
-                        view! {
-                            <div class="table-container">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            {cols.iter().map(|f| {
-                                                view! { <th>{f.label.clone()}</th> }
-                                            }).collect_view()}
-                                            <th class="action-header">""</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {move || {
-                                            let cols = list_columns();
-                                            let etype = entity_type();
-                                            data.get().into_iter().map(|row| {
-                                                let record_id = row.get("id")
-                                                    .and_then(|v| v.as_str())
-                                                    .unwrap_or_default()
-                                                    .to_string();
-                                                let etype_clone = etype.clone();
-                                                let row_path = format!("/app/crm/entity/{}/{}", etype_clone, record_id);
-                                                view! {
-                                                    <tr class="clickable-row">
-                                                        {cols.iter().map(|f| {
-                                                            let value = row.get(&f.name)
-                                                                .map(|v| format_field_value(v, &f.get_field_type()))
-                                                                .unwrap_or_default();
-                                                            view! { <td>{value}</td> }
-                                                        }).collect_view()}
-                                                        <td class="action-cell">
-                                                            <a href=row_path class="row-link">"→"</a>
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            }).collect_view()
-                                        }}
-                                    </tbody>
-                                </table>
-                                
-                                {move || data.get().is_empty().then(|| view! {
-                                    <div class="empty-state">"No records found. Click + New to create one."</div>
-                                })}
-                            </div>
-                        }.into_view()
+                        
+                        if is_mobile() {
+                            // Mobile Card View
+                            view! {
+                                <div class="mobile-card-list">
+                                    {move || {
+                                        let etype = entity_type();
+                                        let cols = list_columns();
+                                        data.get().into_iter().map(|row| {
+                                            let record_id = row.get("id")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or_default()
+                                                .to_string();
+                                            let etype_clone = etype.clone();
+                                            let row_path = format!("/app/crm/entity/{}/{}", etype_clone, record_id);
+                                            
+                                            // Get title from first column
+                                            let title = cols.first()
+                                                .and_then(|f| row.get(&f.name))
+                                                .map(|v| format_field_value(v, "text"))
+                                                .unwrap_or_else(|| "Untitled".to_string());
+                                            
+                                            // Get subtitle from second column
+                                            let subtitle = cols.get(1)
+                                                .and_then(|f| row.get(&f.name))
+                                                .map(|v| format_field_value(v, "text"))
+                                                .unwrap_or_default();
+                                            
+                                            // Get phone/email for quick action
+                                            let phone = row.get("phone")
+                                                .and_then(|v| v.as_str())
+                                                .map(|s| s.to_string());
+                                            
+                                            // Get status
+                                            let status = row.get("status")
+                                                .and_then(|v| v.as_str())
+                                                .map(|s| s.to_string());
+                                            
+                                            view! {
+                                                <a href=row_path class="mobile-card">
+                                                    <div class="card-avatar">
+                                                        <div class="avatar-placeholder">
+                                                            {title.chars().next().unwrap_or('?').to_string()}
+                                                        </div>
+                                                    </div>
+                                                    <div class="card-content">
+                                                        <div class="card-title">{title}</div>
+                                                        <div class="card-subtitle">{subtitle}</div>
+                                                        {status.map(|s| view! {
+                                                            <span class="card-status" data-status=s.to_lowercase()>{s}</span>
+                                                        })}
+                                                    </div>
+                                                    <div class="card-actions">
+                                                        {phone.map(|p| {
+                                                            let phone_url = format!("tel:{}", p);
+                                                            view! {
+                                                                <span class="action-btn call-btn" on:click=move |e| {
+                                                                    e.prevent_default();
+                                                                    if let Some(window) = web_sys::window() {
+                                                                        let _ = window.open_with_url(&phone_url);
+                                                                    }
+                                                                }>
+                                                                    "📞"
+                                                                </span>
+                                                            }
+                                                        })}
+                                                        <span class="card-arrow">"›"</span>
+                                                    </div>
+                                                </a>
+                                            }
+                                        }).collect_view()
+                                    }}
+                                    
+                                    {move || data.get().is_empty().then(|| view! {
+                                        <div class="empty-state">"No records found. Click + New to create one."</div>
+                                    })}
+                                </div>
+                            }.into_view()
+                        } else {
+                            // Desktop Table View
+                            view! {
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                {cols.iter().map(|f| {
+                                                    view! { <th>{f.label.clone()}</th> }
+                                                }).collect_view()}
+                                                <th class="action-header">""</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {move || {
+                                                let cols = list_columns();
+                                                let etype = entity_type();
+                                                data.get().into_iter().map(|row| {
+                                                    let record_id = row.get("id")
+                                                        .and_then(|v| v.as_str())
+                                                        .unwrap_or_default()
+                                                        .to_string();
+                                                    let etype_clone = etype.clone();
+                                                    let row_path = format!("/app/crm/entity/{}/{}", etype_clone, record_id);
+                                                    view! {
+                                                        <tr class="clickable-row">
+                                                            {cols.iter().map(|f| {
+                                                                let value = row.get(&f.name)
+                                                                    .map(|v| format_field_value(v, &f.get_field_type()))
+                                                                    .unwrap_or_default();
+                                                                view! { <td>{value}</td> }
+                                                            }).collect_view()}
+                                                            <td class="action-cell">
+                                                                <a href=row_path class="row-link">"→"</a>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                }).collect_view()
+                                            }}
+                                        </tbody>
+                                    </table>
+                                    
+                                    {move || data.get().is_empty().then(|| view! {
+                                        <div class="empty-state">"No records found. Click + New to create one."</div>
+                                    })}
+                                </div>
+                            }.into_view()
+                        }
                     }
                 }
             })}
