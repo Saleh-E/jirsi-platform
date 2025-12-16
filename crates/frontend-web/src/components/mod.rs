@@ -25,4 +25,6 @@ pub mod action_bar;
 pub mod editable_table;
 pub mod bottom_nav;
 pub mod mobile_card;
+pub mod bottom_sheet;
+pub mod smart_input;
 

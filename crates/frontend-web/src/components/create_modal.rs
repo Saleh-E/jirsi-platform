@@ -10,9 +10,12 @@ pub fn CreateModal(
     entity_label: String,
     #[prop(into)] on_close: Callback<()>,
     #[prop(into)] on_created: Callback<String>,
+    /// Z-index for modal stacking (default 1000, nested modals get +100)
+    #[prop(optional, default = 1000)] z_index: i32,
 ) -> impl IntoView {
     let entity_type_stored = store_value(entity_type.clone());
     let entity_label_stored = store_value(entity_label.clone());
+    let z_index_stored = store_value(z_index);
     
     // State
     let (fields, set_fields) = create_signal::<Vec<FieldDef>>(Vec::new());
@@ -86,7 +89,11 @@ pub fn CreateModal(
     };
     
     view! {
-        <div class="modal-overlay" on:click=move |_| on_close.call(())>
+        <div 
+            class="modal-overlay" 
+            style=move || format!("z-index: {}", z_index_stored.get_value())
+            on:click=move |_| on_close.call(())
+        >
             <div class="modal-container" on:click=move |ev| ev.stop_propagation()>
                 <div class="modal-header">
                     <h2 class="modal-title">{format!("Create {}", entity_label_stored.get_value())}</h2>
