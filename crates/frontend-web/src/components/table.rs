@@ -9,7 +9,7 @@
 use leptos::*;
 use crate::api::FieldDef as ApiFieldDef;
 use crate::models::ViewColumn;
-use crate::api::{patch_json, API_BASE, TENANT_ID};
+use crate::api::{put_json, API_BASE, TENANT_ID};
 
 /// Smart Table with inline editing support
 #[component]
@@ -220,9 +220,10 @@ fn SmartTableCell(
                 spawn_local(async move {
                     let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
                         API_BASE, entity, rid, TENANT_ID);
-                    let mut payload = std::collections::HashMap::new();
-                    payload.insert(field, new_val);
-                    let _: Result<serde_json::Value, _> = patch_json(&url, &payload).await;
+                    let mut map = serde_json::Map::new();
+                    map.insert(field, new_val);
+                    let payload = serde_json::Value::Object(map);
+                    let _: Result<serde_json::Value, _> = put_json(&url, &payload).await;
                 });
                 
                 original_value.set_value(new_val_clone);
@@ -257,9 +258,10 @@ fn SmartTableCell(
             spawn_local(async move {
                 let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
                     API_BASE, entity, rid, TENANT_ID);
-                let mut payload = std::collections::HashMap::new();
-                payload.insert(field, new_val);
-                let _: Result<serde_json::Value, _> = patch_json(&url, &payload).await;
+                let mut map = serde_json::Map::new();
+                map.insert(field, new_val);
+                let payload = serde_json::Value::Object(map);
+                let _: Result<serde_json::Value, _> = put_json(&url, &payload).await;
             });
             
             // Update original to new value
