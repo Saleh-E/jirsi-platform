@@ -259,7 +259,117 @@ pub fn SmartInput(
                         }.into_view()
                     }
                     
-                    // Boolean
+                    // MultiLink fields (many-to-many entity relationships)
+                    "multilink" | "multi_link" => {
+                        let field_val = field_stored.get_value();
+                        let target_entity = get_link_target(&field_val);
+                        let target_entity_for_fetch = target_entity.clone();
+                        let target_entity_for_modal = target_entity.clone();
+                        
+                        // Get current values as array of IDs
+                        let current_ids: Vec<String> = local_value.get()
+                            .as_array()
+                            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                            .unwrap_or_default();
+                        
+                        // State for async-loaded options
+                        let (entity_options, set_entity_options) = create_signal::<Vec<SelectOption>>(Vec::new());
+                        let (loading, set_loading) = create_signal(true);
+                        let (show_create, set_show_create) = create_signal(false);
+                        
+                        // Fetch records on mount
+                        create_effect(move |_| {
+                            let entity = target_entity_for_fetch.clone();
+                            spawn_local(async move {
+                                set_loading.set(true);
+                                if let Ok(records) = fetch_entity_list(&entity).await {
+                                    let opts: Vec<SelectOption> = records.data.iter().filter_map(|r: &serde_json::Value| {
+                                        let id = r.get("id")?.as_str()?.to_string();
+                                        let label = r.get("name")
+                                            .or_else(|| r.get("title"))
+                                            .or_else(|| r.get("first_name"))
+                                            .and_then(|v: &serde_json::Value| v.as_str())
+                                            .map(|s: &str| {
+                                                if let Some(last) = r.get("last_name").and_then(|v: &serde_json::Value| v.as_str()) {
+                                                    format!("{} {}", s, last)
+                                                } else {
+                                                    s.to_string()
+                                                }
+                                            })
+                                            .unwrap_or_else(|| id[..8.min(id.len())].to_string());
+                                        Some(SelectOption::new(id, label))
+                                    }).collect();
+                                    set_entity_options.set(opts);
+                                }
+                                set_loading.set(false);
+                            });
+                        });
+                        
+                        let on_change = on_change.clone();
+                        
+                        // Handle multi-select value changes
+                        let handle_multi_link_change = move |vals: Vec<String>| {
+                            let json_vals: Vec<Value> = vals.iter()
+                                .map(|v| Value::String(v.clone()))
+                                .collect();
+                            let arr = Value::Array(json_vals);
+                            set_local_value.set(arr.clone());
+                            on_change.call(arr);
+                        };
+                        
+                        // Handle entity created - add to selection and refresh list
+                        let target_for_created = target_entity.clone();
+                        let handle_multilink_created = move |record: crate::components::create_modal::CreatedRecord| {
+                            // Add new entity to options
+                            set_entity_options.update(|opts| {
+                                opts.push(SelectOption::new(record.id.clone(), record.display_name.clone()));
+                            });
+                            set_show_create.set(false);
+                            
+                            // Auto-select the new record (without triggering a full on_change)
+                            // Can be enhanced later to auto-add to selection
+                        };
+                        
+                        let create_label_str = format!("+ New {}", target_entity.clone());
+                        
+                        view! {
+                            <div class="multilink-input">
+                                {move || {
+                                    if loading.get() {
+                                        view! { <span class="multilink-loading">"Loading..."</span> }.into_view()
+                                    } else {
+                                        view! {
+                                            <MultiSelect
+                                                options=entity_options.get()
+                                                values=current_ids.clone()
+                                                on_change=handle_multi_link_change.clone()
+                                                allow_search=true
+                                                allow_create=true
+                                                create_label=create_label_str.clone()
+                                                on_create=move |_| set_show_create.set(true)
+                                            />
+                                        }.into_view()
+                                    }
+                                }}
+                                
+                                // Create modal for new entities
+                                {move || show_create.get().then(|| {
+                                    let entity = target_for_created.clone();
+                                    let label = entity.clone();
+                                    view! {
+                                        <CreateModal
+                                            entity_type=entity
+                                            entity_label=label
+                                            on_close=move |_| set_show_create.set(false)
+                                            on_created=handle_multilink_created.clone()
+                                            z_index=z_index + 100
+                                        />
+                                    }
+                                })}
+                            </div>
+                        }.into_view()
+                    }
+                    
                     "boolean" | "checkbox" => {
                         let checked = local_value.get().as_bool().unwrap_or(false);
                         let on_change = on_change.clone();
