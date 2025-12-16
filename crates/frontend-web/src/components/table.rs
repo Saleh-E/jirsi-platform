@@ -218,7 +218,7 @@ fn SmartTableCell(
                 });
                 
                 spawn_local(async move {
-                    let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
+                    let url = format!("{}/entities/{}/{}?tenant_id={}", 
                         API_BASE, entity, rid, TENANT_ID);
                     let mut map = serde_json::Map::new();
                     map.insert(field, new_val);
@@ -256,7 +256,7 @@ fn SmartTableCell(
             });
             
             spawn_local(async move {
-                let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
+                let url = format!("{}/entities/{}/{}?tenant_id={}", 
                     API_BASE, entity, rid, TENANT_ID);
                 let mut map = serde_json::Map::new();
                 map.insert(field, new_val);
