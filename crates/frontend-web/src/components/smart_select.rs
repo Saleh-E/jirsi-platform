@@ -8,8 +8,10 @@
 //! - Optional icons/images per option
 //! - Multi-select with chips
 //! - Async option loading with debounce
+//! - Mobile: Uses BottomSheet instead of dropdown
 
 use leptos::*;
+use crate::context::mobile::use_mobile;
 
 /// Icon type for SelectOption - can be emoji/text or image URL
 #[derive(Clone, Debug, PartialEq)]
@@ -81,6 +83,10 @@ pub fn SmartSelect(
     /// Whether the field is disabled
     #[prop(optional)] disabled: bool,
 ) -> impl IntoView {
+    // Mobile detection
+    let mobile_ctx = use_mobile();
+    let is_mobile = move || mobile_ctx.is_mobile.get();
+    
     // State
     let (is_open, set_is_open) = create_signal(false);
     let (search_query, set_search_query) = create_signal(String::new());
@@ -90,6 +96,8 @@ pub fn SmartSelect(
     let options_stored = store_value(options.clone());
     let value_stored = store_value(if value.is_empty() { None } else { Some(value) });
     let placeholder_stored = store_value(placeholder);
+    let create_label_stored = store_value(create_label);
+    let on_create_stored = store_value(on_create);
     
     // Get display label for current value
     let display_label = move || {
@@ -220,8 +228,8 @@ pub fn SmartSelect(
                 </span>
             </button>
             
-            // Dropdown menu
-            {move || is_open.get().then(|| view! {
+            // Dropdown menu - Desktop only
+            {move || (!is_mobile() && is_open.get()).then(|| view! {
                 <div class="smart-select__dropdown">
                     // Search input
                     {allow_search.then(|| view! {
@@ -297,8 +305,8 @@ pub fn SmartSelect(
                     
                     // Add New button (sticky footer)
                     {allow_create.then(|| {
-                        let label = create_label.clone();
-                        let on_create_clone = on_create.clone();
+                        let label = create_label_stored.get_value();
+                        let on_create_clone = on_create_stored.get_value();
                         let on_create_value_clone = on_create_value.clone();
                         
                         view! {
@@ -352,8 +360,8 @@ pub fn SmartSelect(
                 </div>
             })}
             
-            // Backdrop to catch clicks outside
-            {move || is_open.get().then(|| view! {
+            // Backdrop to catch clicks outside - Desktop only
+            {move || (!is_mobile() && is_open.get()).then(|| view! {
                 <div 
                     class="smart-select__backdrop"
                     on:click=move |_| {
@@ -362,6 +370,74 @@ pub fn SmartSelect(
                     }
                 />
             })}
+            
+            // Mobile: BottomSheet
+            {move || {
+                let is_mob = is_mobile();
+                let open = is_open.get();
+                
+                if is_mob && open {
+                    let opts = options_stored.get_value();
+                    let items: Vec<(String, String)> = opts.iter()
+                        .map(|o| (o.value.clone(), o.label.clone()))
+                        .collect();
+                    
+                    let title_val = placeholder_stored.get_value();
+                    let create_label_val = create_label_stored.get_value();
+                    
+                    // Render with or without "Add New" based on allow_create
+                    if allow_create {
+                        if let Some(create_callback) = on_create_stored.get_value() {
+                            let cb = create_callback.clone();
+                            view! {
+                                <crate::components::bottom_sheet::SearchableBottomSheet
+                                    is_open=is_open
+                                    on_close=move |_: ()| {
+                                        set_is_open.set(false);
+                                        set_search_query.set(String::new());
+                                    }
+                                    title=title_val
+                                    items=items
+                                    on_select=move |val: String| handle_select(val)
+                                    show_add_new=true
+                                    add_new_label=create_label_val
+                                    on_add_new=cb
+                                />
+                            }.into_view()
+                        } else {
+                            view! {
+                                <crate::components::bottom_sheet::SearchableBottomSheet
+                                    is_open=is_open
+                                    on_close=move |_: ()| {
+                                        set_is_open.set(false);
+                                        set_search_query.set(String::new());
+                                    }
+                                    title=title_val
+                                    items=items
+                                    on_select=move |val: String| handle_select(val)
+                                    show_add_new=true
+                                    add_new_label=create_label_val
+                                />
+                            }.into_view()
+                        }
+                    } else {
+                        view! {
+                            <crate::components::bottom_sheet::SearchableBottomSheet
+                                is_open=is_open
+                                on_close=move |_: ()| {
+                                    set_is_open.set(false);
+                                    set_search_query.set(String::new());
+                                }
+                                title=title_val
+                                items=items
+                                on_select=move |val: String| handle_select(val)
+                            />
+                        }.into_view()
+                    }
+                } else {
+                    view! {}.into_view()
+                }
+            }}
         </div>
     }
 }
