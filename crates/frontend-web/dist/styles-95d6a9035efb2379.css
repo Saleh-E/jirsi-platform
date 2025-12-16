@@ -6676,3 +6676,128 @@ a.mobile-card {
     }
 }
 
+/* ======================================
+   FINAL INBOX MOBILE FIX - CLEAN SLATE
+   ====================================== */
+@media screen and (max-width: 768px) {
+    /* Reset inbox to simple column layout */
+    .inbox-page {
+        display: block !important;
+        height: auto !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        padding-bottom: 80px !important;
+    }
+    
+    .inbox-layout {
+        display: block !important;
+        height: auto !important;
+        background: transparent !important;
+    }
+    
+    /* Hide filters and conversation on mobile */
+    .inbox-filters,
+    .inbox-conversation {
+        display: none !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+    
+    /* Thread list - FORCE VISIBLE */
+    .inbox-thread-list {
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 200px !important;
+        background: var(--bg-main) !important;
+        border: none !important;
+    }
+    
+    /* Thread list container inside */
+    .thread-list {
+        display: block !important;
+        width: 100% !important;
+    }
+    
+    /* Empty state */
+    .thread-list-empty {
+        display: block !important;
+        padding: 4rem 2rem !important;
+        text-align: center !important;
+        color: var(--text-secondary) !important;
+        font-size: 1rem !important;
+    }
+    
+    /* Individual thread items */
+    .thread-item {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        padding: 16px !important;
+        background: var(--bg-card) !important;
+        border-bottom: 1px solid var(--border) !important;
+        cursor: pointer !important;
+    }
+    
+    .thread-avatar {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        border-radius: 50% !important;
+        background: var(--primary) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    .avatar-initial {
+        color: white !important;
+        font-weight: 600 !important;
+        font-size: 18px !important;
+    }
+    
+    .thread-content {
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+    
+    .thread-header {
+        display: flex !important;
+        justify-content: space-between !important;
+        margin-bottom: 4px !important;
+    }
+    
+    .thread-name {
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+    }
+    
+    .thread-time {
+        font-size: 12px !important;
+        color: var(--text-muted) !important;
+    }
+    
+    .thread-preview {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+    
+    .thread-message {
+        color: var(--text-secondary) !important;
+        font-size: 14px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    
+    .thread-unread-badge {
+        background: var(--primary) !important;
+        color: white !important;
+        padding: 2px 8px !important;
+        border-radius: 12px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+    }
+}
+
