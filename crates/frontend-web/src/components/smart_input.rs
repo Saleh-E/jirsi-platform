@@ -10,7 +10,7 @@ use leptos::*;
 use serde_json::Value;
 use crate::api::FieldDef;
 use crate::context::mobile::use_mobile;
-use crate::components::smart_select::{SmartSelect, SelectOption};
+use crate::components::smart_select::{SmartSelect, MultiSelect, SelectOption};
 use crate::components::create_modal::CreateModal;
 use crate::api::{fetch_entity_list, API_BASE, TENANT_ID};
 
@@ -191,6 +191,58 @@ pub fn SmartInput(
                         }.into_view()
                     }
                     
+                    // TagList / MultiSelect fields - chips with inline tag creation
+                    "taglist" | "tag_list" | "tags" | "multi_select" => {
+                        let field_val = field_stored.get_value();
+                        let options: Vec<SelectOption> = get_field_options(&field_val)
+                            .into_iter()
+                            .map(|opt| SelectOption::new(opt.clone(), opt))
+                            .collect();
+                        
+                        // Get current values as array
+                        let current_values: Vec<String> = local_value.get()
+                            .as_array()
+                            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                            .unwrap_or_default();
+                        
+                        let on_change = on_change.clone();
+                        let (local_options, set_local_options) = create_signal(options);
+                        
+                        // Handle inline tag creation
+                        let handle_create_tag = move |new_tag: String| {
+                            let trimmed = new_tag.trim().to_string();
+                            if !trimmed.is_empty() {
+                                // Add to local options
+                                set_local_options.update(|opts| {
+                                    if !opts.iter().any(|o| o.value == trimmed) {
+                                        opts.push(SelectOption::new(trimmed.clone(), trimmed.clone()));
+                                    }
+                                });
+                            }
+                        };
+                        
+                        // Handle multi-select value changes
+                        let handle_multi_change = move |vals: Vec<String>| {
+                            let json_vals: Vec<Value> = vals.iter()
+                                .map(|v| Value::String(v.clone()))
+                                .collect();
+                            let arr = Value::Array(json_vals);
+                            set_local_value.set(arr.clone());
+                            on_change.call(arr);
+                        };
+                        
+                        view! {
+                            <MultiSelect
+                                options=local_options.get()
+                                values=current_values
+                                on_change=handle_multi_change
+                                allow_search=true
+                                allow_create=true
+                                create_label="+ Add Tag".to_string()
+                                on_create_value=handle_create_tag
+                            />
+                        }.into_view()
+                    }
                     // Link fields (references to other entities)
                     "link" => {
                         let field_val = field_stored.get_value();
