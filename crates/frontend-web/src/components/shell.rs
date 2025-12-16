@@ -6,6 +6,8 @@
 use leptos::*;
 use leptos_router::*;
 use crate::context::theme::ThemeToggle;
+use crate::context::mobile::use_mobile;
+use crate::components::bottom_nav::BottomNav;
 
 /// Sidebar nav section with collapsible state
 #[component]
@@ -188,6 +190,10 @@ pub fn Shell() -> impl IntoView {
     let (sidebar_collapsed, set_sidebar_collapsed) = create_signal(false);
     let navigate = use_navigate();
     
+    // Mobile context
+    let mobile_ctx = use_mobile();
+    let is_mobile = move || mobile_ctx.is_mobile.get();
+    
     // Get user email from localStorage
     let user_email = move || {
         web_sys::window()
@@ -238,7 +244,7 @@ pub fn Shell() -> impl IntoView {
     });
 
     view! {
-        <div class="app-shell" class:sidebar-collapsed=sidebar_collapsed>
+        <div class="app-shell" class:sidebar-collapsed=sidebar_collapsed class:is-mobile=is_mobile>
             // Command Palette Modal
             {move || show_command_palette.get().then(|| view! {
                 <CommandPalette on_close=move || set_show_command_palette.set(false) />
@@ -348,6 +354,9 @@ pub fn Shell() -> impl IntoView {
                     <Outlet/>
                 </div>
             </main>
+            
+            // Bottom Nav (Mobile Only)
+            {move || is_mobile().then(|| view! { <BottomNav /> })}
         </div>
     }
 }

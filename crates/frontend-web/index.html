@@ -2,12 +2,41 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SaaS Platform</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Jirsi">
+    <meta name="description" content="Real Estate CRM & Property Management Platform">
+    
+    <title>Jirsi Platform</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/assets/manifest.json">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/assets/icon-192.png">
+    
+    <!-- Styles -->
     <link data-trunk rel="css" href="styles.css"/>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/assets/icon-192.png">
 </head>
 <body>
     <div id="app"></div>
     <link data-trunk rel="rust" data-wasm-opt="z"/>
+    <link data-trunk rel="copy-dir" href="assets"/>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/assets/sw.js')
+                    .then(reg => console.log('[PWA] Service worker registered'))
+                    .catch(err => console.error('[PWA] Service worker failed:', err));
+            });
+        }
+    </script>
 </body>
 </html>

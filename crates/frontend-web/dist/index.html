@@ -2,18 +2,35 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SaaS Platform</title>
-    <link rel="stylesheet" href="/styles-db43aa43baf664cd.css" integrity="sha384&#x2D;C7qR2OFV845VKBQ9M6xPODYtmqH6EpJ&#x2B;yNJzwEbOSmXPPhYt0YflYQaFa5g2J98E"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Jirsi">
+    <meta name="description" content="Real Estate CRM & Property Management Platform">
+    
+    <title>Jirsi Platform</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/assets/manifest.json">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/assets/icon-192.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/styles-44ef419b74503fbf.css" integrity="sha384&#x2D;znUWuvHT0lvQdDGghN1xDZXUHEQou2ipI2I0t&#x2B;4zipjsRC1ikIHaKvH94QW4fQQj"/>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/assets/icon-192.png">
 
-<link rel="modulepreload" href="/frontend-web-f9e85d1e59849a83.js" crossorigin=anonymous integrity="sha384-RGn/v2iU1xjxHbv6GrgfuW1mjd4g56d2i9f6PJLg5Vt0EjUog04VcfSzvgZ+v0HJ">
-<link rel="preload" href="/frontend-web-f9e85d1e59849a83_bg.wasm" crossorigin=anonymous integrity="sha384-0694ZUxKBA+uFaZ3ACc1kALwxJOOIMOux1CYbX6xaI4n+cZtoIj0+WEk8UGaC5XN" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/frontend-web-a0326c1381c5feb9.js" crossorigin=anonymous integrity="sha384-49NQnokyVrgPgjUDhjoUhDx3i+eoEowzOL19Kc9qmLSjl8OcAKV/bBvQFjymVGzq">
+<link rel="preload" href="/frontend-web-a0326c1381c5feb9_bg.wasm" crossorigin=anonymous integrity="sha384-w7HgWS2cKm4O2CJU4nwqUn5xar1GDkBtoCZOPIeU2oGLHNq3VAUHSW1r4KL+t1hB" as="fetch" type="application/wasm"></head>
 <body>
     <div id="app"></div>
     
-<script type="module" nonce="eD9ftSE+fanEriDDWWLXcg==">
-import init, * as bindings from '/frontend-web-f9e85d1e59849a83.js';
-const wasm = await init('/frontend-web-f9e85d1e59849a83_bg.wasm');
+<script type="module" nonce="uSbmQjQbei07exHgQqu0uQ==">
+import init, * as bindings from '/frontend-web-a0326c1381c5feb9.js';
+const wasm = await init('/frontend-web-a0326c1381c5feb9_bg.wasm');
 
 
 window.wasmBindings = bindings;
@@ -22,6 +39,18 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
+    
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/assets/sw.js')
+                    .then(reg => console.log('[PWA] Service worker registered'))
+                    .catch(err => console.error('[PWA] Service worker failed:', err));
+            });
+        }
+    </script>
 <script>"use strict";
 
 (function () {

@@ -20,8 +20,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub fn hydrate() {
     console_error_panic_hook::set_once();
     leptos::mount_to_body(|| {
-        // Provide theme context at app root
+        // Provide contexts at app root
         context::provide_theme_context();
+        context::provide_mobile_context();
         view! { <App/> }
     });
 }
