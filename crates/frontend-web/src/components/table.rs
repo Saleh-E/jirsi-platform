@@ -349,6 +349,8 @@ fn SmartTableCell(
                                         class="cell-input"
                                         value=current
                                         autofocus=true
+                                        on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
+                                        on:mousedown=move |ev: web_sys::MouseEvent| ev.stop_propagation()
                                         on:input=move |ev| {
                                             if let Ok(n) = event_target_value(&ev).parse::<f64>() {
                                                 local_value.set_value(serde_json::json!(n));
@@ -388,6 +390,8 @@ fn SmartTableCell(
                                         class="cell-input"
                                         value=current
                                         autofocus=true
+                                        on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
+                                        on:mousedown=move |ev: web_sys::MouseEvent| ev.stop_propagation()
                                         on:input=move |ev| {
                                             local_value.set_value(serde_json::Value::String(event_target_value(&ev)));
                                         }
