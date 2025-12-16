@@ -25,11 +25,6 @@ pub fn EntityListPage() -> impl IntoView {
     
     let entity_type = move || params.with(|p| p.get("entity").cloned().unwrap_or_default());
     
-    // Read initial view from URL query param
-    let initial_view = query.with(|q| {
-        q.get("view").cloned().unwrap_or_else(|| "table".to_string())
-    });
-    
     // Signals
     let (fields, set_fields) = create_signal(Vec::<FieldDef>::new());
     let (data, set_data) = create_signal(Vec::<serde_json::Value>::new());
@@ -38,9 +33,17 @@ pub fn EntityListPage() -> impl IntoView {
     let (form_data, set_form_data) = create_signal(serde_json::Map::new());
     let (error, set_error) = create_signal(Option::<String>::None);
     
-    // View switching state - initialized from URL
-    let (current_view_type, set_current_view_type) = create_signal(initial_view);
+    // View switching state
+    let (current_view_type, set_current_view_type) = create_signal("table".to_string());
     let (current_view_settings, set_current_view_settings) = create_signal(serde_json::Value::Null);
+    
+    // Sync view type from URL query param (reactive)
+    create_effect(move |_| {
+        let view_from_url = query.with(|q| {
+            q.get("view").cloned().unwrap_or_else(|| "table".to_string())
+        });
+        set_current_view_type.set(view_from_url);
+    });
     
     // Mobile context
     let mobile_ctx = use_mobile();
