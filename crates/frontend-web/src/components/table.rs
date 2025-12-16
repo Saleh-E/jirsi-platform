@@ -61,6 +61,10 @@ pub fn SmartTable(
                                 </th>
                             }
                         }).collect::<Vec<_>>()}
+                        // Action column header when editable
+                        {editable.then(|| view! {
+                            <th class="smart-table-header action-header"></th>
+                        })}
                     </tr>
                 </thead>
                 <tbody>
@@ -73,7 +77,9 @@ pub fn SmartTable(
                                 .unwrap_or("")
                                 .to_string();
                             let row_for_click = row.clone();
+                            let row_for_action = row.clone();
                             let on_row_click = on_row_click.clone();
+                            let on_row_click_action = on_row_click.clone();
                             let entity = entity_type_stored.get_value();
                             
                             view! {
@@ -106,6 +112,25 @@ pub fn SmartTable(
                                             />
                                         }
                                     }).collect::<Vec<_>>()}
+                                    // Action column with arrow button when editable
+                                    {editable.then(|| {
+                                        let row_for_nav = row_for_action.clone();
+                                        let on_nav = on_row_click_action.clone();
+                                        view! {
+                                            <td class="smart-table-cell action-cell">
+                                                <button 
+                                                    class="row-action-btn" 
+                                                    on:click=move |_| {
+                                                        if let Some(ref cb) = on_nav {
+                                                            cb.call(row_for_nav.clone());
+                                                        }
+                                                    }
+                                                >
+                                                    "→"
+                                                </button>
+                                            </td>
+                                        }
+                                    })}
                                 </tr>
                             }
                         }
@@ -140,18 +165,23 @@ fn SmartTableCell(
     let row_id_stored = store_value(row_id.clone());
     let entity_type_stored = store_value(entity_type.clone());
     
-    // Handle double-click to edit
-    let handle_dbl_click = move |_| {
+    // Handle double-click to edit - must stop propagation to prevent row click
+    let handle_dbl_click = move |ev: web_sys::MouseEvent| {
+        ev.stop_propagation();
+        ev.prevent_default();
         if editable {
             set_is_editing.set(true);
         }
     };
     
-    // Handle single click for navigation
-    let handle_click = move |_| {
-        if !is_editing.get() {
+    // Handle single click - if editable, don't navigate (let dblclick handle editing)
+    // If not editable, navigate on click
+    let handle_click = move |ev: web_sys::MouseEvent| {
+        if !editable && !is_editing.get() {
+            ev.stop_propagation();
             on_click.call(());
         }
+        // When editable, single click does nothing - user must double-click to edit
     };
     
     // Handle blur to save

@@ -7664,3 +7664,32 @@ a.mobile-card {
     font-size: 1.1rem;
 }
 
+/* Action button in table */
+.row-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: var(--bg-sidebar);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.15s;
+}
+
+.row-action-btn:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.action-header {
+    width: 50px;
+}
+
+.action-cell {
+    text-align: center;
+}
+
