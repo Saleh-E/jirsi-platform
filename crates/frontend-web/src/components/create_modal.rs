@@ -3,6 +3,7 @@
 use leptos::*;
 use crate::api::{fetch_field_defs, post_json, FieldDef, API_BASE, TENANT_ID};
 use crate::components::field_renderer::{LinkInput, DynamicSelect};
+use crate::components::smart_select::{MultiSelect, SelectOption};
 
 /// Record info returned from CreateModal when a new record is created
 #[derive(Clone, Debug)]
@@ -270,6 +271,51 @@ pub fn CreateModal(
                                                                 }
                                                             />
                                                         }.into_view(),
+                                                        "taglist" | "tag_list" | "tags" | "multi_select" => {
+                                                            // Multi-select with chips and inline creation
+                                                            let tag_options: Vec<String> = field.options.as_ref()
+                                                                .and_then(|v| v.as_array())
+                                                                .map(|arr| arr.iter()
+                                                                    .filter_map(|v| v.as_str().map(String::from))
+                                                                    .collect())
+                                                                .unwrap_or_default();
+                                                            
+                                                            let select_options: Vec<SelectOption> = tag_options.iter()
+                                                                .map(|o| SelectOption::new(o.clone(), o.clone()))
+                                                                .collect();
+                                                            
+                                                            let field_name_tags = field_name_change.clone();
+                                                            let (local_opts, set_local_opts) = create_signal(select_options);
+                                                            
+                                                            let handle_tags_change = move |vals: Vec<String>| {
+                                                                // Store as JSON array string
+                                                                let json_arr = serde_json::to_string(&vals).unwrap_or_default();
+                                                                update_field(field_name_tags.clone(), json_arr);
+                                                            };
+                                                            
+                                                            let handle_create_tag = move |new_tag: String| {
+                                                                let trimmed = new_tag.trim().to_string();
+                                                                if !trimmed.is_empty() {
+                                                                    set_local_opts.update(|opts| {
+                                                                        if !opts.iter().any(|o| o.value == trimmed) {
+                                                                            opts.push(SelectOption::new(trimmed.clone(), trimmed.clone()));
+                                                                        }
+                                                                    });
+                                                                }
+                                                            };
+                                                            
+                                                            view! {
+                                                                <MultiSelect
+                                                                    options=local_opts.get()
+                                                                    on_change=handle_tags_change
+                                                                    allow_search=true
+                                                                    allow_create=true
+                                                                    create_label="+ Add Tag".to_string()
+                                                                    on_create_value=handle_create_tag
+                                                                    placeholder="Select tags...".to_string()
+                                                                />
+                                                            }.into_view()
+                                                        },
                                                         _ => view! {
                                                             <input
                                                                 type="text"
