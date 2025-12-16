@@ -6641,3 +6641,38 @@ a.mobile-card {
     }
 }
 
+/* INBOX DEBUG - Force visibility */
+@media (max-width: 768px) {
+    /* Force show the thread list content */
+    .inbox-page,
+    .inbox-layout,
+    .inbox-thread-list,
+    .thread-list,
+    .thread-list-empty {
+        visibility: visible !important;
+        opacity: 1 !important;
+        transform: none !important;
+        position: relative !important;
+        z-index: 1 !important;
+    }
+    
+    /* Make sure suspense loading is visible */
+    .inbox-page .loading,
+    .inbox-thread-list .loading,
+    div:has(> .loading) {
+        display: block !important;
+        visibility: visible !important;
+        min-height: 50px !important;
+        color: var(--text-primary) !important;
+        padding: 2rem !important;
+    }
+    
+    /* Remove any clipping */
+    .inbox-page *,
+    .inbox-layout *,
+    .inbox-thread-list * {
+        clip: auto !important;
+        clip-path: none !important;
+    }
+}
+
