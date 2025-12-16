@@ -5481,7 +5481,9 @@ select:focus {
 .editable-table-wrapper .empty-icon {
     font-size: 3rem;
     margin-bottom: 1rem;
-}/* ===============================================
+}
+
+/* ===============================================
    MOBILE STYLES - PWA Experience
    =============================================== */
 
@@ -5551,7 +5553,8 @@ select:focus {
 /* Full width main content on mobile */
 .app-shell.is-mobile .main-content {
     margin-left: 0;
-    padding-bottom: 80px; /* Space for bottom nav */
+    padding-bottom: 80px;
+    /* Space for bottom nav */
 }
 
 /* Mobile topbar adjustments */
@@ -5703,34 +5706,35 @@ select:focus {
 
 /* Responsive Media Queries */
 @media (max-width: 768px) {
+
     /* Hide sidebar toggle button on mobile */
     .sidebar-toggle {
         display: none;
     }
-    
+
     /* Adjust content padding */
     .content {
         padding: 1rem !important;
     }
-    
+
     /* Full width tables on mobile - scroll horizontally */
     .entity-table-wrapper {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
-    
+
     /* Stack forms vertically */
     .form-fields {
         grid-template-columns: 1fr !important;
     }
-    
+
     /* Modal adjustments */
     .modal-container {
         width: 95vw !important;
         max-height: 90vh !important;
         margin: 5vh auto;
     }
-    
+
     /* Command palette full width on mobile */
     .command-palette {
         width: 95vw !important;
@@ -5740,12 +5744,15 @@ select:focus {
 
 /* Touch-friendly adjustments */
 @media (hover: none) and (pointer: coarse) {
+
     /* Larger touch targets */
-    button, a, .btn {
+    button,
+    a,
+    .btn {
         min-height: 44px;
         min-width: 44px;
     }
-    
+
     /* Disable hover effects on touch */
     .nav-item:hover,
     .mobile-card:hover {
@@ -5758,7 +5765,7 @@ select:focus {
     .bottom-nav {
         padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
     }
-    
+
     .app-shell.is-mobile .main-content {
         padding-bottom: calc(80px + env(safe-area-inset-bottom));
     }
@@ -5776,8 +5783,13 @@ select:focus {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .more-menu-drawer {
@@ -5791,8 +5803,13 @@ select:focus {
 }
 
 @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
 }
 
 .more-menu-drawer .drawer-header {
@@ -5888,11 +5905,11 @@ a.mobile-card {
         flex-wrap: wrap;
         gap: 0.75rem;
     }
-    
+
     .entity-list-page .page-header h1 {
         font-size: 1.5rem;
     }
-    
+
     .view-switcher {
         overflow-x: auto;
         padding-bottom: 0.5rem;
@@ -5908,51 +5925,53 @@ a.mobile-card {
     .inbox-page {
         padding-bottom: 80px;
     }
-    
+
     .inbox-layout {
         display: flex !important;
         flex-direction: column !important;
         height: auto !important;
     }
-    
+
     .inbox-filters {
-        display: none !important; /* Hide filters sidebar on mobile */
+        display: none !important;
+        /* Hide filters sidebar on mobile */
     }
-    
+
     .inbox-thread-list {
         width: 100% !important;
         max-height: 60vh !important;
         border: none !important;
         overflow-y: auto;
     }
-    
+
     .inbox-conversation {
-        display: none; /* Initially hidden on mobile */
+        display: none;
+        /* Initially hidden on mobile */
         position: fixed;
         inset: 0;
         background: var(--bg-main);
         z-index: 900;
         flex-direction: column;
     }
-    
+
     .inbox-conversation.active {
         display: flex !important;
     }
-    
+
     .inbox-thread-list .thread-item {
         padding: 0.75rem 1rem;
     }
-    
+
     .conversation-empty {
         padding: 3rem 1rem;
     }
-    
+
     .message-list {
         flex: 1;
         padding: 1rem;
         overflow-y: auto;
     }
-    
+
     .composer-container {
         padding: 0.75rem;
         border-top: 1px solid var(--border);
@@ -5965,56 +5984,56 @@ a.mobile-card {
         padding: 0 0.5rem;
         padding-bottom: 80px;
     }
-    
+
     .dashboard-header {
         flex-direction: column !important;
         align-items: flex-start !important;
         gap: 0.75rem;
         padding: 1rem 0;
     }
-    
+
     .dashboard-title {
         font-size: 1.5rem !important;
     }
-    
+
     .dashboard-subtitle {
         font-size: 0.875rem;
     }
-    
+
     .dashboard-date-range {
         width: 100%;
     }
-    
+
     .dashboard-date-range select {
         width: 100%;
     }
-    
+
     .dashboard-kpis {
         grid-template-columns: 1fr !important;
         gap: 0.75rem !important;
     }
-    
+
     .stat-card {
         padding: 1rem !important;
     }
-    
+
     .dashboard-charts {
         grid-template-columns: 1fr !important;
         gap: 1rem !important;
     }
-    
+
     .dashboard-chart {
         min-height: 200px;
     }
-    
+
     .dashboard-chart--wide {
         grid-column: 1 !important;
     }
-    
+
     .dashboard-activity {
         margin-top: 1rem;
     }
-    
+
     .activity-item {
         padding: 0.75rem 0;
     }
@@ -6026,36 +6045,36 @@ a.mobile-card {
         padding: 1rem 0.5rem;
         padding-bottom: 80px;
     }
-    
+
     .settings-header {
         padding: 0 0.5rem;
     }
-    
+
     .settings-tabs {
         overflow-x: auto;
         white-space: nowrap;
         padding-bottom: 0.5rem;
         -webkit-overflow-scrolling: touch;
     }
-    
+
     .settings-tab {
         padding: 0.5rem 1rem;
         flex-shrink: 0;
     }
-    
+
     .settings-content {
         padding: 1rem !important;
     }
-    
+
     .settings-card {
         padding: 1rem !important;
     }
-    
+
     .form-row {
         flex-direction: column !important;
         gap: 0.5rem !important;
     }
-    
+
     .form-row .form-group {
         width: 100% !important;
     }
@@ -6067,17 +6086,17 @@ a.mobile-card {
         padding: 1rem 0.5rem;
         padding-bottom: 80px;
     }
-    
+
     .profile-header {
         flex-direction: column !important;
         text-align: center;
         gap: 1rem;
     }
-    
+
     .profile-avatar {
         margin: 0 auto;
     }
-    
+
     .profile-form {
         padding: 1rem !important;
     }
@@ -6089,20 +6108,20 @@ a.mobile-card {
         padding: 1rem 0.5rem;
         padding-bottom: 80px;
     }
-    
+
     .reports-header {
         flex-direction: column !important;
         gap: 0.75rem;
     }
-    
+
     .reports-grid {
         grid-template-columns: 1fr !important;
     }
-    
+
     .report-card {
         padding: 1rem !important;
     }
-    
+
     .report-chart {
         height: 200px !important;
     }
@@ -6113,18 +6132,18 @@ a.mobile-card {
     .workflow-editor {
         flex-direction: column !important;
     }
-    
+
     .workflow-sidebar {
         width: 100% !important;
         height: auto !important;
         max-height: 30vh;
         overflow-x: auto;
     }
-    
+
     .workflow-canvas {
         height: 50vh !important;
     }
-    
+
     .workflow-node-palette {
         display: flex !important;
         flex-direction: row !important;
@@ -6134,24 +6153,25 @@ a.mobile-card {
 
 /* General Mobile Fixes */
 @media (max-width: 768px) {
+
     /* Fix right side cutoff */
     .content {
         overflow-x: hidden;
         padding-right: 0.5rem !important;
     }
-    
+
     /* Fix main content overflow */
     .main-content {
         overflow-x: hidden;
     }
-    
+
     /* Responsive tables */
     .data-table {
         display: block;
         overflow-x: auto;
         white-space: nowrap;
     }
-    
+
     /* Form inputs full width */
     .form-input,
     .form-select,
@@ -6159,7 +6179,7 @@ a.mobile-card {
         width: 100% !important;
         min-width: 0 !important;
     }
-    
+
     /* Modals */
     .modal-overlay .modal {
         width: 95% !important;
@@ -6168,14 +6188,14 @@ a.mobile-card {
         max-height: 85vh;
         overflow-y: auto;
     }
-    
+
     /* Page headers */
     .page-header {
         flex-wrap: wrap;
         gap: 0.75rem;
         padding: 0.75rem 0;
     }
-    
+
     .page-header h1 {
         font-size: 1.25rem !important;
         width: 100%;
@@ -6192,7 +6212,7 @@ a.mobile-card {
         flex-direction: column !important;
         padding-bottom: 80px;
     }
-    
+
     /* Make sidebar horizontal tabs on mobile */
     .reports-sidebar {
         width: 100% !important;
@@ -6200,11 +6220,11 @@ a.mobile-card {
         border-bottom: 1px solid var(--border);
         padding: 0.5rem !important;
     }
-    
+
     .reports-sidebar__title {
         display: none;
     }
-    
+
     .reports-nav {
         display: flex !important;
         flex-direction: row !important;
@@ -6212,7 +6232,7 @@ a.mobile-card {
         gap: 0.5rem;
         -webkit-overflow-scrolling: touch;
     }
-    
+
     .reports-nav__item {
         flex-shrink: 0;
         padding: 0.5rem 1rem !important;
@@ -6221,26 +6241,26 @@ a.mobile-card {
         display: flex;
         align-items: center;
     }
-    
+
     .reports-content {
         padding: 1rem 0.5rem !important;
     }
-    
+
     /* Leaderboard table as cards on mobile */
     .leaderboard-table {
         display: block;
     }
-    
+
     .leaderboard-table thead {
         display: none;
     }
-    
+
     .leaderboard-table tbody {
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
     }
-    
+
     .leaderboard-table tr {
         display: flex;
         flex-wrap: wrap;
@@ -6249,28 +6269,28 @@ a.mobile-card {
         border: 1px solid var(--border);
         border-radius: 12px;
     }
-    
+
     .leaderboard-table td {
         border: none !important;
         padding: 0.25rem 0 !important;
     }
-    
+
     .leaderboard-table td.leaderboard-rank {
         width: 40px;
         font-size: 1.5rem;
     }
-    
+
     .leaderboard-table td:nth-child(2) {
         flex: 1;
     }
-    
+
     .leaderboard-table td:nth-child(n+3) {
         width: 100%;
         display: flex;
         justify-content: space-between;
         padding-left: 40px !important;
     }
-    
+
     .leaderboard-progress {
         flex: 1;
     }
@@ -6281,15 +6301,15 @@ a.mobile-card {
     .settings-page {
         padding-bottom: 80px;
     }
-    
+
     .settings-header {
         padding: 0.5rem;
     }
-    
+
     .settings-title {
         font-size: 1.5rem !important;
     }
-    
+
     .settings-tabs {
         display: flex !important;
         overflow-x: auto !important;
@@ -6299,7 +6319,7 @@ a.mobile-card {
         background: var(--bg-dark);
         -webkit-overflow-scrolling: touch;
     }
-    
+
     .settings-tab {
         flex-shrink: 0 !important;
         padding: 0.75rem 1rem !important;
@@ -6308,16 +6328,16 @@ a.mobile-card {
         min-height: 44px;
         font-size: 0.875rem;
     }
-    
+
     .settings-content {
         padding: 0.5rem !important;
     }
-    
+
     .settings-card {
         padding: 1rem !important;
         margin-bottom: 1rem;
     }
-    
+
     .settings-card__header {
         flex-direction: column !important;
         gap: 0.5rem;
@@ -6330,36 +6350,36 @@ a.mobile-card {
         height: calc(100vh - 140px);
         padding-bottom: 80px;
     }
-    
+
     .inbox-layout {
         flex-direction: column !important;
         height: 100%;
     }
-    
+
     /* Hide filters on mobile, show thread list full width */
     .inbox-filters {
         display: none !important;
     }
-    
+
     .inbox-thread-list {
         width: 100% !important;
         flex: 1 !important;
         border: none !important;
         overflow-y: auto;
     }
-    
+
     /* Thread items */
     .thread-item {
         padding: 1rem !important;
         border-bottom: 1px solid var(--border);
         min-height: 72px;
     }
-    
+
     /* Hide conversation initially, show when selected */
     .inbox-conversation {
         display: none;
     }
-    
+
     .conversation-empty {
         display: flex;
         flex-direction: column;
@@ -6369,7 +6389,7 @@ a.mobile-card {
         padding: 4rem 2rem;
         color: var(--text-muted);
     }
-    
+
     .conversation-empty .empty-icon {
         font-size: 4rem;
         margin-bottom: 1rem;
@@ -6382,23 +6402,23 @@ a.mobile-card {
         flex-direction: column !important;
         padding-bottom: 80px;
     }
-    
+
     .workflow-header {
         flex-wrap: wrap;
         gap: 0.5rem;
         padding: 0.5rem !important;
     }
-    
+
     .workflow-header__title {
         width: 100%;
         font-size: 1rem !important;
     }
-    
+
     .workflow-editor-container {
         flex-direction: column !important;
         height: auto !important;
     }
-    
+
     /* Node palette as horizontal strip */
     .node-palette,
     .workflow-sidebar {
@@ -6413,16 +6433,16 @@ a.mobile-card {
         border-bottom: 1px solid var(--border);
         padding: 0.5rem !important;
     }
-    
+
     .node-palette .palette-section {
         flex-direction: row !important;
         flex-shrink: 0;
     }
-    
+
     .node-palette .palette-title {
         display: none;
     }
-    
+
     .node-palette .palette-item,
     .palette-node {
         flex-shrink: 0;
@@ -6430,13 +6450,13 @@ a.mobile-card {
         padding: 0.5rem;
         text-align: center;
     }
-    
+
     /* Canvas fills remaining space */
     .workflow-canvas {
         min-height: 50vh !important;
         flex: 1;
     }
-    
+
     /* Inspector as bottom sheet */
     .node-inspector {
         position: fixed !important;
@@ -6452,10 +6472,18 @@ a.mobile-card {
 
 /* General Mobile Typography */
 @media (max-width: 768px) {
-    h1 { font-size: 1.5rem !important; }
-    h2 { font-size: 1.25rem !important; }
-    h3 { font-size: 1rem !important; }
-    
+    h1 {
+        font-size: 1.5rem !important;
+    }
+
+    h2 {
+        font-size: 1.25rem !important;
+    }
+
+    h3 {
+        font-size: 1rem !important;
+    }
+
     /* Ensure no content is cut off */
     .content {
         max-width: 100vw;
@@ -6473,7 +6501,7 @@ a.mobile-card {
         overflow: visible !important;
         padding-bottom: 80px;
     }
-    
+
     .inbox-layout {
         display: flex !important;
         flex-direction: column !important;
@@ -6481,11 +6509,11 @@ a.mobile-card {
         height: auto !important;
         min-height: 60vh;
     }
-    
+
     .inbox-filters {
         display: none !important;
     }
-    
+
     .inbox-thread-list {
         width: 100% !important;
         flex: 1 !important;
@@ -6493,11 +6521,11 @@ a.mobile-card {
         overflow-y: auto !important;
         background: var(--bg-main);
     }
-    
+
     .inbox-conversation {
         display: none !important;
     }
-    
+
     /* Ensure thread items are visible */
     .thread-item {
         display: flex !important;
@@ -6505,7 +6533,7 @@ a.mobile-card {
         border-bottom: 1px solid var(--border);
         background: var(--bg-card);
     }
-    
+
     /* Empty state should be visible */
     .inbox-thread-list .loading,
     .inbox-thread-list .empty-state {
@@ -6519,6 +6547,7 @@ a.mobile-card {
    INBOX THREAD LIST - ENSURE VISIBLE
    ====================================== */
 @media (max-width: 768px) {
+
     /* Make thread list visible */
     .thread-list {
         display: flex !important;
@@ -6526,7 +6555,7 @@ a.mobile-card {
         min-height: 100px !important;
         background: var(--bg-main) !important;
     }
-    
+
     /* Thread items - ensure visible */
     .thread-item {
         display: flex !important;
@@ -6538,11 +6567,11 @@ a.mobile-card {
         cursor: pointer;
         min-height: 72px !important;
     }
-    
+
     .thread-item:active {
         background: var(--bg-sidebar) !important;
     }
-    
+
     .thread-avatar {
         width: 48px !important;
         height: 48px !important;
@@ -6553,13 +6582,13 @@ a.mobile-card {
         justify-content: center;
         flex-shrink: 0;
     }
-    
+
     .avatar-initial {
         color: white !important;
         font-size: 1.25rem !important;
         font-weight: 600 !important;
     }
-    
+
     .thread-content {
         flex: 1 !important;
         min-width: 0 !important;
@@ -6567,35 +6596,35 @@ a.mobile-card {
         flex-direction: column !important;
         gap: 0.25rem !important;
     }
-    
+
     .thread-header {
         display: flex !important;
         justify-content: space-between !important;
         align-items: center !important;
     }
-    
+
     .thread-name {
         font-weight: 600 !important;
         color: var(--text-primary) !important;
         font-size: 0.95rem !important;
     }
-    
+
     .thread-time {
         font-size: 0.75rem !important;
         color: var(--text-muted) !important;
         flex-shrink: 0;
     }
-    
+
     .thread-preview {
         display: flex !important;
         align-items: center !important;
         gap: 0.5rem !important;
     }
-    
+
     .thread-type-icon {
         flex-shrink: 0;
     }
-    
+
     .thread-message {
         color: var(--text-secondary) !important;
         font-size: 0.875rem !important;
@@ -6603,7 +6632,7 @@ a.mobile-card {
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    
+
     .thread-unread-badge {
         background: var(--primary) !important;
         color: white !important;
@@ -6612,7 +6641,7 @@ a.mobile-card {
         font-size: 0.75rem !important;
         font-weight: 600 !important;
     }
-    
+
     /* Empty state - visible */
     .thread-list-empty {
         display: flex !important;
@@ -6624,7 +6653,7 @@ a.mobile-card {
         color: var(--text-muted) !important;
         min-height: 200px !important;
     }
-    
+
     /* Loading state - visible */
     .inbox-thread-list .loading {
         display: flex !important;
@@ -6634,7 +6663,7 @@ a.mobile-card {
         color: var(--text-secondary) !important;
         min-height: 100px !important;
     }
-    
+
     /* Conversaiton empty state */
     .conversation-empty {
         display: none !important;
@@ -6643,6 +6672,7 @@ a.mobile-card {
 
 /* INBOX DEBUG - Force visibility */
 @media (max-width: 768px) {
+
     /* Force show the thread list content */
     .inbox-page,
     .inbox-layout,
@@ -6655,7 +6685,7 @@ a.mobile-card {
         position: relative !important;
         z-index: 1 !important;
     }
-    
+
     /* Make sure suspense loading is visible */
     .inbox-page .loading,
     .inbox-thread-list .loading,
@@ -6666,7 +6696,7 @@ a.mobile-card {
         color: var(--text-primary) !important;
         padding: 2rem !important;
     }
-    
+
     /* Remove any clipping */
     .inbox-page *,
     .inbox-layout *,
@@ -6680,6 +6710,7 @@ a.mobile-card {
    FINAL INBOX MOBILE FIX - CLEAN SLATE
    ====================================== */
 @media screen and (max-width: 768px) {
+
     /* Reset inbox to simple column layout */
     .inbox-page {
         display: block !important;
@@ -6688,13 +6719,13 @@ a.mobile-card {
         padding: 0 !important;
         padding-bottom: 80px !important;
     }
-    
+
     .inbox-layout {
         display: block !important;
         height: auto !important;
         background: transparent !important;
     }
-    
+
     /* Hide filters and conversation on mobile */
     .inbox-filters,
     .inbox-conversation {
@@ -6702,7 +6733,7 @@ a.mobile-card {
         height: 0 !important;
         overflow: hidden !important;
     }
-    
+
     /* Thread list - FORCE VISIBLE */
     .inbox-thread-list {
         display: block !important;
@@ -6712,13 +6743,13 @@ a.mobile-card {
         background: var(--bg-main) !important;
         border: none !important;
     }
-    
+
     /* Thread list container inside */
     .thread-list {
         display: block !important;
         width: 100% !important;
     }
-    
+
     /* Empty state */
     .thread-list-empty {
         display: block !important;
@@ -6727,7 +6758,7 @@ a.mobile-card {
         color: var(--text-secondary) !important;
         font-size: 1rem !important;
     }
-    
+
     /* Individual thread items */
     .thread-item {
         display: flex !important;
@@ -6738,7 +6769,7 @@ a.mobile-card {
         border-bottom: 1px solid var(--border) !important;
         cursor: pointer !important;
     }
-    
+
     .thread-avatar {
         width: 48px !important;
         height: 48px !important;
@@ -6749,40 +6780,40 @@ a.mobile-card {
         align-items: center !important;
         justify-content: center !important;
     }
-    
+
     .avatar-initial {
         color: white !important;
         font-weight: 600 !important;
         font-size: 18px !important;
     }
-    
+
     .thread-content {
         flex: 1 !important;
         min-width: 0 !important;
     }
-    
+
     .thread-header {
         display: flex !important;
         justify-content: space-between !important;
         margin-bottom: 4px !important;
     }
-    
+
     .thread-name {
         font-weight: 600 !important;
         color: var(--text-primary) !important;
     }
-    
+
     .thread-time {
         font-size: 12px !important;
         color: var(--text-muted) !important;
     }
-    
+
     .thread-preview {
         display: flex !important;
         align-items: center !important;
         gap: 6px !important;
     }
-    
+
     .thread-message {
         color: var(--text-secondary) !important;
         font-size: 14px !important;
@@ -6790,7 +6821,7 @@ a.mobile-card {
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
     }
-    
+
     .thread-unread-badge {
         background: var(--primary) !important;
         color: white !important;
@@ -6806,6 +6837,7 @@ a.mobile-card {
    When a thread is selected, show conversation
    ====================================== */
 @media screen and (max-width: 768px) {
+
     /* Show conversation when thread is selected (has content) */
     .inbox-conversation:has(.conversation-container) {
         display: flex !important;
@@ -6820,13 +6852,13 @@ a.mobile-card {
         width: 100% !important;
         height: auto !important;
     }
-    
+
     .conversation-container {
         display: flex !important;
         flex-direction: column !important;
         height: 100% !important;
     }
-    
+
     .conversation-header {
         display: flex !important;
         align-items: center !important;
@@ -6835,44 +6867,37 @@ a.mobile-card {
         border-bottom: 1px solid var(--border) !important;
         gap: 1rem !important;
     }
-    
-    /* Add back button functionality via CSS pseudo-element */
-    .conversation-header::before {
-        content: "← Back" !important;
-        color: var(--primary) !important;
-        font-size: 0.9rem !important;
-        cursor: pointer !important;
-        padding: 0.5rem !important;
-    }
-    
+
+    /* Back button styling is in .back-btn */
+
     .header-content {
         flex: 1 !important;
     }
-    
+
     .entity-name {
         font-size: 1.1rem !important;
         font-weight: 600 !important;
         color: var(--text-primary) !important;
     }
-    
+
     .go-to-record {
         font-size: 0.85rem !important;
         color: var(--primary) !important;
     }
-    
+
     /* Message list */
     .message-list {
         flex: 1 !important;
         overflow-y: auto !important;
         padding: 1rem !important;
     }
-    
+
     .messages-container {
         display: flex !important;
         flex-direction: column !important;
         gap: 1rem !important;
     }
-    
+
     /* Message bubbles */
     .message-bubble {
         max-width: 85% !important;
@@ -6880,42 +6905,42 @@ a.mobile-card {
         border-radius: 16px !important;
         background: var(--bg-card) !important;
     }
-    
+
     .message-bubble.outgoing {
         margin-left: auto !important;
         background: var(--primary) !important;
         color: white !important;
     }
-    
+
     /* Composer at bottom */
     .composer-container {
         padding: 0.5rem !important;
         background: var(--bg-sidebar) !important;
         border-top: 1px solid var(--border) !important;
     }
-    
+
     .composer {
         display: flex !important;
         flex-direction: column !important;
         gap: 0.5rem !important;
     }
-    
+
     .composer-tabs {
         display: flex !important;
         gap: 0.5rem !important;
     }
-    
+
     .composer-tab {
         padding: 0.5rem 1rem !important;
         border-radius: 8px !important;
         font-size: 0.85rem !important;
     }
-    
+
     .composer-tab.active {
         background: var(--primary) !important;
         color: white !important;
     }
-    
+
     .composer textarea {
         width: 100% !important;
         min-height: 60px !important;
@@ -6926,12 +6951,12 @@ a.mobile-card {
         color: var(--text-primary) !important;
         resize: none !important;
     }
-    
+
     .composer-actions {
         display: flex !important;
         justify-content: flex-end !important;
     }
-    
+
     .composer-actions button {
         padding: 0.5rem 1.5rem !important;
         background: var(--primary) !important;
@@ -6951,6 +6976,7 @@ a.mobile-card {
 }
 
 @media screen and (max-width: 768px) {
+
     /* Show mobile tabs */
     .inbox-mobile-tabs {
         display: flex !important;
@@ -6961,7 +6987,7 @@ a.mobile-card {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
-    
+
     .mobile-tab {
         flex-shrink: 0;
         padding: 0.5rem 1rem;
@@ -6974,13 +7000,13 @@ a.mobile-card {
         white-space: nowrap;
         min-height: 36px;
     }
-    
+
     .mobile-tab.active {
         background: var(--primary);
         border-color: var(--primary);
         color: white;
     }
-    
+
     /* Back button - hidden on desktop */
     .back-btn {
         display: flex !important;
@@ -6994,11 +7020,11 @@ a.mobile-card {
         cursor: pointer;
         flex-shrink: 0;
     }
-    
+
     .back-btn:active {
         opacity: 0.7;
     }
-    
+
     /* Update conversation header to use flexbox */
     .conversation-header {
         display: flex !important;
@@ -7008,17 +7034,17 @@ a.mobile-card {
         background: var(--bg-sidebar) !important;
         border-bottom: 1px solid var(--border) !important;
     }
-    
+
     .header-content {
         flex: 1 !important;
         min-width: 0;
     }
-    
+
     .entity-name {
         font-size: 1rem !important;
         margin: 0 !important;
     }
-    
+
     .go-to-record {
         font-size: 0.8rem !important;
     }
@@ -7030,4 +7056,3 @@ a.mobile-card {
         display: none !important;
     }
 }
-

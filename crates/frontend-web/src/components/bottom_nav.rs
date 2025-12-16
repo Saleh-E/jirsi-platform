@@ -90,14 +90,6 @@ pub fn BottomNav() -> impl IntoView {
                                     <span class="item-label">"Settings"</span>
                                     <span class="item-arrow">"›"</span>
                                 </button>
-                                <button class="drawer-item" on:click=move |_| {
-                                    nav7.clone()("/app/settings/workflows", Default::default());
-                                    set_show_more_menu.set(false);
-                                }>
-                                    <span class="item-icon">"🔄"</span>
-                                    <span class="item-label">"Workflows"</span>
-                                    <span class="item-arrow">"›"</span>
-                                </button>
                             </div>
                         </div>
                     </div>
