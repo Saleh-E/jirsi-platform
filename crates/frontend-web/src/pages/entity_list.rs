@@ -3,6 +3,7 @@
 //! This component renders entity lists dynamically using FieldDefs metadata.
 //! Columns and form fields are NOT hardcoded per entity type.
 //! Supports multiple view types via ViewSwitcher.
+//! Persists view selection in URL query params (?view=kanban)
 
 use leptos::*;
 use leptos_router::*;
@@ -19,7 +20,15 @@ use crate::context::mobile::use_mobile;
 #[component]
 pub fn EntityListPage() -> impl IntoView {
     let params = use_params_map();
+    let query = use_query_map();
+    let navigate = use_navigate();
+    
     let entity_type = move || params.with(|p| p.get("entity").cloned().unwrap_or_default());
+    
+    // Read initial view from URL query param
+    let initial_view = query.with(|q| {
+        q.get("view").cloned().unwrap_or_else(|| "table".to_string())
+    });
     
     // Signals
     let (fields, set_fields) = create_signal(Vec::<FieldDef>::new());
@@ -29,8 +38,8 @@ pub fn EntityListPage() -> impl IntoView {
     let (form_data, set_form_data) = create_signal(serde_json::Map::new());
     let (error, set_error) = create_signal(Option::<String>::None);
     
-    // View switching state
-    let (current_view_type, set_current_view_type) = create_signal("table".to_string());
+    // View switching state - initialized from URL
+    let (current_view_type, set_current_view_type) = create_signal(initial_view);
     let (current_view_settings, set_current_view_settings) = create_signal(serde_json::Value::Null);
     
     // Mobile context
@@ -126,8 +135,17 @@ pub fn EntityListPage() -> impl IntoView {
             <ViewSwitcher 
                 entity_type=entity_type()
                 on_view_change=move |view_def: ViewDefResponse| {
-                    set_current_view_type.set(view_def.view_type.clone());
+                    let new_view = view_def.view_type.clone();
+                    set_current_view_type.set(new_view.clone());
                     set_current_view_settings.set(view_def.settings.clone());
+                    
+                    // Update URL query param
+                    let etype = entity_type();
+                    let new_url = format!("/app/crm/entity/{}?view={}", etype, new_view);
+                    navigate(&new_url, NavigateOptions {
+                        replace: true,
+                        ..Default::default()
+                    });
                 }
             />
             
