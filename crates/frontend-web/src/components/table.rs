@@ -5,11 +5,13 @@
 //! - Auto-save on blur
 //! - Status badges
 //! - Row click navigation
+//! - SmartSelect for searchable dropdowns
 
 use leptos::*;
 use crate::api::FieldDef as ApiFieldDef;
 use crate::models::ViewColumn;
 use crate::api::{put_json, API_BASE, TENANT_ID};
+use crate::components::smart_select::{SmartSelect, SelectOption};
 
 /// Smart Table with inline editing support
 #[component]
@@ -318,27 +320,29 @@ fn SmartTableCell(
                     // Edit mode with confirm button
                     match ft.to_lowercase().as_str() {
                         "select" | "status" => {
-                            // Dropdown for select/status fields
+                            // SmartSelect for searchable select/status fields
                             let current = local_value.get_value().as_str().unwrap_or("").to_string();
-                            let options = opts.clone();
+                            let select_options: Vec<SelectOption> = opts.iter()
+                                .map(|o| SelectOption::new(o.clone(), o.clone()))
+                                .collect();
+                            
+                            // Handle selection change and auto-save
+                            let handle_select_change = move |val: String| {
+                                local_value.set_value(serde_json::Value::String(val));
+                                save_cell();
+                                set_editing_cell.set(None);
+                            };
+                            
                             view! {
-                                <div class="cell-edit-wrapper">
-                                    <select
-                                        class="cell-select"
-                                        on:change=move |ev| {
-                                            local_value.set_value(serde_json::Value::String(event_target_value(&ev)));
-                                        }
-                                    >
-                                        {options.iter().map(|opt| {
-                                            let is_selected = opt == &current;
-                                            view! {
-                                                <option value=opt.clone() selected=is_selected>
-                                                    {opt.clone()}
-                                                </option>
-                                            }
-                                        }).collect_view()}
-                                    </select>
-                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                <div class="cell-edit-wrapper cell-smart-select">
+                                    <SmartSelect
+                                        options=select_options
+                                        value=current
+                                        on_change=handle_select_change
+                                        allow_search=true
+                                        allow_create=false
+                                        placeholder="Select...".to_string()
+                                    />
                                 </div>
                             }.into_view()
                         }
