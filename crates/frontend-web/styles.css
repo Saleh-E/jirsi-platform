@@ -7413,3 +7413,124 @@ a.mobile-card {
     color: var(--text-muted);
 }
 
+/* ======================================
+   MOBILE SWIPE CARD STYLES
+   ====================================== */
+
+.mobile-card-container {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1px;
+}
+
+.mobile-card-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: stretch;
+    z-index: 1;
+}
+
+.swipe-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    padding: 0.5rem;
+    color: white;
+    text-decoration: none;
+    font-size: 0.75rem;
+}
+
+.swipe-action .action-icon {
+    font-size: 1.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.swipe-action .action-label {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+}
+
+.call-action {
+    background: #22c55e;
+}
+
+.whatsapp-action {
+    background: #25d366;
+}
+
+.email-action {
+    background: #3b82f6;
+}
+
+.mobile-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    transition: transform 0.2s ease;
+    z-index: 2;
+    cursor: pointer;
+}
+
+.mobile-card.swiped {
+    transform: translateX(-120px) !important;
+}
+
+.mobile-card:active {
+    background: var(--bg-sidebar);
+}
+
+.card-chevron {
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    margin-left: auto;
+    padding-left: 0.5rem;
+}
+
+/* Mobile card list */
+.mobile-card-list {
+    background: var(--bg-card);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.mobile-card-list .mobile-card-container:last-child .mobile-card {
+    border-bottom: none;
+}
+
+/* More button for mobile cards */
+.card-more-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.card-more-btn:hover {
+    background: var(--bg-sidebar);
+}
+
+@media screen and (max-width: 768px) {
+    .card-more-btn {
+        display: flex;
+    }
+    
+    .card-chevron {
+        display: none;
+    }
+}
+
