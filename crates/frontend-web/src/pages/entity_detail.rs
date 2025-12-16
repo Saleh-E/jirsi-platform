@@ -2,7 +2,7 @@
 //! 
 //! This component displays entity details using FieldDefs metadata.
 //! Includes tabs: Details, Related (Task 9), Timeline (Task 10)
-//! Includes inline editing support.
+//! Includes inline editing support with SmartInput.
 
 use leptos::*;
 use leptos_router::*;
@@ -10,6 +10,7 @@ use crate::api::{
     fetch_field_defs, fetch_entity, update_entity, fetch_associations, fetch_interactions,
     FieldDef, Association, Interaction,
 };
+use crate::components::smart_input::{SmartInput, InputMode};
 
 /// Tab options for the detail page
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -268,17 +269,28 @@ fn EditForm(
                     {fields.into_iter().filter(|f| !f.is_readonly).map(|field| {
                         let field_name = field.name.clone();
                         let field_label = field.label.clone();
-                        let field_type = field.get_field_type();
                         let is_required = field.is_required;
-                        let placeholder = field.placeholder.clone().unwrap_or_default();
-                        let options = field.options.clone();
                         
-                        // Get initial value from record
+                        // Get initial value from record as serde_json::Value
                         let initial_value = form_data.get()
                             .get(&field_name)
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null);
+                        
+                        // Create on_change callback that updates form_data
+                        let field_name_for_change = field_name.clone();
+                        let update_fn = update_form_field.clone();
+                        let handle_change = move |val: serde_json::Value| {
+                            // Convert Value to String for form_data
+                            let str_val = match &val {
+                                serde_json::Value::String(s) => s.clone(),
+                                serde_json::Value::Number(n) => n.to_string(),
+                                serde_json::Value::Bool(b) => b.to_string(),
+                                serde_json::Value::Null => String::new(),
+                                other => other.to_string(),
+                            };
+                            update_fn(field_name_for_change.clone(), str_val);
+                        };
                         
                         view! {
                             <div class="field-item">
@@ -286,15 +298,13 @@ fn EditForm(
                                     {field_label}
                                     {is_required.then(|| " *")}
                                 </label>
-                                {render_edit_input(
-                                    field_name, 
-                                    field_type, 
-                                    is_required, 
-                                    placeholder, 
-                                    options,
-                                    initial_value,
-                                    update_form_field.clone()
-                                )}
+                                <SmartInput
+                                    field=field.clone()
+                                    value=initial_value
+                                    on_change=handle_change
+                                    mode=InputMode::Edit
+                                    z_index=1000
+                                />
                             </div>
                         }
                     }).collect_view()}
