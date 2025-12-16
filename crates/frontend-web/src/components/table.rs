@@ -45,6 +45,9 @@ pub fn SmartTable(
     // Store data reactively so edits update the UI
     let (table_data, set_table_data) = create_signal(data);
     
+    // Global editing cell: (row_id, field_name) - only one cell can edit at a time
+    let (editing_cell, set_editing_cell) = create_signal::<Option<(String, String)>>(None);
+    
     view! {
         <div class="smart-table-wrapper">
             <table class="smart-table">
@@ -99,11 +102,13 @@ pub fn SmartTable(
                                             <SmartTableCell
                                                 value=value
                                                 field_def=field_def
-                                                field_name=field_name
-                                                row_id=row_id_cell
+                                                field_name=field_name.clone()
+                                                row_id=row_id_cell.clone()
                                                 entity_type=entity_cell
                                                 editable=editable
                                                 set_table_data=set_table_data
+                                                editing_cell=editing_cell
+                                                set_editing_cell=set_editing_cell
                                                 on_click=Callback::new(move |_: ()| {
                                                     if let Some(ref cb) = on_click {
                                                         cb.call(row_data.clone());
@@ -151,10 +156,12 @@ fn SmartTableCell(
     entity_type: String,
     editable: bool,
     set_table_data: WriteSignal<Vec<serde_json::Value>>,
+    editing_cell: ReadSignal<Option<(String, String)>>,
+    set_editing_cell: WriteSignal<Option<(String, String)>>,
     #[prop(into)] on_click: Callback<()>,
 ) -> impl IntoView {
-    let (is_editing, set_is_editing) = create_signal(false);
-    let (local_value, set_local_value) = create_signal(value.clone());
+    // Use store_value to avoid re-renders when value changes during editing
+    let local_value = store_value(value.clone());
     let original_value = store_value(value.clone());
     
     let field_type = field_def.as_ref()
@@ -171,150 +178,112 @@ fn SmartTableCell(
         .unwrap_or_default();
     let options_stored = store_value(field_options);
     
-    // Handle single click to edit
+    // Cell ID for global editing comparison
+    let cell_id = (row_id.clone(), field_name.clone());
+    let cell_id_stored = store_value(cell_id.clone());
+    
+    // Check if THIS cell is the one being edited
+    let is_editing = move || {
+        editing_cell.get() == Some(cell_id_stored.get_value())
+    };
+    
+    // Save current cell value and persist to API
+    let save_cell = move || {
+        let new_val = local_value.get_value();
+        let old_val = original_value.get_value();
+        
+        if new_val != old_val {
+            let field = field_name_stored.get_value();
+            let rid = row_id_stored.get_value();
+            let entity = entity_type_stored.get_value();
+            
+            let field_clone = field.clone();
+            let new_val_clone = new_val.clone();
+            set_table_data.update(|rows| {
+                if let Some(row) = rows.iter_mut().find(|r| {
+                    r.get("id").and_then(|v| v.as_str()) == Some(&rid)
+                }) {
+                    if let Some(obj) = row.as_object_mut() {
+                        obj.insert(field_clone.clone(), new_val_clone.clone());
+                    }
+                }
+            });
+            
+            spawn_local(async move {
+                let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
+                    API_BASE, entity, rid, TENANT_ID);
+                let mut payload = std::collections::HashMap::new();
+                payload.insert(field, new_val);
+                let _: Result<serde_json::Value, _> = patch_json(&url, &payload).await;
+            });
+            
+            // Update original to new value
+            original_value.set_value(new_val_clone);
+        }
+    };
+    
+    // Handle single click to edit - saves any currently editing cell first
     let handle_click = move |ev: web_sys::MouseEvent| {
         ev.stop_propagation();
-        if editable && !is_editing.get() {
-            set_is_editing.set(true);
+        if editable {
+            // If another cell is editing, save it first (clicking on new cell = Enter for old cell)
+            if editing_cell.get().is_some() && !is_editing() {
+                // Another cell is editing - trigger save by setting to this cell
+                save_cell(); // This will do nothing for current cell as values match
+            }
+            // Set this cell as the editing cell
+            set_editing_cell.set(Some(cell_id_stored.get_value()));
         }
     };
     
     // Handle confirm button click
-    let handle_confirm = move |_| {
-        set_is_editing.set(false);
-        let new_val = local_value.get();
-        let old_val = original_value.get_value();
-        
-        if new_val != old_val {
-            let field = field_name_stored.get_value();
-            let rid = row_id_stored.get_value();
-            let entity = entity_type_stored.get_value();
-            
-            let field_clone = field.clone();
-            let new_val_clone = new_val.clone();
-            set_table_data.update(|rows| {
-                if let Some(row) = rows.iter_mut().find(|r| {
-                    r.get("id").and_then(|v| v.as_str()) == Some(&rid)
-                }) {
-                    if let Some(obj) = row.as_object_mut() {
-                        obj.insert(field_clone.clone(), new_val_clone.clone());
-                    }
-                }
-            });
-            
-            spawn_local(async move {
-                let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
-                    API_BASE, entity, rid, TENANT_ID);
-                let mut payload = std::collections::HashMap::new();
-                payload.insert(field, new_val);
-                let _: Result<serde_json::Value, _> = patch_json(&url, &payload).await;
-            });
-        }
+    let handle_confirm = move |ev: web_sys::MouseEvent| {
+        ev.stop_propagation();
+        save_cell();
+        set_editing_cell.set(None);
     };
     
-    // Handle blur to save
+    // Handle blur - save and close
     let handle_blur = move |_| {
-        set_is_editing.set(false);
-        let new_val = local_value.get();
-        let old_val = original_value.get_value();
-        
-        // Only save if value changed
-        if new_val != old_val {
-            let field = field_name_stored.get_value();
-            let rid = row_id_stored.get_value();
-            let entity = entity_type_stored.get_value();
-            
-            // Update local table data optimistically
-            let field_clone = field.clone();
-            let new_val_clone = new_val.clone();
-            set_table_data.update(|rows| {
-                if let Some(row) = rows.iter_mut().find(|r| {
-                    r.get("id").and_then(|v| v.as_str()) == Some(&rid)
-                }) {
-                    if let Some(obj) = row.as_object_mut() {
-                        obj.insert(field_clone.clone(), new_val_clone.clone());
-                    }
-                }
-            });
-            
-            // API call to persist
-            spawn_local(async move {
-                let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
-                    API_BASE, entity, rid, TENANT_ID);
-                
-                let mut payload = std::collections::HashMap::new();
-                payload.insert(field, new_val);
-                
-                // Ignore result - optimistic update already applied
-                let _: Result<serde_json::Value, _> = patch_json(&url, &payload).await;
-            });
-        }
+        save_cell();
+        set_editing_cell.set(None);
     };
     
-    // Handle Enter key
+    // Handle Enter key - save and close
     let handle_keydown = move |ev: web_sys::KeyboardEvent| {
         if ev.key() == "Enter" {
-            set_is_editing.set(false);
-            
-            let new_val = local_value.get();
-            let old_val = original_value.get_value();
-            
-            if new_val != old_val {
-                let field = field_name_stored.get_value();
-                let rid = row_id_stored.get_value();
-                let entity = entity_type_stored.get_value();
-                
-                let field_clone = field.clone();
-                let new_val_clone = new_val.clone();
-                set_table_data.update(|rows| {
-                    if let Some(row) = rows.iter_mut().find(|r| {
-                        r.get("id").and_then(|v| v.as_str()) == Some(&rid)
-                    }) {
-                        if let Some(obj) = row.as_object_mut() {
-                            obj.insert(field_clone.clone(), new_val_clone.clone());
-                        }
-                    }
-                });
-                
-                spawn_local(async move {
-                    let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
-                        API_BASE, entity, rid, TENANT_ID);
-                    
-                    let mut payload = std::collections::HashMap::new();
-                    payload.insert(field, new_val);
-                    
-                    let _: Result<serde_json::Value, _> = patch_json(&url, &payload).await;
-                });
-            }
+            save_cell();
+            set_editing_cell.set(None);
         } else if ev.key() == "Escape" {
-            set_local_value.set(original_value.get_value());
-            set_is_editing.set(false);
+            // Revert to original value
+            local_value.set_value(original_value.get_value());
+            set_editing_cell.set(None);
         }
     };
     
     view! {
         <td 
             class="smart-table-cell"
-            class:editing=move || is_editing.get()
+            class:editing=is_editing
             on:click=handle_click
         >
             {move || {
                 let ft = field_type.clone();
                 let opts = options_stored.get_value();
                 
-                if is_editing.get() {
+                if is_editing() {
                     // Edit mode with confirm button
                     match ft.to_lowercase().as_str() {
                         "select" | "status" => {
                             // Dropdown for select/status fields
-                            let current = local_value.get().as_str().unwrap_or("").to_string();
+                            let current = local_value.get_value().as_str().unwrap_or("").to_string();
                             let options = opts.clone();
                             view! {
                                 <div class="cell-edit-wrapper">
                                     <select
                                         class="cell-select"
                                         on:change=move |ev| {
-                                            set_local_value.set(serde_json::Value::String(event_target_value(&ev)));
+                                            local_value.set_value(serde_json::Value::String(event_target_value(&ev)));
                                         }
                                     >
                                         {options.iter().map(|opt| {
@@ -331,7 +300,7 @@ fn SmartTableCell(
                             }.into_view()
                         }
                         "number" | "integer" | "decimal" | "money" => {
-                            let current = local_value.get().as_f64().unwrap_or(0.0).to_string();
+                            let current = local_value.get_value().as_f64().unwrap_or(0.0).to_string();
                             view! {
                                 <div class="cell-edit-wrapper">
                                     <input
@@ -341,7 +310,7 @@ fn SmartTableCell(
                                         autofocus=true
                                         on:input=move |ev| {
                                             if let Ok(n) = event_target_value(&ev).parse::<f64>() {
-                                                set_local_value.set(serde_json::json!(n));
+                                                local_value.set_value(serde_json::json!(n));
                                             }
                                         }
                                         on:blur=handle_blur
@@ -352,7 +321,7 @@ fn SmartTableCell(
                             }.into_view()
                         }
                         "boolean" => {
-                            let checked = local_value.get().as_bool().unwrap_or(false);
+                            let checked = local_value.get_value().as_bool().unwrap_or(false);
                             view! {
                                 <div class="cell-edit-wrapper">
                                     <input
@@ -361,7 +330,7 @@ fn SmartTableCell(
                                         checked=checked
                                         on:change=move |ev| {
                                             let target = event_target::<web_sys::HtmlInputElement>(&ev);
-                                            set_local_value.set(serde_json::json!(target.checked()));
+                                            local_value.set_value(serde_json::json!(target.checked()));
                                         }
                                     />
                                     <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
@@ -370,7 +339,7 @@ fn SmartTableCell(
                         }
                         _ => {
                             // Default text input
-                            let current = local_value.get().as_str().unwrap_or("").to_string();
+                            let current = local_value.get_value().as_str().unwrap_or("").to_string();
                             view! {
                                 <div class="cell-edit-wrapper">
                                     <input
@@ -379,7 +348,7 @@ fn SmartTableCell(
                                         value=current
                                         autofocus=true
                                         on:input=move |ev| {
-                                            set_local_value.set(serde_json::Value::String(event_target_value(&ev)));
+                                            local_value.set_value(serde_json::Value::String(event_target_value(&ev)));
                                         }
                                         on:blur=handle_blur
                                         on:keydown=handle_keydown
@@ -391,7 +360,7 @@ fn SmartTableCell(
                     }
                 } else {
                     // Display mode
-                    render_cell_display(&ft, &local_value.get())
+                    render_cell_display(&ft, &local_value.get_value())
                 }
             }}
         </td>
