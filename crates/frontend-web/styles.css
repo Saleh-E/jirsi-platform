@@ -5899,3 +5899,286 @@ a.mobile-card {
     }
 }
 
+/* ==============================================
+   COMPREHENSIVE MOBILE PAGE STYLES
+   ============================================== */
+
+/* INBOX - Mobile Layout */
+@media (max-width: 768px) {
+    .inbox-page {
+        padding-bottom: 80px;
+    }
+    
+    .inbox-layout {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+    }
+    
+    .inbox-filters {
+        display: none !important; /* Hide filters sidebar on mobile */
+    }
+    
+    .inbox-thread-list {
+        width: 100% !important;
+        max-height: 60vh !important;
+        border: none !important;
+        overflow-y: auto;
+    }
+    
+    .inbox-conversation {
+        display: none; /* Initially hidden on mobile */
+        position: fixed;
+        inset: 0;
+        background: var(--bg-main);
+        z-index: 900;
+        flex-direction: column;
+    }
+    
+    .inbox-conversation.active {
+        display: flex !important;
+    }
+    
+    .inbox-thread-list .thread-item {
+        padding: 0.75rem 1rem;
+    }
+    
+    .conversation-empty {
+        padding: 3rem 1rem;
+    }
+    
+    .message-list {
+        flex: 1;
+        padding: 1rem;
+        overflow-y: auto;
+    }
+    
+    .composer-container {
+        padding: 0.75rem;
+        border-top: 1px solid var(--border);
+    }
+}
+
+/* DASHBOARD - Mobile Layout */
+@media (max-width: 768px) {
+    .dashboard-page {
+        padding: 0 0.5rem;
+        padding-bottom: 80px;
+    }
+    
+    .dashboard-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem;
+        padding: 1rem 0;
+    }
+    
+    .dashboard-title {
+        font-size: 1.5rem !important;
+    }
+    
+    .dashboard-subtitle {
+        font-size: 0.875rem;
+    }
+    
+    .dashboard-date-range {
+        width: 100%;
+    }
+    
+    .dashboard-date-range select {
+        width: 100%;
+    }
+    
+    .dashboard-kpis {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+    }
+    
+    .stat-card {
+        padding: 1rem !important;
+    }
+    
+    .dashboard-charts {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+    
+    .dashboard-chart {
+        min-height: 200px;
+    }
+    
+    .dashboard-chart--wide {
+        grid-column: 1 !important;
+    }
+    
+    .dashboard-activity {
+        margin-top: 1rem;
+    }
+    
+    .activity-item {
+        padding: 0.75rem 0;
+    }
+}
+
+/* SETTINGS - Mobile Layout */
+@media (max-width: 768px) {
+    .settings-page {
+        padding: 1rem 0.5rem;
+        padding-bottom: 80px;
+    }
+    
+    .settings-header {
+        padding: 0 0.5rem;
+    }
+    
+    .settings-tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 0.5rem;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .settings-tab {
+        padding: 0.5rem 1rem;
+        flex-shrink: 0;
+    }
+    
+    .settings-content {
+        padding: 1rem !important;
+    }
+    
+    .settings-card {
+        padding: 1rem !important;
+    }
+    
+    .form-row {
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+    }
+    
+    .form-row .form-group {
+        width: 100% !important;
+    }
+}
+
+/* PROFILE - Mobile Layout */
+@media (max-width: 768px) {
+    .profile-page {
+        padding: 1rem 0.5rem;
+        padding-bottom: 80px;
+    }
+    
+    .profile-header {
+        flex-direction: column !important;
+        text-align: center;
+        gap: 1rem;
+    }
+    
+    .profile-avatar {
+        margin: 0 auto;
+    }
+    
+    .profile-form {
+        padding: 1rem !important;
+    }
+}
+
+/* REPORTS - Mobile Layout */
+@media (max-width: 768px) {
+    .reports-page {
+        padding: 1rem 0.5rem;
+        padding-bottom: 80px;
+    }
+    
+    .reports-header {
+        flex-direction: column !important;
+        gap: 0.75rem;
+    }
+    
+    .reports-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .report-card {
+        padding: 1rem !important;
+    }
+    
+    .report-chart {
+        height: 200px !important;
+    }
+}
+
+/* WORKFLOW EDITOR - Mobile Layout */
+@media (max-width: 768px) {
+    .workflow-editor {
+        flex-direction: column !important;
+    }
+    
+    .workflow-sidebar {
+        width: 100% !important;
+        height: auto !important;
+        max-height: 30vh;
+        overflow-x: auto;
+    }
+    
+    .workflow-canvas {
+        height: 50vh !important;
+    }
+    
+    .workflow-node-palette {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto;
+    }
+}
+
+/* General Mobile Fixes */
+@media (max-width: 768px) {
+    /* Fix right side cutoff */
+    .content {
+        overflow-x: hidden;
+        padding-right: 0.5rem !important;
+    }
+    
+    /* Fix main content overflow */
+    .main-content {
+        overflow-x: hidden;
+    }
+    
+    /* Responsive tables */
+    .data-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    
+    /* Form inputs full width */
+    .form-input,
+    .form-select,
+    .form-textarea {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+    
+    /* Modals */
+    .modal-overlay .modal {
+        width: 95% !important;
+        max-width: 95% !important;
+        margin: 1rem auto;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+    
+    /* Page headers */
+    .page-header {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.75rem 0;
+    }
+    
+    .page-header h1 {
+        font-size: 1.25rem !important;
+        width: 100%;
+    }
+}
+
