@@ -248,10 +248,37 @@ fn entity_type_from_row(row: &sqlx::postgres::PgRow) -> Result<EntityType, Metad
 fn field_def_from_row(row: &sqlx::postgres::PgRow) -> Result<FieldDef, MetadataError> {
     use sqlx::Row;
     
-    // Get field_type as string and parse
+    // Get field_type as string - it might be JSON or simple string
     let field_type_str: String = row.try_get("field_type")?;
-    let field_type: FieldType = serde_json::from_str(&format!("\"{}\"", field_type_str))
-        .unwrap_or(FieldType::Text);
+    
+    // Try parsing as JSON first (new format: {"type": "Select", ...})
+    let field_type: FieldType = serde_json::from_str(&field_type_str)
+        .unwrap_or_else(|_| {
+            // Fallback: try as simple string (old format: "select", "text", etc.)
+            match field_type_str.to_lowercase().as_str() {
+                "select" | "status" => FieldType::Select { options: vec![] },
+                "multiselect" | "multi_select" => FieldType::MultiSelect { options: vec![] },
+                "text" => FieldType::Text,
+                "textarea" | "longtext" => FieldType::TextArea,
+                "richtext" => FieldType::RichText,
+                "number" | "integer" | "decimal" => FieldType::Number { decimals: None },
+                "money" | "currency" => FieldType::Money { currency_code: Some("USD".to_string()) },
+                "boolean" => FieldType::Boolean,
+                "date" => FieldType::Date,
+                "datetime" => FieldType::DateTime,
+                "email" => FieldType::Email,
+                "phone" => FieldType::Phone,
+                "url" => FieldType::Url,
+                "link" | "lookup" => FieldType::Link { target_entity: "contact".to_string() },
+                "multilink" | "multi_link" => FieldType::MultiLink { target_entity: "contact".to_string() },
+                "taglist" | "tag_list" | "tags" => FieldType::TagList,
+                "image" => FieldType::Image,
+                "attachment" | "file" | "file_array" => FieldType::Attachment,
+                "score" => FieldType::Score { max_value: Some(100) },
+                "json" => FieldType::Json,
+                _ => FieldType::Text,
+            }
+        });
     
     // Get optional JSON fields
     let validation: Option<serde_json::Value> = row.try_get("validation")?;
