@@ -41,6 +41,44 @@ fn save_view(entity_type: &str, view_id: &str) {
     }
 }
 
+/// Get default views for all view types
+fn get_default_views() -> Vec<ViewDefResponse> {
+    vec![
+        ViewDefResponse {
+            id: "default_table".to_string(),
+            name: "default_table".to_string(),
+            label: "Table".to_string(),
+            view_type: "table".to_string(),
+            is_default: true,
+            settings: serde_json::json!({}),
+        },
+        ViewDefResponse {
+            id: "default_kanban".to_string(),
+            name: "default_kanban".to_string(),
+            label: "Kanban".to_string(),
+            view_type: "kanban".to_string(),
+            is_default: false,
+            settings: serde_json::json!({"group_field": "lifecycle_stage"}),
+        },
+        ViewDefResponse {
+            id: "default_calendar".to_string(),
+            name: "default_calendar".to_string(),
+            label: "Calendar".to_string(),
+            view_type: "calendar".to_string(),
+            is_default: false,
+            settings: serde_json::json!({"date_field": "created_at"}),
+        },
+        ViewDefResponse {
+            id: "default_map".to_string(),
+            name: "default_map".to_string(),
+            label: "Map".to_string(),
+            view_type: "map".to_string(),
+            is_default: false,
+            settings: serde_json::json!({}),
+        },
+    ]
+}
+
 #[component]
 pub fn ViewSwitcher(
     entity_type: String,
@@ -70,16 +108,9 @@ pub fn ViewSwitcher(
                 Ok(response) => {
                     let mut view_list = response.views;
                     
-                    // If no views returned, add a default table view
+                    // If no views returned, add default views for all types
                     if view_list.is_empty() {
-                        view_list.push(ViewDefResponse {
-                            id: "default_table".to_string(),
-                            name: "default_table".to_string(),
-                            label: "Table".to_string(),
-                            view_type: "table".to_string(),
-                            is_default: true,
-                            settings: serde_json::json!({}),
-                        });
+                        view_list = get_default_views();
                     }
                     
                     // Try to restore saved view from localStorage
@@ -104,15 +135,8 @@ pub fn ViewSwitcher(
                     set_loading.set(false);
                 }
                 Err(_) => {
-                    // On error, still show a default table view
-                    let default_views = vec![ViewDefResponse {
-                        id: "default_table".to_string(),
-                        name: "default_table".to_string(),
-                        label: "Table".to_string(),
-                        view_type: "table".to_string(),
-                        is_default: true,
-                        settings: serde_json::json!({}),
-                    }];
+                    // On error, show all default view types
+                    let default_views = get_default_views();
                     set_active_view.set(Some("default_table".to_string()));
                     callback.call(default_views[0].clone());
                     set_views.set(default_views);
