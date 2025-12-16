@@ -207,6 +207,18 @@ impl FieldDef {
             "text".to_string()
         }
     }
+    
+    /// Get options as Vec<String> for select/status fields
+    pub fn get_options(&self) -> Vec<String> {
+        self.options.as_ref()
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 // ============================================================================

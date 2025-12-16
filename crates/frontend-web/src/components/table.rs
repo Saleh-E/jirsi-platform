@@ -165,23 +165,51 @@ fn SmartTableCell(
     let row_id_stored = store_value(row_id.clone());
     let entity_type_stored = store_value(entity_type.clone());
     
-    // Handle double-click to edit - must stop propagation to prevent row click
-    let handle_dbl_click = move |ev: web_sys::MouseEvent| {
+    // Store field options for select fields
+    let field_options: Vec<String> = field_def.as_ref()
+        .map(|f| f.get_options())
+        .unwrap_or_default();
+    let options_stored = store_value(field_options);
+    
+    // Handle single click to edit
+    let handle_click = move |ev: web_sys::MouseEvent| {
         ev.stop_propagation();
-        ev.prevent_default();
-        if editable {
+        if editable && !is_editing.get() {
             set_is_editing.set(true);
         }
     };
     
-    // Handle single click - if editable, don't navigate (let dblclick handle editing)
-    // If not editable, navigate on click
-    let handle_click = move |ev: web_sys::MouseEvent| {
-        if !editable && !is_editing.get() {
-            ev.stop_propagation();
-            on_click.call(());
+    // Handle confirm button click
+    let handle_confirm = move |_| {
+        set_is_editing.set(false);
+        let new_val = local_value.get();
+        let old_val = original_value.get_value();
+        
+        if new_val != old_val {
+            let field = field_name_stored.get_value();
+            let rid = row_id_stored.get_value();
+            let entity = entity_type_stored.get_value();
+            
+            let field_clone = field.clone();
+            let new_val_clone = new_val.clone();
+            set_table_data.update(|rows| {
+                if let Some(row) = rows.iter_mut().find(|r| {
+                    r.get("id").and_then(|v| v.as_str()) == Some(&rid)
+                }) {
+                    if let Some(obj) = row.as_object_mut() {
+                        obj.insert(field_clone.clone(), new_val_clone.clone());
+                    }
+                }
+            });
+            
+            spawn_local(async move {
+                let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
+                    API_BASE, entity, rid, TENANT_ID);
+                let mut payload = std::collections::HashMap::new();
+                payload.insert(field, new_val);
+                let _: Result<serde_json::Value, _> = patch_json(&url, &payload).await;
+            });
         }
-        // When editable, single click does nothing - user must double-click to edit
     };
     
     // Handle blur to save
@@ -269,67 +297,101 @@ fn SmartTableCell(
             class="smart-table-cell"
             class:editing=move || is_editing.get()
             on:click=handle_click
-            on:dblclick=handle_dbl_click
         >
             {move || {
+                let ft = field_type.clone();
+                let opts = options_stored.get_value();
+                
                 if is_editing.get() {
-                    // Edit mode
-                    match field_type.to_lowercase().as_str() {
-                        "text" | "email" | "phone" | "url" => {
+                    // Edit mode with confirm button
+                    match ft.to_lowercase().as_str() {
+                        "select" | "status" => {
+                            // Dropdown for select/status fields
                             let current = local_value.get().as_str().unwrap_or("").to_string();
+                            let options = opts.clone();
                             view! {
-                                <input
-                                    type="text"
-                                    class="cell-input"
-                                    value=current
-                                    autofocus=true
-                                    on:input=move |ev| {
-                                        set_local_value.set(serde_json::Value::String(event_target_value(&ev)));
-                                    }
-                                    on:blur=handle_blur
-                                    on:keydown=handle_keydown
-                                />
+                                <div class="cell-edit-wrapper">
+                                    <select
+                                        class="cell-select"
+                                        on:change=move |ev| {
+                                            set_local_value.set(serde_json::Value::String(event_target_value(&ev)));
+                                        }
+                                    >
+                                        {options.iter().map(|opt| {
+                                            let is_selected = opt == &current;
+                                            view! {
+                                                <option value=opt.clone() selected=is_selected>
+                                                    {opt.clone()}
+                                                </option>
+                                            }
+                                        }).collect_view()}
+                                    </select>
+                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                </div>
                             }.into_view()
                         }
                         "number" | "integer" | "decimal" | "money" => {
                             let current = local_value.get().as_f64().unwrap_or(0.0).to_string();
                             view! {
-                                <input
-                                    type="number"
-                                    class="cell-input"
-                                    value=current
-                                    autofocus=true
-                                    on:input=move |ev| {
-                                        if let Ok(n) = event_target_value(&ev).parse::<f64>() {
-                                            set_local_value.set(serde_json::json!(n));
+                                <div class="cell-edit-wrapper">
+                                    <input
+                                        type="number"
+                                        class="cell-input"
+                                        value=current
+                                        autofocus=true
+                                        on:input=move |ev| {
+                                            if let Ok(n) = event_target_value(&ev).parse::<f64>() {
+                                                set_local_value.set(serde_json::json!(n));
+                                            }
                                         }
-                                    }
-                                    on:blur=handle_blur
-                                    on:keydown=handle_keydown
-                                />
+                                        on:blur=handle_blur
+                                        on:keydown=handle_keydown
+                                    />
+                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                </div>
+                            }.into_view()
+                        }
+                        "boolean" => {
+                            let checked = local_value.get().as_bool().unwrap_or(false);
+                            view! {
+                                <div class="cell-edit-wrapper">
+                                    <input
+                                        type="checkbox"
+                                        class="cell-checkbox"
+                                        checked=checked
+                                        on:change=move |ev| {
+                                            let target = event_target::<web_sys::HtmlInputElement>(&ev);
+                                            set_local_value.set(serde_json::json!(target.checked()));
+                                        }
+                                    />
+                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                </div>
                             }.into_view()
                         }
                         _ => {
                             // Default text input
                             let current = local_value.get().as_str().unwrap_or("").to_string();
                             view! {
-                                <input
-                                    type="text"
-                                    class="cell-input"
-                                    value=current
-                                    autofocus=true
-                                    on:input=move |ev| {
-                                        set_local_value.set(serde_json::Value::String(event_target_value(&ev)));
-                                    }
-                                    on:blur=handle_blur
-                                    on:keydown=handle_keydown
-                                />
+                                <div class="cell-edit-wrapper">
+                                    <input
+                                        type="text"
+                                        class="cell-input"
+                                        value=current
+                                        autofocus=true
+                                        on:input=move |ev| {
+                                            set_local_value.set(serde_json::Value::String(event_target_value(&ev)));
+                                        }
+                                        on:blur=handle_blur
+                                        on:keydown=handle_keydown
+                                    />
+                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                </div>
                             }.into_view()
                         }
                     }
                 } else {
                     // Display mode
-                    render_cell_display(&field_type, &local_value.get())
+                    render_cell_display(&ft, &local_value.get())
                 }
             }}
         </td>

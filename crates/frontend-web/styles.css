@@ -7693,3 +7693,59 @@ a.mobile-card {
     text-align: center;
 }
 
+/* Cell edit wrapper with confirm button */
+.cell-edit-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cell-edit-wrapper .cell-input,
+.cell-edit-wrapper .cell-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.confirm-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border: none;
+    background: #22c55e;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.confirm-btn:hover {
+    background: #16a34a;
+}
+
+/* Select dropdown in cell */
+.cell-select {
+    width: 100%;
+    padding: 0.4rem;
+    border: 2px solid var(--primary);
+    border-radius: 4px;
+    background: var(--bg-main);
+    color: var(--text);
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.cell-select:focus {
+    outline: none;
+}
+
+/* Checkbox in cell */
+.cell-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
