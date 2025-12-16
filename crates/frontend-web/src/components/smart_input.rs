@@ -77,8 +77,8 @@ pub fn SmartInput(
     
     // Handle created entity from modal
     let on_change_created = on_change.clone();
-    let handle_created = move |id: String| {
-        on_change_created.call(Value::String(id));
+    let handle_created = move |record: crate::components::create_modal::CreatedRecord| {
+        on_change_created.call(Value::String(record.id));
         set_show_create_modal.set(false);
     };
     

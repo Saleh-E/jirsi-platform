@@ -533,10 +533,10 @@ pub fn LinkInput(
     };
     
     // Handle new record created
-    let handle_created = move |id: String| {
+    let handle_created = move |record: crate::components::create_modal::CreatedRecord| {
         // Immediately select the new record
-        set_selected_value.set(Some(id.clone()));
-        on_change.call(id.clone());
+        set_selected_value.set(Some(record.id.clone()));
+        on_change.call(record.id.clone());
         set_show_modal.set(false);
         
         // Refresh the options list
@@ -843,9 +843,9 @@ pub fn AsyncLinkInput(
     };
     
     // Handle record creation
-    let handle_created = move |id: String| {
-        set_selected_value.set(Some(id.clone()));
-        on_change.call(id.clone());
+    let handle_created = move |record: crate::components::create_modal::CreatedRecord| {
+        set_selected_value.set(Some(record.id.clone()));
+        on_change.call(record.id.clone());
         set_show_modal.set(false);
         
         // Refresh options

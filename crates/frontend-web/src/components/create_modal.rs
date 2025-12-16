@@ -4,12 +4,24 @@ use leptos::*;
 use crate::api::{fetch_field_defs, post_json, FieldDef, API_BASE, TENANT_ID};
 use crate::components::field_renderer::{LinkInput, DynamicSelect};
 
+/// Record info returned from CreateModal when a new record is created
+#[derive(Clone, Debug)]
+pub struct CreatedRecord {
+    /// The ID of the newly created record
+    pub id: String,
+    /// Display name/title of the record
+    pub display_name: String,
+    /// Entity type (e.g., "contact", "property")
+    pub entity_type: String,
+}
+
 #[component]
 pub fn CreateModal(
     entity_type: String,
     entity_label: String,
     #[prop(into)] on_close: Callback<()>,
-    #[prop(into)] on_created: Callback<String>,
+    /// Callback with full record info when created (id, display_name, entity_type)
+    #[prop(into)] on_created: Callback<CreatedRecord>,
     /// Z-index for modal stacking (default 1000, nested modals get +100)
     #[prop(optional, default = 1000)] z_index: i32,
 ) -> impl IntoView {
@@ -64,12 +76,41 @@ pub fn CreateModal(
                 }
             }
             
-            let url = format!("{}/entities/{}?tenant_id={}", API_BASE, et, TENANT_ID);
+            let url = format!("{}/entities/{}?tenant_id={}", API_BASE, et.clone(), TENANT_ID);
             
-            match post_json::<_, serde_json::Value>(&url, &serde_json::Value::Object(json_data)).await {
+            match post_json::<_, serde_json::Value>(&url, &serde_json::Value::Object(json_data.clone())).await {
                 Ok(response) => {
                     if let Some(id) = response.get("id").and_then(|v| v.as_str()) {
-                        on_created.call(id.to_string());
+                        // Extract display name from response or form data
+                        // Try common display fields: name, title, first_name + last_name
+                        let display_name = response.get("name")
+                            .or_else(|| response.get("title"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .or_else(|| {
+                                // Try first_name + last_name combo
+                                let first = response.get("first_name")
+                                    .or_else(|| json_data.get("first_name"))
+                                    .and_then(|v| v.as_str())?;
+                                let last = response.get("last_name")
+                                    .or_else(|| json_data.get("last_name"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("");
+                                Some(format!("{} {}", first, last).trim().to_string())
+                            })
+                            .or_else(|| {
+                                // Fallback to reference field (for properties)
+                                json_data.get("reference")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .unwrap_or_else(|| format!("New {}", et));
+                        
+                        on_created.call(CreatedRecord {
+                            id: id.to_string(),
+                            display_name,
+                            entity_type: et.clone(),
+                        });
                     }
                     set_saving.set(false);
                 }
