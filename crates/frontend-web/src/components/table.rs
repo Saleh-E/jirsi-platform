@@ -187,6 +187,51 @@ fn SmartTableCell(
         editing_cell.get() == Some(cell_id_stored.get_value())
     };
     
+    // Track previous editing state to detect when this cell stops being edited
+    let (was_editing, set_was_editing) = create_signal(false);
+    
+    // Auto-save when this cell stops being the editing cell
+    create_effect(move |_| {
+        let currently_editing = is_editing();
+        let previously_editing = was_editing.get();
+        
+        if previously_editing && !currently_editing {
+            // This cell just stopped being edited - save it
+            let new_val = local_value.get_value();
+            let old_val = original_value.get_value();
+            
+            if new_val != old_val {
+                let field = field_name_stored.get_value();
+                let rid = row_id_stored.get_value();
+                let entity = entity_type_stored.get_value();
+                
+                let field_clone = field.clone();
+                let new_val_clone = new_val.clone();
+                set_table_data.update(|rows| {
+                    if let Some(row) = rows.iter_mut().find(|r| {
+                        r.get("id").and_then(|v| v.as_str()) == Some(&rid)
+                    }) {
+                        if let Some(obj) = row.as_object_mut() {
+                            obj.insert(field_clone.clone(), new_val_clone.clone());
+                        }
+                    }
+                });
+                
+                spawn_local(async move {
+                    let url = format!("{}/entities/{}/records/{}?tenant_id={}", 
+                        API_BASE, entity, rid, TENANT_ID);
+                    let mut payload = std::collections::HashMap::new();
+                    payload.insert(field, new_val);
+                    let _: Result<serde_json::Value, _> = patch_json(&url, &payload).await;
+                });
+                
+                original_value.set_value(new_val_clone);
+            }
+        }
+        
+        set_was_editing.set(currently_editing);
+    });
+    
     // Save current cell value and persist to API
     let save_cell = move || {
         let new_val = local_value.get_value();
@@ -222,16 +267,12 @@ fn SmartTableCell(
         }
     };
     
-    // Handle single click to edit - saves any currently editing cell first
+    // Handle single click to edit - effect will auto-save previous cell
     let handle_click = move |ev: web_sys::MouseEvent| {
         ev.stop_propagation();
         if editable {
-            // If another cell is editing, save it first (clicking on new cell = Enter for old cell)
-            if editing_cell.get().is_some() && !is_editing() {
-                // Another cell is editing - trigger save by setting to this cell
-                save_cell(); // This will do nothing for current cell as values match
-            }
-            // Set this cell as the editing cell
+            // Just set this cell as editing - the effect on the previous cell
+            // will detect it stopped being edited and auto-save
             set_editing_cell.set(Some(cell_id_stored.get_value()));
         }
     };
