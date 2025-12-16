@@ -6463,3 +6463,55 @@ a.mobile-card {
     }
 }
 
+/* ======================================
+   INBOX MOBILE FIX - COMPLETE OVERRIDE
+   ====================================== */
+@media (max-width: 768px) {
+    .inbox-page {
+        height: auto !important;
+        min-height: calc(100vh - 140px);
+        overflow: visible !important;
+        padding-bottom: 80px;
+    }
+    
+    .inbox-layout {
+        display: flex !important;
+        flex-direction: column !important;
+        grid-template-columns: unset !important;
+        height: auto !important;
+        min-height: 60vh;
+    }
+    
+    .inbox-filters {
+        display: none !important;
+    }
+    
+    .inbox-thread-list {
+        width: 100% !important;
+        flex: 1 !important;
+        min-height: 50vh;
+        overflow-y: auto !important;
+        background: var(--bg-main);
+    }
+    
+    .inbox-conversation {
+        display: none !important;
+    }
+    
+    /* Ensure thread items are visible */
+    .thread-item {
+        display: flex !important;
+        padding: 1rem !important;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-card);
+    }
+    
+    /* Empty state should be visible */
+    .inbox-thread-list .loading,
+    .inbox-thread-list .empty-state {
+        display: flex !important;
+        padding: 2rem;
+        text-align: center;
+    }
+}
+
