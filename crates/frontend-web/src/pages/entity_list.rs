@@ -14,7 +14,9 @@ use crate::components::view_switcher::{ViewSwitcher, ViewDefResponse};
 use crate::components::kanban::{KanbanView, KanbanConfig};
 use crate::components::calendar::{CalendarView, CalendarConfig};
 use crate::components::map::{MapView, MapConfig};
+use crate::components::table::SmartTable;
 use crate::context::mobile::use_mobile;
+use crate::models::ViewColumn;
 
 /// Main entity list page component
 #[component]
@@ -337,51 +339,38 @@ pub fn EntityListPage() -> impl IntoView {
                                 </div>
                             }.into_view()
                         } else {
-                            // Desktop Table View
+                            // Desktop Table View with SmartTable (inline editing)
+                            let etype = entity_type();
+                            let cols_as_viewcolumns: Vec<ViewColumn> = cols.iter().map(|f| {
+                                ViewColumn {
+                                    field: f.name.clone(),
+                                    visible: true,
+                                    width: None,
+                                }
+                            }).collect();
+                            let api_fields = fields.get();
+                            let navigate = use_navigate();
+                            
                             view! {
-                                <div class="table-container">
-                                    <table class="data-table">
-                                        <thead>
-                                            <tr>
-                                                {cols.iter().map(|f| {
-                                                    view! { <th>{f.label.clone()}</th> }
-                                                }).collect_view()}
-                                                <th class="action-header">""</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {move || {
-                                                let cols = list_columns();
-                                                let etype = entity_type();
-                                                data.get().into_iter().map(|row| {
-                                                    let record_id = row.get("id")
-                                                        .and_then(|v| v.as_str())
-                                                        .unwrap_or_default()
-                                                        .to_string();
-                                                    let etype_clone = etype.clone();
-                                                    let row_path = format!("/app/crm/entity/{}/{}", etype_clone, record_id);
-                                                    view! {
-                                                        <tr class="clickable-row">
-                                                            {cols.iter().map(|f| {
-                                                                let value = row.get(&f.name)
-                                                                    .map(|v| format_field_value(v, &f.get_field_type()))
-                                                                    .unwrap_or_default();
-                                                                view! { <td>{value}</td> }
-                                                            }).collect_view()}
-                                                            <td class="action-cell">
-                                                                <a href=row_path class="row-link">"→"</a>
-                                                            </td>
-                                                        </tr>
-                                                    }
-                                                }).collect_view()
-                                            }}
-                                        </tbody>
-                                    </table>
-                                    
-                                    {move || data.get().is_empty().then(|| view! {
-                                        <div class="empty-state">"No records found. Click + New to create one."</div>
-                                    })}
-                                </div>
+                                <SmartTable
+                                    columns=cols_as_viewcolumns
+                                    fields=api_fields
+                                    data=data.get()
+                                    entity_type=etype.clone()
+                                    on_row_click=Callback::new(move |row: serde_json::Value| {
+                                        let record_id = row.get("id")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or_default()
+                                            .to_string();
+                                        let path = format!("/app/crm/entity/{}/{}", etype.clone(), record_id);
+                                        navigate(&path, Default::default());
+                                    })
+                                    editable=true
+                                />
+                                
+                                {move || data.get().is_empty().then(|| view! {
+                                    <div class="empty-state">"No records found. Click + New to create one."</div>
+                                })}
                             }.into_view()
                         }
                     }

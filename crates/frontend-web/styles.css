@@ -7534,3 +7534,133 @@ a.mobile-card {
     }
 }
 
+/* ======================================
+   SMART TABLE STYLES
+   ====================================== */
+
+.smart-table-wrapper {
+    overflow-x: auto;
+    background: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.smart-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.smart-table-header {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-sidebar);
+    white-space: nowrap;
+}
+
+.smart-table-row {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+}
+
+.smart-table-row:hover {
+    background: var(--bg-sidebar);
+}
+
+.smart-table-row:last-child {
+    border-bottom: none;
+}
+
+.smart-table-cell {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.smart-table-cell.editing {
+    padding: 0.25rem 0.5rem;
+}
+
+.cell-input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 2px solid var(--primary);
+    border-radius: 4px;
+    background: var(--bg-main);
+    color: var(--text);
+    font-size: inherit;
+}
+
+.cell-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.cell-text {
+    line-height: 1.4;
+}
+
+/* Status badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-new {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
+.status-progress {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.status-won {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.status-lost {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.status-qualified {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+}
+
+.status-default {
+    background: var(--bg-sidebar);
+    color: var(--text-muted);
+}
+
+/* Links in table */
+.email-link,
+.phone-link {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.email-link:hover,
+.phone-link:hover {
+    text-decoration: underline;
+}
+
+.money-display {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.bool-display {
+    font-size: 1.1rem;
+}
+
