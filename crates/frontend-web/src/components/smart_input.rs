@@ -12,7 +12,7 @@ use crate::api::FieldDef;
 use crate::context::mobile::use_mobile;
 use crate::components::smart_select::{SmartSelect, MultiSelect, SelectOption};
 use crate::components::create_modal::CreateModal;
-use crate::api::{fetch_entity_list, add_field_option, delete_field_option, API_BASE, TENANT_ID};
+use crate::api::{fetch_entity_list, fetch_entity_lookup, add_field_option, delete_field_option, API_BASE, TENANT_ID};
 use leptos::spawn_local;
 
 /// Input mode for SmartInput
@@ -532,36 +532,17 @@ fn LinkFieldInput(
     let target_for_fetch = target_entity.clone();
     let target_for_label = target_entity.clone();
     
-    // Fetch options from API
+    // Fetch options from lookup API (efficient - returns pre-formatted id/label pairs)
     create_effect(move |_| {
         let target = target_for_fetch.clone();
         set_loading.set(true);
         
         spawn_local(async move {
-            // Pass just the entity type to fetch_entity_list (not a URL)
-            if let Ok(response) = fetch_entity_list(&target).await {
-                let opts: Vec<SelectOption> = response.data.iter()
-                    .filter_map(|r| {
-                        let id = r.get("id")?.as_str()?.to_string();
-                        // Try various name fields for display
-                        let name = r.get("title")
-                            .or_else(|| r.get("name"))
-                            .or_else(|| r.get("full_name"))
-                            .and_then(|v| v.as_str())
-                            .map(String::from)
-                            .unwrap_or_else(|| {
-                                // Try first_name + last_name for contacts
-                                let first = r.get("first_name").and_then(|v| v.as_str()).unwrap_or("");
-                                let last = r.get("last_name").and_then(|v| v.as_str()).unwrap_or("");
-                                if !first.is_empty() || !last.is_empty() {
-                                    format!("{} {}", first, last).trim().to_string()
-                                } else {
-                                    // Fallback to reference or ID
-                                    r.get("reference").and_then(|v| v.as_str()).unwrap_or(&id).to_string()
-                                }
-                            });
-                        Some(SelectOption::new(id, name))
-                    })
+            // Use the new lookup endpoint for better performance
+            if let Ok(results) = fetch_entity_lookup(&target, None).await {
+                let opts: Vec<SelectOption> = results
+                    .into_iter()
+                    .map(|r| SelectOption::new(r.id, r.label))
                     .collect();
                 set_options.set(opts);
             }

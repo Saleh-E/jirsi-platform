@@ -8,13 +8,14 @@
 use leptos::*;
 use leptos_router::*;
 use crate::api::{
-    fetch_field_defs, fetch_entity_list, create_entity, FieldDef,
+    fetch_field_defs, fetch_entity_list, FieldDef,
 };
 use crate::components::view_switcher::{ViewSwitcher, ViewDefResponse};
 use crate::components::kanban::{KanbanView, KanbanConfig};
 use crate::components::calendar::{CalendarView, CalendarConfig};
 use crate::components::map::{MapView, MapConfig};
 use crate::components::table::SmartTable;
+use crate::components::create_modal::CreateModal;
 use crate::context::mobile::use_mobile;
 use crate::models::ViewColumn;
 
@@ -31,8 +32,7 @@ pub fn EntityListPage() -> impl IntoView {
     let (fields, set_fields) = create_signal(Vec::<FieldDef>::new());
     let (data, set_data) = create_signal(Vec::<serde_json::Value>::new());
     let (loading, set_loading) = create_signal(true);
-    let (show_form, set_show_form) = create_signal(false);
-    let (form_data, set_form_data) = create_signal(serde_json::Map::new());
+    let (show_create_modal, set_show_create_modal) = create_signal(false);
     let (error, set_error) = create_signal(Option::<String>::None);
     
     // View switching state
@@ -85,34 +85,18 @@ pub fn EntityListPage() -> impl IntoView {
             .collect::<Vec<_>>()
     };
     
-    // Handle form input change
-    let update_form_field = move |field_name: String, value: String| {
-        set_form_data.update(|map| {
-            map.insert(field_name, serde_json::Value::String(value));
-        });
-    };
-    
-    // Handle form submit
-    let entity_for_submit = entity_type.clone();
-    let on_submit = move |ev: web_sys::SubmitEvent| {
-        ev.prevent_default();
-        let etype = entity_for_submit();
-        let body = serde_json::Value::Object(form_data.get());
-        
+    // Callback when record is created via CreateModal
+    let entity_for_refresh = entity_type.clone();
+    let on_record_created = move |_record: crate::components::create_modal::CreatedRecord| {
+        let etype = entity_for_refresh();
         spawn_local(async move {
-            match create_entity(&etype, body).await {
-                Ok(_) => {
-                    set_show_form.set(false);
-                    set_form_data.set(serde_json::Map::new());
-                    // Refresh list
-                    if let Ok(response) = fetch_entity_list(&etype).await {
-                        set_data.set(response.data);
-                    }
-                }
-                Err(e) => set_error.set(Some(e)),
+            if let Ok(response) = fetch_entity_list(&etype).await {
+                set_data.set(response.data);
             }
         });
     };
+    
+
     
     // Format entity type for display
     let entity_label = move || {
@@ -131,7 +115,7 @@ pub fn EntityListPage() -> impl IntoView {
         <div class="entity-list-page">
             <header class="page-header">
                 <h1>{entity_label}</h1>
-                <button class="btn btn-primary" on:click=move |_| set_show_form.set(true)>
+                <button class="btn btn-primary" on:click=move |_| set_show_create_modal.set(true)>
                     "+ New"
                 </button>
             </header>
@@ -377,43 +361,27 @@ pub fn EntityListPage() -> impl IntoView {
                 }
             })}
             
-            // Add New Form Modal - fields from metadata
-            {move || show_form.get().then(|| {
-                let cols = fields.get();
+            // Create Modal with SmartSelect components
+            {move || show_create_modal.get().then(|| {
+                let etype = entity_type();
+                let elabel = match etype.as_str() {
+                    "contact" => "Contact".to_string(),
+                    "company" => "Company".to_string(),
+                    "deal" => "Deal".to_string(),
+                    "task" => "Task".to_string(),
+                    "property" => "Property".to_string(),
+                    "listing" => "Listing".to_string(),
+                    "viewing" => "Viewing".to_string(),
+                    "offer" => "Offer".to_string(),
+                    _ => etype[0..1].to_uppercase() + &etype[1..],
+                };
                 view! {
-                    <div class="modal-overlay" on:click=move |_| set_show_form.set(false)>
-                        <div class="modal" on:click=move |ev| ev.stop_propagation()>
-                            <h2>"Add New " {entity_type()}</h2>
-                            <form on:submit=on_submit.clone()>
-                                // Dynamic form fields from FieldDefs
-                                {cols.iter().filter(|f| !f.is_readonly).map(|field| {
-                                    let field_name = field.name.clone();
-                                    let field_label = field.label.clone();
-                                    let field_type = field.get_field_type();
-                                    let is_required = field.is_required;
-                                    let placeholder = field.placeholder.clone().unwrap_or_default();
-                                    let options = field.options.clone();
-                                    
-                                    view! {
-                                        <div class="form-group">
-                                            <label>
-                                                {field_label}
-                                                {is_required.then(|| " *")}
-                                            </label>
-                                            {render_input_field(field_name, field_type, is_required, placeholder, options, update_form_field.clone())}
-                                        </div>
-                                    }
-                                }).collect_view()}
-                                
-                                <div class="form-actions">
-                                    <button type="button" class="btn" on:click=move |_| set_show_form.set(false)>
-                                        "Cancel"
-                                    </button>
-                                    <button type="submit" class="btn btn-primary">"Save"</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+                    <CreateModal
+                        entity_type=etype
+                        entity_label=elabel
+                        on_close=Callback::new(move |_| set_show_create_modal.set(false))
+                        on_created=Callback::new(on_record_created.clone())
+                    />
                 }
             })}
         </div>

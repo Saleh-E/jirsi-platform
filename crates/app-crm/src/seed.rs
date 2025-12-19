@@ -4,8 +4,8 @@
 //! Updated for Golden Rule: FieldType uses tagged serde format with config.
 
 use core_models::{
-    AppDef, EntityType, FieldDef, FieldType, FieldOptions,
-    SelectChoice, ViewDef, ViewColumn,
+    AppDef, EntityType, FieldDef, FieldType,
+    ViewDef, ViewColumn,
 };
 use chrono::Utc;
 use uuid::Uuid;
@@ -228,23 +228,16 @@ fn lifecycle_stage_field(tenant_id: Uuid, entity_type_id: Uuid) -> FieldDef {
     .filterable()
     .order(7);
 
-    // Additional options with colors/icons via FieldOptions
-    field.options = Some(FieldOptions {
-        choices: Some(vec![
-            SelectChoice { value: "subscriber".to_string(), label: "Subscriber".to_string(), color: Some("#6b7280".to_string()), icon: None, is_default: false, sort_order: 1 },
-            SelectChoice { value: "lead".to_string(), label: "Lead".to_string(), color: Some("#3b82f6".to_string()), icon: None, is_default: true, sort_order: 2 },
-            SelectChoice { value: "mql".to_string(), label: "Marketing Qualified".to_string(), color: Some("#8b5cf6".to_string()), icon: None, is_default: false, sort_order: 3 },
-            SelectChoice { value: "sql".to_string(), label: "Sales Qualified".to_string(), color: Some("#f59e0b".to_string()), icon: None, is_default: false, sort_order: 4 },
-            SelectChoice { value: "opportunity".to_string(), label: "Opportunity".to_string(), color: Some("#10b981".to_string()), icon: None, is_default: false, sort_order: 5 },
-            SelectChoice { value: "customer".to_string(), label: "Customer".to_string(), color: Some("#059669".to_string()), icon: None, is_default: false, sort_order: 6 },
-            SelectChoice { value: "evangelist".to_string(), label: "Evangelist".to_string(), color: Some("#0ea5e9".to_string()), icon: None, is_default: false, sort_order: 7 },
-        ]),
-        link_target: None,
-        link_display_field: None,
-        currency: None,
-        formula: None,
-        max_score: None,
-    });
+    // Additional options with colors/icons as JSON array
+    field.options = Some(serde_json::json!([
+        {"value": "subscriber", "label": "Subscriber", "color": "#6b7280"},
+        {"value": "lead", "label": "Lead", "color": "#3b82f6"},
+        {"value": "mql", "label": "Marketing Qualified", "color": "#8b5cf6"},
+        {"value": "sql", "label": "Sales Qualified", "color": "#f59e0b"},
+        {"value": "opportunity", "label": "Opportunity", "color": "#10b981"},
+        {"value": "customer", "label": "Customer", "color": "#059669"},
+        {"value": "evangelist", "label": "Evangelist", "color": "#0ea5e9"}
+    ]));
 
     field
 }

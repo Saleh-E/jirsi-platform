@@ -12,6 +12,7 @@ use crate::api::FieldDef as ApiFieldDef;
 use crate::models::ViewColumn;
 use crate::api::{put_json, add_field_option, delete_field_option, API_BASE, TENANT_ID};
 use crate::components::smart_select::{SmartSelect, SelectOption};
+use crate::components::field_renderer::AsyncEntitySelect;
 
 /// Smart Table with inline editing support
 #[component]
@@ -523,6 +524,41 @@ fn SmartTableCell(
                                         on:keydown=handle_keydown
                                     />
                                     <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                </div>
+                            }.into_view()
+                        }
+                        "link" => {
+                            // Link field - use AsyncEntitySelect with lookup endpoint
+                            let current = local_value.get_value().as_str().unwrap_or("").to_string();
+                            
+                            // Get target entity from field_type definition
+                            let target_entity = field_def.as_ref()
+                                .and_then(|f| {
+                                    // field_type can be {"Link": {"target_entity": "property"}}
+                                    if let Some(obj) = f.field_type.as_object() {
+                                        if let Some(link_obj) = obj.get("Link").and_then(|v| v.as_object()) {
+                                            return link_obj.get("target_entity").and_then(|v| v.as_str()).map(|s| s.to_string());
+                                        }
+                                    }
+                                    None
+                                })
+                                .unwrap_or_else(|| "entity".to_string());
+                            
+                            // Handle selection change and auto-save
+                            let handle_link_change = move |val: String| {
+                                local_value.set_value(serde_json::Value::String(val));
+                                save_cell();
+                                set_editing_cell.set(None);
+                            };
+                            
+                            view! {
+                                <div class="cell-edit-wrapper cell-link-select" on:click=|ev| ev.stop_propagation()>
+                                    <AsyncEntitySelect
+                                        target_entity=target_entity
+                                        value=current
+                                        on_change=handle_link_change
+                                        placeholder="Select...".to_string()
+                                    />
                                 </div>
                             }.into_view()
                         }

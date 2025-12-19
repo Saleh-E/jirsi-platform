@@ -304,7 +304,7 @@ fn field_def_from_row(row: &sqlx::postgres::PgRow) -> Result<FieldDef, MetadataE
         placeholder: row.try_get("placeholder")?,
         help_text: row.try_get("help_text")?,
         validation: validation.and_then(|v| serde_json::from_value(v).ok()),
-        options: options.and_then(|v| serde_json::from_value(v).ok()),
+        options: options, // Pass through raw JSON value
         ui_hints: ui_hints.and_then(|v| serde_json::from_value(v).ok()),
         sort_order: row.try_get("sort_order")?,
         group: row.try_get("group")?,

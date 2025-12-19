@@ -1,8 +1,6 @@
-//! Metadata routes
-
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get, post, delete},
     extract::{State, Path, Query},
     Json,
 };
@@ -20,6 +18,8 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/entities", get(list_entities))
         .route("/entities/:name", get(get_entity))
         .route("/entities/:name/fields", get(get_fields))
+        .route("/entities/:name/fields/:field_id/options", post(add_field_option))
+        .route("/entities/:name/fields/:field_id/options/:option_value", delete(delete_field_option))
         .route("/entities/:name/views", get(get_views))
         .route("/entities/:name/views", post(create_view))
 }
@@ -148,3 +148,160 @@ async fn create_view(
     })))
 }
 
+/// Request body for adding a field option
+#[derive(Debug, Deserialize)]
+pub struct AddFieldOptionRequest {
+    pub value: String,
+    pub label: Option<String>,
+    pub color: Option<String>,
+}
+
+/// Add a new option to a Select/Status field's options list
+async fn add_field_option(
+    State(state): State<Arc<AppState>>,
+    Path((entity_name, field_id)): Path<(String, Uuid)>,
+    Query(query): Query<TenantQuery>,
+    Json(payload): Json<AddFieldOptionRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let now = chrono::Utc::now();
+    
+    // Build the new option object
+    let label = payload.label.unwrap_or_else(|| payload.value.clone());
+    let mut new_option = serde_json::json!({
+        "value": payload.value,
+        "label": label
+    });
+    if let Some(color) = payload.color {
+        new_option["color"] = serde_json::json!(color);
+    }
+    
+    // Debug: Log what we're trying to insert
+    tracing::debug!(
+        field_id = %field_id,
+        new_option = %new_option,
+        "Attempting to add new option to field"
+    );
+    
+    // Update the field's options by appending the new option to the JSON array
+    // The options column stores JSONB, we use jsonb_insert or array concatenation
+    let result = sqlx::query(
+        r#"UPDATE field_defs 
+           SET options = COALESCE(options, '[]'::jsonb) || $1::jsonb,
+               updated_at = $2
+           WHERE id = $3 AND tenant_id = $4"#
+    )
+    .bind(serde_json::json!([new_option]))
+    .bind(now)
+    .bind(field_id)
+    .bind(query.tenant_id)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "SQL error while adding option");
+        ApiError::Internal(e.to_string())
+    })?;
+    
+    tracing::debug!(
+        rows_affected = result.rows_affected(),
+        "SQL UPDATE result for adding option"
+    );
+    
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound(format!("Field {} not found", field_id)));
+    }
+    
+    tracing::info!(
+        entity = %entity_name,
+        field_id = %field_id,
+        option = %payload.value,
+        "Successfully added new option to field"
+    );
+    
+    // IMPORTANT: Invalidate the fields cache so the updated options appear on next fetch
+    // First get the entity type to get its ID for cache invalidation
+    if let Ok(entity) = state.metadata.get_entity_type(query.tenant_id, &entity_name).await {
+        state.metadata.invalidate_fields(entity.id);
+        tracing::debug!(
+            entity_type_id = %entity.id,
+            "Invalidated fields cache after adding option"
+        );
+    }
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "option": new_option
+    })))
+}
+
+/// Delete an option from a Select/Status field's options list
+async fn delete_field_option(
+    State(state): State<Arc<AppState>>,
+    Path((entity_name, field_id, option_value)): Path<(String, Uuid, String)>,
+    Query(query): Query<TenantQuery>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let now = chrono::Utc::now();
+    
+    // Decode URL-encoded option value (in case it has special characters)
+    let option_value = urlencoding::decode(&option_value)
+        .map(|s| s.to_string())
+        .unwrap_or(option_value);
+    
+    tracing::debug!(
+        field_id = %field_id,
+        option_value = %option_value,
+        "Attempting to delete option from field"
+    );
+    
+    // Remove the option from the JSONB array where value matches
+    // This uses jsonb_path_query_array to filter out the matching element
+    let result = sqlx::query(
+        r#"UPDATE field_defs 
+           SET options = (
+               SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+               FROM jsonb_array_elements(COALESCE(options, '[]'::jsonb)) AS elem
+               WHERE elem->>'value' != $1
+           ),
+           updated_at = $2
+           WHERE id = $3 AND tenant_id = $4"#
+    )
+    .bind(&option_value)
+    .bind(now)
+    .bind(field_id)
+    .bind(query.tenant_id)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "SQL error while deleting option");
+        ApiError::Internal(e.to_string())
+    })?;
+    
+    tracing::debug!(
+        rows_affected = result.rows_affected(),
+        "SQL UPDATE result for deleting option"
+    );
+    
+    if result.rows_affected() == 0 {
+        return Err(ApiError::NotFound(format!("Field {} not found", field_id)));
+    }
+    
+    tracing::info!(
+        entity = %entity_name,
+        field_id = %field_id,
+        option = %option_value,
+        "Successfully deleted option from field"
+    );
+    
+    // Invalidate the fields cache
+    if let Ok(entity) = state.metadata.get_entity_type(query.tenant_id, &entity_name).await {
+        state.metadata.invalidate_fields(entity.id);
+        tracing::debug!(
+            entity_type_id = %entity.id,
+            "Invalidated fields cache after deleting option"
+        );
+    }
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "deleted_value": option_value
+    })))
+}

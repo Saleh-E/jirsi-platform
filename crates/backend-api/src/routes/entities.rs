@@ -49,6 +49,7 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/:entity_type", get(list_records))
         .route("/:entity_type", post(create_record))
+        .route("/:entity_type/lookup", get(lookup_entity))
         .route("/:entity_type/:id", get(get_record))
         .route("/:entity_type/:id", put(update_record))
         .route("/:entity_type/:id", delete(delete_record))
@@ -72,6 +73,146 @@ pub struct ListResponse {
     pub page: i32,
     pub per_page: i32,
 }
+
+// ============================================================================
+// LOOKUP ENDPOINT - Universal lookup for Link fields
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+pub struct LookupResult {
+    pub id: Uuid,
+    pub label: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LookupQuery {
+    pub tenant_id: Uuid,
+    /// Search term for filtering results
+    pub q: Option<String>,
+}
+
+/// Get the display field for an entity type (used for lookup labels)
+fn get_display_field_for_entity(entity_type: &str) -> &'static str {
+    match entity_type {
+        "contact" => "first_name",  // Will combine with last_name
+        "company" => "name",
+        "deal" => "name",
+        "property" => "title",
+        "listing" => "channel_name",
+        "viewing" => "id",  // Fallback
+        "offer" => "id",
+        "contract" => "contract_number",
+        "task" => "title",
+        "user" => "email",
+        _ => "name",
+    }
+}
+
+/// Get the table name for an entity type
+fn get_table_name_for_entity(entity_type: &str) -> &'static str {
+    match entity_type {
+        "contact" => "contacts",
+        "company" => "companies",
+        "deal" => "deals",
+        "property" => "properties",
+        "listing" => "listings",
+        "viewing" => "viewings",
+        "offer" => "offers",
+        "contract" => "contracts",
+        "task" => "tasks",
+        "user" => "users",
+        _ => "unknown",
+    }
+}
+
+/// Universal lookup endpoint for fetching options for Link fields
+pub async fn lookup_entity(
+    State(state): State<Arc<AppState>>,
+    Path(entity_type): Path<String>,
+    Query(params): Query<LookupQuery>,
+) -> Result<Json<Vec<LookupResult>>, ApiError> {
+    use sqlx::Row;
+    
+    // Validate entity type exists
+    let _entity = state.metadata
+        .get_entity_type(params.tenant_id, &entity_type)
+        .await?;
+    
+    let search_pattern = params.q.as_ref()
+        .map(|q| format!("%{}%", q))
+        .unwrap_or_else(|| "%".to_string());
+    
+    // Special handling for contacts (combine first_name + last_name)
+    let results = if entity_type == "contact" {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, first_name, last_name 
+            FROM contacts 
+            WHERE tenant_id = $1 
+              AND deleted_at IS NULL
+              AND (first_name ILIKE $2 OR last_name ILIKE $2 OR email ILIKE $2)
+            ORDER BY first_name, last_name
+            LIMIT 20
+            "#
+        )
+        .bind(params.tenant_id)
+        .bind(&search_pattern)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+        
+        rows.iter().map(|row| {
+            let id: Uuid = row.try_get("id").unwrap_or_default();
+            let first: String = row.try_get("first_name").unwrap_or_default();
+            let last: String = row.try_get("last_name").unwrap_or_default();
+            LookupResult {
+                id,
+                label: format!("{} {}", first, last).trim().to_string(),
+            }
+        }).collect()
+    } else {
+        // Generic lookup for other entities
+        let table_name = get_table_name_for_entity(&entity_type);
+        let display_field = get_display_field_for_entity(&entity_type);
+        
+        if table_name == "unknown" {
+            return Ok(Json(vec![]));
+        }
+        
+        // Build query based on entity type
+        let query = match entity_type.as_str() {
+            "user" => {
+                // Users table doesn't have deleted_at
+                format!(
+                    "SELECT id, {} as label FROM {} WHERE tenant_id = $1 AND {} ILIKE $2 ORDER BY {} LIMIT 20",
+                    display_field, table_name, display_field, display_field
+                )
+            }
+            _ => {
+                format!(
+                    "SELECT id, {} as label FROM {} WHERE tenant_id = $1 AND deleted_at IS NULL AND {} ILIKE $2 ORDER BY {} LIMIT 20",
+                    display_field, table_name, display_field, display_field
+                )
+            }
+        };
+        
+        let rows = sqlx::query(&query)
+            .bind(params.tenant_id)
+            .bind(&search_pattern)
+            .fetch_all(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        
+        rows.iter().map(|row| {
+            let id: Uuid = row.try_get("id").unwrap_or_default();
+            let label: String = row.try_get("label").unwrap_or_else(|_| id.to_string());
+            LookupResult { id, label }
+        }).collect()
+    };
+    
+    Ok(Json(results))
+}
+
 
 async fn list_records(
     State(state): State<Arc<AppState>>,

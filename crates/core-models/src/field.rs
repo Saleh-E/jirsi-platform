@@ -129,8 +129,8 @@ pub struct FieldDef {
     pub help_text: Option<String>,
     /// Validation rules
     pub validation: Option<FieldValidation>,
-    /// Type-specific options
-    pub options: Option<FieldOptions>,
+    /// Type-specific options (raw JSON - can be array of strings, array of objects, or FieldOptions struct)
+    pub options: Option<serde_json::Value>,
     /// UI rendering hints
     pub ui_hints: Option<FieldUiHints>,
     /// Display order in forms/lists
@@ -196,9 +196,13 @@ pub struct FieldUiHints {
     /// CSS class names
     pub class: Option<String>,
     /// Hide label in forms
+    #[serde(default)]
     pub hide_label: bool,
     /// Display as read-only chip/badge
+    #[serde(default)]
     pub as_badge: bool,
+    /// For lookup fields: target entity type to fetch
+    pub lookup_entity: Option<String>,
 }
 
 impl FieldDef {

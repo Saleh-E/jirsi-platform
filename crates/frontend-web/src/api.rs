@@ -191,33 +191,70 @@ pub struct FieldDef {
     pub placeholder: Option<String>,
     #[serde(default)]
     pub help_text: Option<String>,
+    #[serde(default)]
+    pub ui_hints: Option<serde_json::Value>,
 }
 
 impl FieldDef {
-    /// Get field type as string, handling both "Text" and {"type": "Text"} formats
+    /// Get field type as lowercase string, handling both "Text" and {"type": "Text"} formats
     pub fn get_field_type(&self) -> String {
         if let Some(s) = self.field_type.as_str() {
-            s.to_string()
+            s.to_lowercase()
         } else if let Some(obj) = self.field_type.as_object() {
             obj.get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("text")
-                .to_string()
+                .to_lowercase()
         } else {
             "text".to_string()
         }
     }
     
-    /// Get options as Vec<String> for select/status fields
-    pub fn get_options(&self) -> Vec<String> {
-        self.options.as_ref()
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                    .collect()
+    /// Get options as Vec<(value, label)> for select/status fields
+    /// Handles multiple formats: ["val"], [{"value":"v","label":"l"}], {"choices":[...]}
+    pub fn get_options(&self) -> Vec<(String, String)> {
+        if let Some(ref opts) = self.options {
+            // Check for nested "choices" array (some fields use this format)
+            if let Some(choices) = opts.get("choices").and_then(|c| c.as_array()) {
+                return Self::parse_option_array(choices);
+            }
+            
+            // Direct array format
+            if let Some(arr) = opts.as_array() {
+                return Self::parse_option_array(arr);
+            }
+        }
+        vec![]
+    }
+    
+    /// Parse an array of options (handles both string and object formats)
+    fn parse_option_array(arr: &Vec<serde_json::Value>) -> Vec<(String, String)> {
+        arr.iter()
+            .filter_map(|item| {
+                // Object format: {"value": "x", "label": "X"} or {"value": "x"}
+                if let Some(obj) = item.as_object() {
+                    let value = obj.get("value")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let label = obj.get("label")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(value);
+                    if !value.is_empty() {
+                        return Some((value.to_string(), label.to_string()));
+                    }
+                }
+                // String format: "value"
+                if let Some(s) = item.as_str() {
+                    return Some((s.to_string(), s.to_string()));
+                }
+                None
             })
-            .unwrap_or_default()
+            .collect()
+    }
+    
+    /// Get options as simple strings (backward compatibility)
+    pub fn get_option_values(&self) -> Vec<String> {
+        self.get_options().into_iter().map(|(v, _)| v).collect()
     }
 }
 
@@ -386,6 +423,72 @@ pub async fn fetch_entity_type(name: &str) -> Result<EntityType, String> {
 pub async fn fetch_field_defs(entity_name: &str) -> Result<Vec<FieldDef>, String> {
     let url = format!("{}/metadata/entities/{}/fields?tenant_id={}", API_BASE, entity_name, TENANT_ID);
     fetch_json(&url).await
+}
+
+/// Add a new option to a select/status field's options list
+/// This persists the option permanently in the database
+pub async fn add_field_option(
+    entity_name: &str,
+    field_id: &str,
+    value: &str,
+    label: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let url = format!(
+        "{}/metadata/entities/{}/fields/{}/options?tenant_id={}", 
+        API_BASE, entity_name, field_id, TENANT_ID
+    );
+    
+    let body = serde_json::json!({
+        "value": value,
+        "label": label.unwrap_or(value)
+    });
+    
+    post_json(&url, &body).await
+}
+
+/// Delete an option from a select/status field's options list
+/// This permanently removes the option from the database
+pub async fn delete_field_option(
+    entity_name: &str,
+    field_id: &str,
+    value: &str,
+) -> Result<serde_json::Value, String> {
+    let encoded_value = urlencoding::encode(value);
+    let url = format!(
+        "{}/metadata/entities/{}/fields/{}/options/{}?tenant_id={}", 
+        API_BASE, entity_name, field_id, encoded_value, TENANT_ID
+    );
+    
+    delete_request(&url).await
+}
+
+// ============================================================================
+// LOOKUP API FUNCTIONS (for Link fields)
+// ============================================================================
+
+/// Result from entity lookup endpoint - used for Link field dropdowns
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LookupResult {
+    pub id: String,
+    pub label: String,
+}
+
+/// Fetch lookup options for an entity type (for Link field dropdowns)
+/// Uses the universal lookup endpoint that returns id/label pairs
+pub async fn fetch_entity_lookup(
+    entity_type: &str,
+    search: Option<&str>,
+) -> Result<Vec<LookupResult>, String> {
+    let url = match search {
+        Some(q) if !q.is_empty() => {
+            let encoded_q = urlencoding::encode(q);
+            format!("{}/entities/{}/lookup?tenant_id={}&q={}", 
+                API_BASE, entity_type, TENANT_ID, encoded_q)
+        }
+        _ => format!("{}/entities/{}/lookup?tenant_id={}", 
+            API_BASE, entity_type, TENANT_ID)
+    };
+    fetch_json::<Vec<LookupResult>>(&url).await
 }
 
 // ============================================================================

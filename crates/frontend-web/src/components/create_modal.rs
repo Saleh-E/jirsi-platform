@@ -1,9 +1,9 @@
 //! Generic Create Modal - Metadata-driven form in a modal for creating new records
 
 use leptos::*;
-use crate::api::{fetch_field_defs, post_json, FieldDef, API_BASE, TENANT_ID};
+use crate::api::{fetch_field_defs, fetch_entity_list, post_json, add_field_option, delete_field_option, FieldDef, API_BASE, TENANT_ID};
 use crate::components::field_renderer::{LinkInput, DynamicSelect};
-use crate::components::smart_select::{MultiSelect, SelectOption};
+use crate::components::smart_select::{SmartSelect, MultiSelect, SelectOption};
 
 /// Record info returned from CreateModal when a new record is created
 #[derive(Clone, Debug)]
@@ -179,34 +179,90 @@ pub fn CreateModal(
                                                                 }
                                                             ></textarea>
                                                         }.into_view(),
-                                                        "select" => {
-                                                            // Get options from field and convert to Vec<String>
-                                                            let options: Vec<String> = field.options.as_ref()
-                                                                .and_then(|v| v.as_array())
-                                                                .map(|arr| arr.iter()
-                                                                    .filter_map(|v| v.as_str().map(String::from))
-                                                                    .collect())
-                                                                .unwrap_or_default();
+                                                        "select" | "status" => {
+                                                            // Use field.get_options() which handles both array formats
+                                                            let options: Vec<SelectOption> = field.get_options()
+                                                                .into_iter()
+                                                                .map(|(value, label)| SelectOption::new(value, label))
+                                                                .collect();
                                                             let field_name_select = field_name_change.clone();
-                                                            let on_select_change = move |val: String| {
-                                                                update_field(field_name_select.clone(), val);
-                                                            };
+                                                            let field_name_create = field_name_change.clone();
+                                                            let field_id = field.id.clone();
+                                                            let entity_for_api = entity_type_stored.get_value();
                                                             view! {
-                                                                <DynamicSelect
+                                                                <SmartSelect
                                                                     options=options
-                                                                    on_change=on_select_change
+                                                                    value=String::new()
+                                                                    on_change=move |val: String| {
+                                                                        update_field(field_name_select.clone(), val);
+                                                                    }
+                                                                    allow_search=true
                                                                     allow_create=true
-                                                                    placeholder="-- Select --".to_string()
+                                                                    on_create_value=Callback::new({
+                                                                        let field_id = field_id.clone();
+                                                                        let entity = entity_for_api.clone();
+                                                                        move |new_val: String| {
+                                                                            update_field(field_name_create.clone(), new_val.clone());
+                                                                            
+                                                                            // Persist new option to backend
+                                                                            if !field_id.is_empty() {
+                                                                                let field_id = field_id.clone();
+                                                                                let entity = entity.clone();
+                                                                                let val = new_val.clone();
+                                                                                spawn_local(async move {
+                                                                                    if let Err(e) = add_field_option(&entity, &field_id, &val, Some(&val)).await {
+                                                                                        web_sys::console::error_1(&format!("Failed to persist option: {}", e).into());
+                                                                                    }
+                                                                                });
+                                                                            }
+                                                                        }
+                                                                    })
+                                                                    on_delete_option=Callback::new({
+                                                                        let field_id = field_id.clone();
+                                                                        let entity = entity_for_api.clone();
+                                                                        move |val_to_delete: String| {
+                                                                            if !field_id.is_empty() {
+                                                                                let field_id = field_id.clone();
+                                                                                let entity = entity.clone();
+                                                                                let val = val_to_delete.clone();
+                                                                                spawn_local(async move {
+                                                                                    if let Err(e) = delete_field_option(&entity, &field_id, &val).await {
+                                                                                        web_sys::console::error_1(&format!("Failed to delete option: {}", e).into());
+                                                                                    }
+                                                                                });
+                                                                            }
+                                                                        }
+                                                                    })
+                                                                    create_label="+ Add New".to_string()
+                                                                    placeholder="Search or type to add...".to_string()
                                                                 />
                                                             }.into_view()
                                                         },
-                                                        "link" => {
-                                                            // Get target entity from field options (stored as JSON with target_entity key)
-                                                            let target = field.options.as_ref()
-                                                                .and_then(|v: &serde_json::Value| v.get("target_entity"))
-                                                                .and_then(|v: &serde_json::Value| v.as_str())
-                                                                .unwrap_or("contact")
-                                                                .to_string();
+                                                        "link" | "lookup" => {
+                                                            // Get target entity - check multiple sources:
+                                                            // 1. ui_hints.lookup_entity (preferred)
+                                                            // 2. field_type.config.target_entity
+                                                            // 3. Infer from field name (property_id -> property)
+                                                            let target = field.ui_hints.as_ref()
+                                                                .and_then(|h| h.get("lookup_entity"))
+                                                                .and_then(|v| v.as_str())
+                                                                .map(|s| s.to_string())
+                                                                .or_else(|| {
+                                                                    field.field_type.as_object()
+                                                                        .and_then(|obj| obj.get("config"))
+                                                                        .and_then(|c| c.get("target_entity"))
+                                                                        .and_then(|v| v.as_str())
+                                                                        .map(|s| s.to_string())
+                                                                })
+                                                                .or_else(|| {
+                                                                    // Infer from field name: property_id -> property
+                                                                    if field.name.ends_with("_id") {
+                                                                        Some(field.name.trim_end_matches("_id").to_string())
+                                                                    } else {
+                                                                        None
+                                                                    }
+                                                                })
+                                                                .unwrap_or_else(|| "contact".to_string());
                                                             let field_name_link = field_name_change.clone();
                                                             let on_link_change = move |id: String| {
                                                                 update_field(field_name_link.clone(), id);
@@ -272,16 +328,10 @@ pub fn CreateModal(
                                                             />
                                                         }.into_view(),
                                                         "taglist" | "tag_list" | "tags" | "multi_select" => {
-                                                            // Multi-select with chips and inline creation
-                                                            let tag_options: Vec<String> = field.options.as_ref()
-                                                                .and_then(|v| v.as_array())
-                                                                .map(|arr| arr.iter()
-                                                                    .filter_map(|v| v.as_str().map(String::from))
-                                                                    .collect())
-                                                                .unwrap_or_default();
-                                                            
-                                                            let select_options: Vec<SelectOption> = tag_options.iter()
-                                                                .map(|o| SelectOption::new(o.clone(), o.clone()))
+                                                            // Multi-select with chips and inline creation - use get_options() for proper parsing
+                                                            let select_options: Vec<SelectOption> = field.get_options()
+                                                                .into_iter()
+                                                                .map(|(value, label)| SelectOption::new(value, label))
                                                                 .collect();
                                                             
                                                             let field_name_tags = field_name_change.clone();

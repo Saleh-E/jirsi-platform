@@ -7055,7 +7055,9 @@ a.mobile-card {
     .back-btn {
         display: none !important;
     }
-}/* ======================================
+}
+
+/* ======================================
    BOTTOM SHEET STYLES
    ====================================== */
 
@@ -7528,7 +7530,7 @@ a.mobile-card {
     .card-more-btn {
         display: flex;
     }
-    
+
     .card-chevron {
         display: none;
     }
@@ -7749,3 +7751,179 @@ a.mobile-card {
     cursor: pointer;
 }
 
+/* =========================================
+   SmartSelect Component - Searchable Dropdown
+   ========================================= */
+
+.smart-select {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.smart-select__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.smart-select__trigger:hover {
+    border-color: var(--primary);
+}
+
+.smart-select--open .smart-select__trigger {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.3);
+}
+
+.smart-select__value {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.smart-select__arrow {
+    margin-left: 0.5rem;
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+}
+
+/* Dropdown menu - CRITICAL: High z-index for table inline editing */
+.smart-select__dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    margin-top: 4px;
+    background: var(--bg-content);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    max-height: 280px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Search input inside dropdown */
+.smart-select__search {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.smart-select__search-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.smart-select__search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+/* Options list */
+.smart-select__options {
+    overflow-y: auto;
+    flex: 1;
+    max-height: 200px;
+}
+
+.smart-select__option {
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.smart-select__option:hover,
+.smart-select__option--focused {
+    background: rgba(79, 70, 229, 0.15);
+}
+
+.smart-select__option--selected {
+    background: rgba(79, 70, 229, 0.25);
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.smart-select__option-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.smart-select__option-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.smart-select__empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* Add new button in dropdown */
+.smart-select__create-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border);
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    text-align: left;
+}
+
+.smart-select__create-btn:hover {
+    background: rgba(79, 70, 229, 0.1);
+}
+
+/* Create hint - shows when user clicks + Add New but hasn't typed yet */
+.smart-select__create-hint {
+    padding: 0.75rem;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-style: italic;
+    background: rgba(79, 70, 229, 0.05);
+    border-top: 1px solid var(--border);
+}
+
+/* Table inline editing SmartSelect container */
+.cell-smart-select {
+    position: relative;
+    z-index: 10;
+}
+
+.cell-smart-select .smart-select__dropdown {
+    min-width: 180px;
+}

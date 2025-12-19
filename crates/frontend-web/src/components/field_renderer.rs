@@ -4,7 +4,99 @@
 //! This component handles all field type rendering automatically.
 
 use leptos::*;
-use crate::api::FieldDef;
+use crate::api::{FieldDef, fetch_entity_lookup};
+use crate::components::smart_select::{SmartSelect, SelectOption};
+
+// ============================================================================
+// FIELD MODE - Defines rendering modes for fields
+// ============================================================================
+
+/// Mode for field rendering in different contexts
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub enum FieldMode {
+    /// Read-only display mode (default)
+    #[default]
+    Read,
+    /// Full edit mode (in forms)
+    Edit,
+    /// Inline edit mode (in tables, activated on dblclick)
+    InlineEdit,
+}
+
+// ============================================================================
+// ASYNC ENTITY SELECT - Uses lookup API for Link field dropdowns
+// ============================================================================
+
+/// Async entity select - fetches options from lookup endpoint
+/// This is the CRITICAL component for Link field dropdowns
+#[component]
+pub fn AsyncEntitySelect(
+    /// Target entity type (e.g., "property", "contact")
+    target_entity: String,
+    /// Currently selected value (UUID)
+    #[prop(optional)] value: Option<String>,
+    /// Callback when selection changes
+    #[prop(into)] on_change: Callback<String>,
+    /// Placeholder text
+    #[prop(optional)] placeholder: Option<String>,
+    /// Whether the field is disabled
+    #[prop(optional)] disabled: bool,
+) -> impl IntoView {
+    let (options, set_options) = create_signal::<Vec<SelectOption>>(Vec::new());
+    let (loading, set_loading) = create_signal(true);
+    let (selected_value, set_selected_value) = create_signal(value.clone());
+    
+    let target_entity_stored = store_value(target_entity.clone());
+    
+    // Fetch all options on mount (SmartSelect handles client-side filtering)
+    create_effect(move |_| {
+        let entity = target_entity_stored.get_value();
+        spawn_local(async move {
+            set_loading.set(true);
+            match fetch_entity_lookup(&entity, None).await {
+                Ok(results) => {
+                    let opts: Vec<SelectOption> = results
+                        .into_iter()
+                        .map(|r| SelectOption::new(r.id, r.label))
+                        .collect();
+                    set_options.set(opts);
+                }
+                Err(e) => {
+                    web_sys::console::error_1(&format!("Lookup error: {}", e).into());
+                    set_options.set(vec![]);
+                }
+            }
+            set_loading.set(false);
+        });
+    });
+    
+    // Handle selection change
+    let handle_change = move |val: String| {
+        set_selected_value.set(Some(val.clone()));
+        on_change.call(val);
+    };
+    
+    view! {
+        <div class="async-entity-select">
+            {move || {
+                if loading.get() && options.get().is_empty() {
+                    view! { <span class="loading-indicator">"Loading..."</span> }.into_view()
+                } else {
+                    view! {
+                        <SmartSelect
+                            options=options.get()
+                            value=selected_value.get().unwrap_or_default()
+                            on_change=handle_change
+                            allow_search=true
+                            placeholder=placeholder.clone().unwrap_or_else(|| "Select...".to_string())
+                            disabled=disabled
+                        />
+                    }.into_view()
+                }
+            }}
+        </div>
+    }
+}
 
 /// Renders a field value based on its FieldDef type
 /// This is the core component for metadata-driven rendering
@@ -444,9 +536,8 @@ fn render_edit_input(
 // Smart Input Components for Inline Creation
 // ============================================================
 
-use crate::components::smart_select::{SmartSelect, SelectOption};
 use crate::components::create_modal::CreateModal;
-use crate::api::{fetch_entity_list, API_BASE, TENANT_ID};
+use crate::api::{fetch_entity_list, add_field_option, API_BASE, TENANT_ID};
 use wasm_bindgen::JsCast;
 
 /// Created record info returned from CreateModal
@@ -609,6 +700,8 @@ pub fn DynamicSelect(
     #[prop(into)] on_change: Callback<String>,
     /// Field ID for updating options via API
     #[prop(optional)] field_id: Option<String>,
+    /// Entity type name for API call
+    #[prop(optional)] entity_type: Option<String>,
     /// Allow adding new options
     #[prop(optional, default = true)] allow_create: bool,
     /// Placeholder text
@@ -619,6 +712,7 @@ pub fn DynamicSelect(
     let (current_options, set_current_options) = create_signal(options.clone());
     let (selected_value, set_selected_value) = create_signal(value.clone());
     let field_id_stored = store_value(field_id);
+    let entity_type_stored = store_value(entity_type);
     
     // Convert string options to SelectOption
     let select_options = move || {
@@ -645,62 +739,18 @@ pub fn DynamicSelect(
             set_selected_value.set(Some(trimmed.clone()));
             on_change.call(trimmed.clone());
             
-            // Persist to API if field_id is provided
+            // Persist to API if field_id and entity_type are provided
             if let Some(fid) = field_id_stored.get_value() {
-                let new_opt = trimmed.clone();
-                let all_opts = current_options.get();
-                spawn_local(async move {
-                    // Build the options array as JSON
-                    let options_json: Vec<serde_json::Value> = all_opts.iter()
-                        .map(|s| serde_json::Value::String(s.clone()))
-                        .collect();
-                    
-                    let body = serde_json::json!({
-                        "options": options_json
+                if let Some(entity) = entity_type_stored.get_value() {
+                    let new_opt = trimmed.clone();
+                    let field_id = fid.clone();
+                    let entity_name = entity.clone();
+                    spawn_local(async move {
+                        if let Err(e) = add_field_option(&entity_name, &field_id, &new_opt, Some(&new_opt)).await {
+                            web_sys::console::error_1(&format!("Failed to persist option: {}", e).into());
+                        }
                     });
-                    
-                    let url = format!("{}/meta/fields/{}?tenant_id={}", API_BASE, fid, TENANT_ID);
-                    
-                    // Make PATCH request
-                    let window = match web_sys::window() {
-                        Some(w) => w,
-                        None => {
-                            web_sys::console::error_1(&"No window available".into());
-                            return;
-                        }
-                    };
-                    
-                    let opts = web_sys::RequestInit::new();
-                    opts.set_method("PATCH");
-                    opts.set_mode(web_sys::RequestMode::Cors);
-                    opts.set_body(&wasm_bindgen::JsValue::from_str(&body.to_string()));
-                    
-                    match web_sys::Request::new_with_str_and_init(&url, &opts) {
-                        Ok(request) => {
-                            if let Err(_e) = request.headers().set("Content-Type", "application/json") {
-                                web_sys::console::error_1(&"Failed to set header".into());
-                                return;
-                            }
-                            
-                            match wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await {
-                                Ok(resp) => {
-                                    let resp: web_sys::Response = resp.dyn_into().unwrap();
-                                    if resp.ok() {
-                                        web_sys::console::log_1(&format!("Saved new option '{}' to field {}", new_opt, fid).into());
-                                    } else {
-                                        web_sys::console::error_1(&format!("Failed to save option: HTTP {}", resp.status()).into());
-                                    }
-                                }
-                                Err(_e) => {
-                                    web_sys::console::error_1(&"Fetch error".into());
-                                }
-                            }
-                        }
-                        Err(_e) => {
-                            web_sys::console::error_1(&"Request error".into());
-                        }
-                    }
-                });
+                }
             }
         }
     };

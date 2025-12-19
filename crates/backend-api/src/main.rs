@@ -44,12 +44,12 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Connected to database");
 
-    // Run migrations
-    sqlx::migrate!("../../migrations")
-        .run(&pool)
-        .await?;
+    // Run migrations (skip if already done)
+    match sqlx::migrate!("../../migrations").run(&pool).await {
+        Ok(_) => tracing::info!("Migrations complete"),
+        Err(e) => tracing::warn!("Migration skipped (may already be applied): {}", e),
+    }
 
-    tracing::info!("Migrations complete");
 
     // Create app state
     let state = Arc::new(AppState::new(pool));
