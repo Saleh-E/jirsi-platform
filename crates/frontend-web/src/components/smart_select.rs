@@ -78,6 +78,8 @@ pub fn SmartSelect(
     #[prop(optional, into)] on_create: Option<Callback<()>>,
     /// Callback with the typed text when creating inline (e.g., "+ Add 'Twitter Ads'")
     #[prop(optional, into)] on_create_value: Option<Callback<String>>,
+    /// Callback when delete button is clicked on an option (value to delete)
+    #[prop(optional, into)] on_delete_option: Option<Callback<String>>,
     /// Placeholder text
     #[prop(optional, default = String::from("-- Select --"))] placeholder: String,
     /// Whether the field is disabled
@@ -91,43 +93,56 @@ pub fn SmartSelect(
     let (is_open, set_is_open) = create_signal(false);
     let (search_query, set_search_query) = create_signal(String::new());
     let (focused_index, set_focused_index) = create_signal::<Option<usize>>(None);
+    let (create_mode, set_create_mode) = create_signal(false); // True when showing create input
+    let (local_options, set_local_options) = create_signal(options.clone()); // Local copy to add new options
     
-    // Store options for filtering
+    // Store options for filtering (use local_options which can grow)
     let options_stored = store_value(options.clone());
-    let value_stored = store_value(if value.is_empty() { None } else { Some(value) });
+    // Local signal for selected value - tracks what's currently selected
+    let (selected_value, set_selected_value) = create_signal(if value.is_empty() { None } else { Some(value) });
     let placeholder_stored = store_value(placeholder);
     let create_label_stored = store_value(create_label);
     let on_create_stored = store_value(on_create);
+    let on_create_value_stored = store_value(on_create_value.clone());
+    let on_delete_option_stored = store_value(on_delete_option.clone());
     
-    // Get display label for current value
+    // Get display label for current value - uses reactive selected_value signal
     let display_label = move || {
-        let current_value = value_stored.get_value();
+        let current_value = selected_value.get();
         if let Some(val) = current_value {
-            options_stored.get_value()
+            // Also check local_options for newly added values
+            local_options.get()
                 .iter()
                 .find(|o| o.value == val)
                 .map(|o| o.label.clone())
+                .or_else(|| {
+                    options_stored.get_value()
+                        .iter()
+                        .find(|o| o.value == val)
+                        .map(|o| o.label.clone())
+                })
                 .unwrap_or(val)
         } else {
             placeholder_stored.get_value()
         }
     };
     
-    // Filter options based on search query
+    // Filter options based on search query - uses local_options to include newly added values
     let filtered_options = move || {
         let query = search_query.get().to_lowercase();
         if query.is_empty() {
-            options_stored.get_value()
+            local_options.get()
         } else {
-            options_stored.get_value()
+            local_options.get()
                 .into_iter()
                 .filter(|o| o.label.to_lowercase().contains(&query))
                 .collect()
         }
     };
     
-    // Handle option selection
+    // Handle option selection - update local selected value and notify parent
     let handle_select = move |value: String| {
+        set_selected_value.set(Some(value.clone())); // Update local display
         on_change.call(value);
         set_is_open.set(false);
         set_search_query.set(String::new());
@@ -182,12 +197,24 @@ pub fn SmartSelect(
         }
     };
     
-    // Handle create new
+    // Handle create new - uses on_create if provided, otherwise enables create mode
     let handle_create = move |_| {
-        if let Some(ref callback) = on_create {
+        let on_create_opt = on_create_stored.get_value();
+        let on_create_value_opt = on_create_value_stored.get_value();
+        
+        if let Some(ref callback) = on_create_opt {
+            // Use the on_create callback (opens external modal)
             callback.call(());
+            set_is_open.set(false);
+            set_create_mode.set(false);
+        } else if on_create_value_opt.is_some() {
+            // Enable create mode - shows dedicated input field
+            set_create_mode.set(true);
+            set_search_query.set(String::new()); // Clear search for typing new value
+            // Keep dropdown open for user to type
+        } else {
+            set_is_open.set(false);
         }
-        set_is_open.set(false);
     };
     
     // Click outside to close
@@ -261,9 +288,12 @@ pub fn SmartSelect(
                             } else {
                                 opts.into_iter().enumerate().map(|(idx, opt)| {
                                     let opt_value_click = opt.value.clone();
+                                    let opt_value_delete = opt.value.clone();
                                     let opt_label = opt.label.clone();
                                     let opt_icon = opt.icon.clone();
-                                    let is_selected = value_stored.get_value().as_ref() == Some(&opt.value);
+                                    let is_selected = selected_value.get().as_ref() == Some(&opt.value);
+                                    let can_delete = on_delete_option.is_some();
+                                    let on_delete = on_delete_option_stored.get_value();
                                     
                                     // Compute option class
                                     let option_class = move || {
@@ -296,6 +326,29 @@ pub fn SmartSelect(
                                                 }.into_view(),
                                             })}
                                             <span class="smart-select__option-label">{opt_label}</span>
+                                            {can_delete.then(|| {
+                                                let del_value = opt_value_delete.clone();
+                                                let on_del = on_delete.clone();
+                                                view! {
+                                                    <button
+                                                        type="button"
+                                                        class="smart-select__option-delete"
+                                                        title="Delete option"
+                                                        on:click=move |ev| {
+                                                            ev.stop_propagation();
+                                                            if let Some(ref cb) = on_del {
+                                                                // Remove from local options immediately
+                                                                set_local_options.update(|opts| {
+                                                                    opts.retain(|o| o.value != del_value);
+                                                                });
+                                                                cb.call(del_value.clone());
+                                                            }
+                                                        }
+                                                    >
+                                                        "×"
+                                                    </button>
+                                                }
+                                            })}
                                         </div>
                                     }
                                 }).collect_view()
@@ -311,35 +364,56 @@ pub fn SmartSelect(
                         
                         view! {
                             <div class="smart-select__create">
-                                // Show "+ Add 'typed text'" when user types a new value
+                                // Show "Create: [input]" when in create mode, or "+ Add 'typed text'" when user types
                                 {move || {
                                     let query = search_query.get();
                                     let trimmed = query.trim();
-                                    let opts = options_stored.get_value();
+                                    let opts = local_options.get(); // Use local_options for persistence
                                     let exact_match = opts.iter().any(|o| 
                                         o.label.to_lowercase() == trimmed.to_lowercase()
                                     );
+                                    let in_create_mode = create_mode.get();
                                     
-                                    if !trimmed.is_empty() && !exact_match && on_create_value_clone.is_some() {
+                                    // Show add button when typing new value OR when in create mode
+                                    if (!trimmed.is_empty() && !exact_match && on_create_value_clone.is_some()) || (in_create_mode && on_create_value_clone.is_some()) {
                                         let typed_text = trimmed.to_string();
                                         let typed_text_display = typed_text.clone();
                                         let typed_text_click = typed_text.clone();
                                         let callback = on_create_value_clone.clone();
-                                        view! {
-                                            <button
-                                                type="button"
-                                                class="smart-select__create-btn smart-select__create-btn--inline"
-                                                on:click=move |_| {
-                                                    if let Some(ref cb) = callback {
-                                                        cb.call(typed_text_click.clone());
+                                        
+                                        // Don't show button if empty and in create mode (user needs to type first)
+                                        if typed_text.is_empty() && in_create_mode {
+                                            view! {
+                                                <div class="smart-select__create-hint">
+                                                    "Type a new value above, then click Add"
+                                                </div>
+                                            }.into_view()
+                                        } else {
+                                            view! {
+                                                <button
+                                                    type="button"
+                                                    class="smart-select__create-btn smart-select__create-btn--inline"
+                                                    on:click=move |_| {
+                                                        if let Some(ref cb) = callback {
+                                                            // Add the new value to local_options for persistence
+                                                            let new_option = SelectOption::new(typed_text_click.clone(), typed_text_click.clone());
+                                                            set_local_options.update(|opts| {
+                                                                opts.push(new_option);
+                                                            });
+                                                            
+                                                            // Update selected value to show new option
+                                                            set_selected_value.set(Some(typed_text_click.clone()));
+                                                            cb.call(typed_text_click.clone());
+                                                        }
+                                                        set_is_open.set(false);
+                                                        set_search_query.set(String::new());
+                                                        set_create_mode.set(false);
                                                     }
-                                                    set_is_open.set(false);
-                                                    set_search_query.set(String::new());
-                                                }
-                                            >
-                                                {format!("+ Add \"{}\"", typed_text_display)}
-                                            </button>
-                                        }.into_view()
+                                                >
+                                                    {format!("+ Add \"{}\"", typed_text_display)}
+                                                </button>
+                                            }.into_view()
+                                        }
                                     } else {
                                         // Show standard create button
                                         let label_inner = label.clone();
@@ -505,7 +579,7 @@ pub const SMART_SELECT_STYLES: &str = r#"
     border: 1px solid var(--border-color, #3a3a4a);
     border-radius: 8px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-    z-index: 1000;
+    z-index: 9999;
     overflow: hidden;
     animation: slideDown 0.15s ease-out;
 }
@@ -542,14 +616,43 @@ pub const SMART_SELECT_STYLES: &str = r#"
 }
 
 .smart-select__options {
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
 }
 
 .smart-select__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 0.625rem 1rem;
     cursor: pointer;
     transition: background 0.15s ease;
+}
+
+.smart-select__option-label {
+    flex: 1;
+}
+
+.smart-select__option-delete {
+    display: none;
+    padding: 0.125rem 0.375rem;
+    margin-left: 0.5rem;
+    background: transparent;
+    border: 1px solid var(--danger-color, #dc3545);
+    border-radius: 4px;
+    color: var(--danger-color, #dc3545);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.smart-select__option:hover .smart-select__option-delete {
+    display: inline-block;
+}
+
+.smart-select__option-delete:hover {
+    background: var(--danger-color, #dc3545);
+    color: white;
 }
 
 .smart-select__option:hover,
@@ -597,7 +700,7 @@ pub const SMART_SELECT_STYLES: &str = r#"
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 999;
+    z-index: 9998;
 }
 
 /* Image icons */

@@ -12,7 +12,8 @@ use crate::api::FieldDef;
 use crate::context::mobile::use_mobile;
 use crate::components::smart_select::{SmartSelect, MultiSelect, SelectOption};
 use crate::components::create_modal::CreateModal;
-use crate::api::{fetch_entity_list, API_BASE, TENANT_ID};
+use crate::api::{fetch_entity_list, add_field_option, delete_field_option, API_BASE, TENANT_ID};
+use leptos::spawn_local;
 
 /// Input mode for SmartInput
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -42,6 +43,8 @@ pub fn SmartInput(
     #[prop(optional, default = InputMode::Edit)] mode: InputMode,
     /// Z-index for modals (for stacking)
     #[prop(optional, default = 1000)] z_index: i32,
+    /// Entity type name for persisting new options
+    #[prop(optional)] entity_type: Option<String>,
 ) -> impl IntoView {
     let mobile_ctx = use_mobile();
     let _is_mobile = move || mobile_ctx.is_mobile.get();
@@ -106,13 +109,14 @@ pub fn SmartInput(
                                 </div>
                             }.into_view()
                         } else {
-                            // Editable input
-                            let current = local_value.get().as_str().unwrap_or("").to_string();
+                            // Editable input - use prop:value to prevent focus loss
+                            let current = local_value.get_untracked().as_str().unwrap_or("").to_string();
+                            let local_value_for_input = local_value;
                             view! {
                                 <input
                                     type=ft.clone()
                                     class="smart-input-field"
-                                    value=current
+                                    prop:value=move || local_value_for_input.get().as_str().unwrap_or("").to_string()
                                     on:input=move |ev| {
                                         let val = event_target_value(&ev);
                                         set_local_value.set(Value::String(val));
@@ -147,12 +151,12 @@ pub fn SmartInput(
                                 </div>
                             }.into_view()
                         } else {
-                            let current = local_value.get().as_f64().unwrap_or(0.0).to_string();
+                            let local_value_for_input = local_value;
                             view! {
                                 <input
                                     type="number"
                                     class="smart-input-field"
-                                    value=current
+                                    prop:value=move || local_value_for_input.get().as_f64().unwrap_or(0.0).to_string()
                                     on:input=move |ev| {
                                         let val = event_target_value(&ev);
                                         if let Ok(n) = val.parse::<f64>() {
@@ -169,13 +173,15 @@ pub fn SmartInput(
                     // Select fields  
                     "select" | "status" => {
                         let field_val = field_stored.get_value();
-                        let options: Vec<SelectOption> = get_field_options(&field_val)
-                            .into_iter()
-                            .map(|opt| SelectOption::new(opt.clone(), opt))
-                            .collect();
+                        let options: Vec<SelectOption> = get_field_options(&field_val);
                         
                         let current = local_value.get().as_str().unwrap_or("").to_string();
                         let on_change = on_change.clone();
+                        let on_change_create = on_change.clone();
+                        
+                        // Get field_id and entity_type for persisting new options
+                        let field_id = field_stored.get_value().id.clone();
+                        let entity_for_api = entity_type.clone().unwrap_or_default();
                         
                         view! {
                             <SmartSelect
@@ -186,7 +192,46 @@ pub fn SmartInput(
                                     on_change.call(Value::String(val));
                                 }
                                 allow_search=true
-                                allow_create=false
+                                allow_create=true
+                                on_create_value=Callback::new({
+                                    let field_id = field_id.clone();
+                                    let entity_for_api = entity_for_api.clone();
+                                    move |new_val: String| {
+                                        set_local_value.set(Value::String(new_val.clone()));
+                                        on_change_create.call(Value::String(new_val.clone()));
+                                        
+                                        // Persist new option to backend
+                                        if !field_id.is_empty() && !entity_for_api.is_empty() {
+                                            let field_id = field_id.clone();
+                                            let entity = entity_for_api.clone();
+                                            let val = new_val.clone();
+                                            spawn_local(async move {
+                                                if let Err(e) = add_field_option(&entity, &field_id, &val, Some(&val)).await {
+                                                    web_sys::console::error_1(&format!("Failed to persist option: {}", e).into());
+                                                }
+                                            });
+                                        }
+                                    }
+                                })
+                                on_delete_option=Callback::new({
+                                    let field_id = field_id.clone();
+                                    let entity_for_api = entity_for_api.clone();
+                                    move |val_to_delete: String| {
+                                        // Persist deletion to backend
+                                        if !field_id.is_empty() && !entity_for_api.is_empty() {
+                                            let field_id = field_id.clone();
+                                            let entity = entity_for_api.clone();
+                                            let val = val_to_delete.clone();
+                                            spawn_local(async move {
+                                                if let Err(e) = delete_field_option(&entity, &field_id, &val).await {
+                                                    web_sys::console::error_1(&format!("Failed to delete option: {}", e).into());
+                                                }
+                                            });
+                                        }
+                                    }
+                                })
+                                create_label="+ Add New".to_string()
+                                placeholder="Search or type to add...".to_string()
                             />
                         }.into_view()
                     }
@@ -194,10 +239,7 @@ pub fn SmartInput(
                     // TagList / MultiSelect fields - chips with inline tag creation
                     "taglist" | "tag_list" | "tags" | "multi_select" => {
                         let field_val = field_stored.get_value();
-                        let options: Vec<SelectOption> = get_field_options(&field_val)
-                            .into_iter()
-                            .map(|opt| SelectOption::new(opt.clone(), opt))
-                            .collect();
+                        let options: Vec<SelectOption> = get_field_options(&field_val);
                         
                         // Get current values as array
                         let current_values: Vec<String> = local_value.get()
@@ -419,30 +461,30 @@ pub fn SmartInput(
                                 </div>
                             }.into_view()
                         } else {
-                            let current = local_value.get().as_str().unwrap_or("").to_string();
+                            let local_value_for_textarea = local_value;
                             view! {
                                 <textarea
                                     class="smart-input-field smart-input-textarea"
+                                    prop:value=move || local_value_for_textarea.get().as_str().unwrap_or("").to_string()
                                     on:input=move |ev| {
                                         let val = event_target_value(&ev);
                                         set_local_value.set(Value::String(val));
                                     }
                                     on:blur=handle_blur.clone()
                                 >
-                                    {current}
                                 </textarea>
                             }.into_view()
                         }
                     }
                     
-                    // Default: text input
+                    // Default: text input - use prop:value to prevent focus loss
                     _ => {
-                        let current = local_value.get().as_str().unwrap_or("").to_string();
+                        let local_value_for_input = local_value;
                         view! {
                             <input
                                 type="text"
                                 class="smart-input-field"
-                                value=current
+                                prop:value=move || local_value_for_input.get().as_str().unwrap_or("").to_string()
                                 on:input=move |ev| {
                                     let val = event_target_value(&ev);
                                     set_local_value.set(Value::String(val));
@@ -496,17 +538,28 @@ fn LinkFieldInput(
         set_loading.set(true);
         
         spawn_local(async move {
-            let url = format!("{}/entities/{}/records?tenant_id={}", API_BASE, target, TENANT_ID);
-            if let Ok(response) = fetch_entity_list(&url).await {
+            // Pass just the entity type to fetch_entity_list (not a URL)
+            if let Ok(response) = fetch_entity_list(&target).await {
                 let opts: Vec<SelectOption> = response.data.iter()
                     .filter_map(|r| {
                         let id = r.get("id")?.as_str()?.to_string();
-                        let name = r.get("name")
-                            .or_else(|| r.get("title"))
+                        // Try various name fields for display
+                        let name = r.get("title")
+                            .or_else(|| r.get("name"))
                             .or_else(|| r.get("full_name"))
                             .and_then(|v| v.as_str())
-                            .unwrap_or(&id)
-                            .to_string();
+                            .map(String::from)
+                            .unwrap_or_else(|| {
+                                // Try first_name + last_name for contacts
+                                let first = r.get("first_name").and_then(|v| v.as_str()).unwrap_or("");
+                                let last = r.get("last_name").and_then(|v| v.as_str()).unwrap_or("");
+                                if !first.is_empty() || !last.is_empty() {
+                                    format!("{} {}", first, last).trim().to_string()
+                                } else {
+                                    // Fallback to reference or ID
+                                    r.get("reference").and_then(|v| v.as_str()).unwrap_or(&id).to_string()
+                                }
+                            });
                         Some(SelectOption::new(id, name))
                     })
                     .collect();
@@ -548,24 +601,33 @@ fn LinkFieldInput(
     }
 }
 
-/// Get options from field definition
-fn get_field_options(field: &FieldDef) -> Vec<String> {
-    if let Some(ref opts) = field.options {
-        if let Some(arr) = opts.as_array() {
-            return arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect();
-        }
-    }
-    vec![]
+/// Get options from field definition as SelectOptions
+fn get_field_options(field: &FieldDef) -> Vec<SelectOption> {
+    field.get_options()
+        .into_iter()
+        .map(|(value, label)| SelectOption::new(value, label))
+        .collect()
 }
 
 /// Get link target entity from field definition
 fn get_link_target(field: &FieldDef) -> String {
-    // Check if field_type is an object with "target" property
+    // First check ui_hints.lookup_entity (preferred)
+    if let Some(ui_hints) = &field.ui_hints {
+        if let Some(lookup_entity) = ui_hints.get("lookup_entity").and_then(|v| v.as_str()) {
+            return lookup_entity.to_string();
+        }
+    }
+    // Then check if field_type is an object with "target" property
     if let Some(obj) = field.field_type.as_object() {
         if let Some(target) = obj.get("target").and_then(|v| v.as_str()) {
             return target.to_string();
+        }
+    }
+    // Infer from field name (property_id -> property, contact_id -> contact)
+    if field.name.ends_with("_id") {
+        let entity = field.name.trim_end_matches("_id");
+        if !entity.is_empty() {
+            return entity.to_string();
         }
     }
     // Default to "contact" if not specified

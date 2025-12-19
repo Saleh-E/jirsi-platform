@@ -10,7 +10,7 @@
 use leptos::*;
 use crate::api::FieldDef as ApiFieldDef;
 use crate::models::ViewColumn;
-use crate::api::{put_json, API_BASE, TENANT_ID};
+use crate::api::{put_json, add_field_option, delete_field_option, API_BASE, TENANT_ID};
 use crate::components::smart_select::{SmartSelect, SelectOption};
 
 /// Smart Table with inline editing support
@@ -32,11 +32,35 @@ pub fn SmartTable(
     let entity_type_stored = store_value(entity_type);
     
     // Build field lookup
-    let field_map: std::collections::HashMap<String, ApiFieldDef> = fields
+    let field_map: std::collections::HashMap<String, ApiFieldDef> = fields.clone()
         .into_iter()
         .map(|f| (f.name.clone(), f))
         .collect();
     let field_map_stored = store_value(field_map);
+    
+    // Create SHARED options signals for each select/status field
+    // This way all cells in the same column share the same options
+    let shared_field_options: std::collections::HashMap<String, (ReadSignal<Vec<SelectOption>>, WriteSignal<Vec<SelectOption>>)> = 
+        fields.iter()
+            .filter(|f| {
+                let ft = f.get_field_type().to_lowercase();
+                ft == "select" || ft == "status"
+            })
+            .map(|f| {
+                let options = f.get_options().into_iter()
+                    .map(|(v, l)| SelectOption::new(v, l))
+                    .collect::<Vec<_>>();
+                // Debug: Log the options being loaded for each field
+                web_sys::console::log_1(&format!(
+                    "🔧 SmartTable: Loading {} options for field '{}': {:?}",
+                    options.len(),
+                    f.name,
+                    options.iter().map(|o| o.value.clone()).collect::<Vec<_>>()
+                ).into());
+                (f.name.clone(), create_signal(options))
+            })
+            .collect();
+    let shared_options_stored = store_value(shared_field_options);
 
     let visible_columns: Vec<_> = columns
         .into_iter()
@@ -100,6 +124,11 @@ pub fn SmartTable(
                                         let on_click = on_row_click.clone();
                                         let row_data = row_for_click.clone();
                                         
+                                        // Get shared options for this field (if it's a select/status field)
+                                        let field_shared_options = shared_options_stored.get_value()
+                                            .get(&col.field)
+                                            .cloned();
+                                        
                                         view! {
                                             <SmartTableCell
                                                 value=value
@@ -111,6 +140,7 @@ pub fn SmartTable(
                                                 set_table_data=set_table_data
                                                 editing_cell=editing_cell
                                                 set_editing_cell=set_editing_cell
+                                                shared_options=field_shared_options
                                                 on_click=Callback::new(move |_: ()| {
                                                     if let Some(ref cb) = on_click {
                                                         cb.call(row_data.clone());
@@ -161,6 +191,9 @@ fn SmartTableCell(
     editing_cell: ReadSignal<Option<(String, String)>>,
     set_editing_cell: WriteSignal<Option<(String, String)>>,
     #[prop(into)] on_click: Callback<()>,
+    /// Shared options signal for this field (shared across all rows)
+    /// Pass None for non-select fields
+    shared_options: Option<(ReadSignal<Vec<SelectOption>>, WriteSignal<Vec<SelectOption>>)>,
 ) -> impl IntoView {
     // Use store_value to avoid re-renders when value changes during editing
     let local_value = store_value(value.clone());
@@ -174,11 +207,18 @@ fn SmartTableCell(
     let row_id_stored = store_value(row_id.clone());
     let entity_type_stored = store_value(entity_type.clone());
     
-    // Store field options for select fields
-    let field_options: Vec<String> = field_def.as_ref()
-        .map(|f| f.get_options())
-        .unwrap_or_default();
-    let options_stored = store_value(field_options);
+    // Use SHARED options from parent if provided, otherwise fall back to field_def options
+    // This ensures all cells in the same column share the same options
+    let (get_options, set_shared_options) = shared_options.unwrap_or_else(|| {
+        // Fallback: create per-cell options (shouldn't happen for select/status fields)
+        let field_options: Vec<SelectOption> = field_def.as_ref()
+            .map(|f| f.get_options().into_iter().map(|(v, l)| SelectOption::new(v, l)).collect())
+            .unwrap_or_default();
+        create_signal(field_options)
+    });
+    
+    // Store field ID for add_field_option API call
+    let field_id_stored = store_value(field_def.as_ref().map(|f| f.id.clone()).unwrap_or_default());
     
     // Cell ID for global editing comparison
     let cell_id = (row_id.clone(), field_name.clone());
@@ -314,17 +354,15 @@ fn SmartTableCell(
         >
             {move || {
                 let ft = field_type.clone();
-                let opts = options_stored.get_value();
+                let opts = get_options.get();
                 
                 if is_editing() {
                     // Edit mode with confirm button
                     match ft.to_lowercase().as_str() {
                         "select" | "status" => {
-                            // SmartSelect for searchable select/status fields
+                            // SmartSelect for searchable select/status fields - use stored SelectOptions with value/label
                             let current = local_value.get_value().as_str().unwrap_or("").to_string();
-                            let select_options: Vec<SelectOption> = opts.iter()
-                                .map(|o| SelectOption::new(o.clone(), o.clone()))
-                                .collect();
+                            let select_options = opts.clone(); // Already Vec<SelectOption>
                             
                             // Handle selection change and auto-save
                             let handle_select_change = move |val: String| {
@@ -333,15 +371,89 @@ fn SmartTableCell(
                                 set_editing_cell.set(None);
                             };
                             
+                            // Handle inline creation - when user types a new value and clicks "+ Add 'value'"
+                            let handle_create_value = move |new_value: String| {
+                                // First, add the new option to the local options so it appears immediately
+                                let new_option = SelectOption::new(new_value.clone(), new_value.clone());
+                                set_shared_options.update(|opts| {
+                                    // Check if not already exists
+                                    if !opts.iter().any(|o| o.value == new_value) {
+                                        opts.push(new_option);
+                                    }
+                                });
+                                
+                                // Save the new value to the entity
+                                local_value.set_value(serde_json::Value::String(new_value.clone()));
+                                save_cell();
+                                set_editing_cell.set(None);
+                                
+                                // Also persist the new option to the field definition via API
+                                let entity = entity_type_stored.get_value();
+                                let field_id = field_id_stored.get_value();
+                                let value_clone = new_value.clone();
+                                
+                                // Debug: Log field_id to verify it's available
+                                web_sys::console::log_1(&format!("DEBUG: field_id='{}', entity='{}', new_value='{}'", field_id, entity, value_clone).into());
+                                
+                                if !field_id.is_empty() {
+                                    spawn_local(async move {
+                                        web_sys::console::log_1(&format!("Calling add_field_option API for field {}", field_id).into());
+                                        match add_field_option(&entity, &field_id, &value_clone, Some(&value_clone)).await {
+                                            Ok(_) => {
+                                                web_sys::console::log_1(&format!("✅ Added option '{}' to field {}", value_clone, field_id).into());
+                                            }
+                                            Err(e) => {
+                                                web_sys::console::error_1(&format!("❌ Failed to persist option: {}", e).into());
+                                            }
+                                        }
+                                    });
+                                } else {
+                                    web_sys::console::warn_1(&"⚠️ field_id is empty, cannot persist option".into());
+                                }
+                            };
+                            
+                            // Handle delete option - when user clicks delete button on an option
+                            let handle_delete_option = {
+                                let entity = entity_type_stored.get_value();
+                                let field_id = field_id_stored.get_value();
+                                move |value_to_delete: String| {
+                                    // Remove from shared options immediately
+                                    set_shared_options.update(|opts| {
+                                        opts.retain(|o| o.value != value_to_delete);
+                                    });
+                                    
+                                    // Persist deletion to backend
+                                    if !field_id.is_empty() {
+                                        let entity = entity.clone();
+                                        let field_id = field_id.clone();
+                                        let val = value_to_delete.clone();
+                                        spawn_local(async move {
+                                            match delete_field_option(&entity, &field_id, &val).await {
+                                                Ok(_) => {
+                                                    web_sys::console::log_1(&format!("✅ Deleted option '{}' from field {}", val, field_id).into());
+                                                }
+                                                Err(e) => {
+                                                    web_sys::console::error_1(&format!("❌ Failed to delete option: {}", e).into());
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            };
+                            
                             view! {
-                                <div class="cell-edit-wrapper cell-smart-select">
+                                // Stop propagation to prevent td click handler from interfering
+                                <div class="cell-edit-wrapper cell-smart-select" on:click=|ev| ev.stop_propagation()>
                                     <SmartSelect
                                         options=select_options
                                         value=current
                                         on_change=handle_select_change
                                         allow_search=true
-                                        allow_create=false
-                                        placeholder="Select...".to_string()
+                                        allow_create=true
+                                        on_create_value=Callback::new(handle_create_value)
+                                        on_delete_option=Callback::new(handle_delete_option)
+                                        create_label="+ Add New".to_string()
+                                        placeholder="Search or type to add...".to_string()
                                     />
                                 </div>
                             }.into_view()
@@ -381,6 +493,34 @@ fn SmartTableCell(
                                             let target = event_target::<web_sys::HtmlInputElement>(&ev);
                                             local_value.set_value(serde_json::json!(target.checked()));
                                         }
+                                    />
+                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                </div>
+                            }.into_view()
+                        }
+                        "date" | "datetime" => {
+                            // Date input - use native date picker
+                            let current = local_value.get_value().as_str().unwrap_or("").to_string();
+                            // Only take the date part for date input (YYYY-MM-DD)
+                            let date_value = if current.len() >= 10 {
+                                current[..10].to_string()
+                            } else {
+                                current.clone()
+                            };
+                            view! {
+                                <div class="cell-edit-wrapper">
+                                    <input
+                                        type="date"
+                                        class="cell-input cell-date-input"
+                                        value=date_value
+                                        autofocus=true
+                                        on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
+                                        on:mousedown=move |ev: web_sys::MouseEvent| ev.stop_propagation()
+                                        on:input=move |ev| {
+                                            local_value.set_value(serde_json::Value::String(event_target_value(&ev)));
+                                        }
+                                        on:blur=handle_blur
+                                        on:keydown=handle_keydown
                                     />
                                     <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
                                 </div>
@@ -446,10 +586,19 @@ fn render_cell_display(field_type: &str, value: &serde_json::Value) -> View {
                 </span>
             }.into_view()
         }
-        "date" => {
+        "date" | "datetime" => {
             let date_str = value.as_str().unwrap_or("");
+            // Format date nicely - shows only date part if present
+            let display_date = if date_str.len() >= 10 {
+                // Could format as "Dec 19, 2024" etc, but for now show YYYY-MM-DD
+                date_str[..10].to_string()
+            } else if date_str.is_empty() {
+                "—".to_string()
+            } else {
+                date_str.to_string()
+            };
             view! {
-                <span class="date-display">{date_str.to_string()}</span>
+                <span class="date-display">{display_date}</span>
             }.into_view()
         }
         "email" => {

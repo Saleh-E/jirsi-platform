@@ -272,7 +272,8 @@ fn EditForm(
                         let is_required = field.is_required;
                         
                         // Get initial value from record as serde_json::Value
-                        let initial_value = form_data.get()
+                        // Use get_untracked to prevent re-rendering on form_data changes
+                        let initial_value = form_data.get_untracked()
                             .get(&field_name)
                             .cloned()
                             .unwrap_or(serde_json::Value::Null);
@@ -304,6 +305,7 @@ fn EditForm(
                                     on_change=handle_change
                                     mode=InputMode::Edit
                                     z_index=1000
+                                    entity_type=entity_type.clone()
                                 />
                             </div>
                         }

@@ -15,6 +15,36 @@ use crate::state::AppState;
 use crate::error::ApiError;
 use super::workflows::execute_triggered_workflows;
 
+/// Helper function to parse date string from JSON value
+/// Handles "YYYY-MM-DD" format and ISO datetime strings
+fn parse_date_field(data: &serde_json::Value, field_name: &str) -> Option<chrono::NaiveDate> {
+    data.get(field_name)
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .and_then(|s| {
+            // Try YYYY-MM-DD format first
+            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                .ok()
+                .or_else(|| {
+                    // Also try ISO datetime format (take just the date part)
+                    if s.len() >= 10 {
+                        chrono::NaiveDate::parse_from_str(&s[..10], "%Y-%m-%d").ok()
+                    } else {
+                        None
+                    }
+                })
+        })
+}
+
+/// Helper to parse datetime field from JSON value
+fn parse_datetime_field(data: &serde_json::Value, field_name: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    data.get(field_name)
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
 pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/:entity_type", get(list_records))
@@ -365,6 +395,9 @@ async fn query_listings(
             "channel": row.try_get::<Option<String>, _>("channel").ok().flatten(),
             "channel_name": row.try_get::<Option<String>, _>("channel_name").ok().flatten(),
             "listing_price": row.try_get::<Option<f64>, _>("listing_price").ok().flatten(),
+            "listing_currency": row.try_get::<Option<String>, _>("listing_currency").ok().flatten(),
+            "start_date": row.try_get::<Option<chrono::NaiveDate>, _>("start_date").ok().flatten(),
+            "end_date": row.try_get::<Option<chrono::NaiveDate>, _>("end_date").ok().flatten(),
             "status": row.try_get::<Option<String>, _>("status").ok().flatten(),
             "featured": row.try_get::<Option<bool>, _>("featured").ok().flatten(),
         })
@@ -516,9 +549,9 @@ async fn query_tasks(
     let search_pattern = search.map(|s| format!("%{}%", s));
     
     let count_sql = if search.is_some() {
-        "SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1 AND deleted_at IS NULL AND title ILIKE $2"
+        "SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1 AND title ILIKE $2"
     } else {
-        "SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1 AND deleted_at IS NULL"
+        "SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1"
     };
     
     let count_row = if let Some(ref pattern) = search_pattern {
@@ -530,8 +563,8 @@ async fn query_tasks(
 
     let rows = if let Some(ref pattern) = search_pattern {
         sqlx::query(
-            r#"SELECT id, title, description, status, priority, due_date, completed_at, assigned_to, created_at
-               FROM tasks WHERE tenant_id = $1 AND deleted_at IS NULL AND title ILIKE $4
+            r#"SELECT id, title, description, status, priority, due_date, completed_at, assignee_id, created_at
+               FROM tasks WHERE tenant_id = $1 AND title ILIKE $4
                ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
         )
         .bind(tenant_id)
@@ -542,8 +575,8 @@ async fn query_tasks(
         .await
     } else {
         sqlx::query(
-            r#"SELECT id, title, description, status, priority, due_date, completed_at, assigned_to, created_at
-               FROM tasks WHERE tenant_id = $1 AND deleted_at IS NULL
+            r#"SELECT id, title, description, status, priority, due_date, completed_at, assignee_id, created_at
+               FROM tasks WHERE tenant_id = $1
                ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
         )
         .bind(tenant_id)
@@ -562,7 +595,7 @@ async fn query_tasks(
             "priority": row.try_get::<Option<String>, _>("priority").ok().flatten().unwrap_or("medium".to_string()),
             "due_date": row.try_get::<Option<chrono::NaiveDate>, _>("due_date").ok().flatten(),
             "completed_at": row.try_get::<Option<chrono::DateTime<Utc>>, _>("completed_at").ok().flatten(),
-            "assigned_to": row.try_get::<Option<Uuid>, _>("assigned_to").ok().flatten(),
+            "assignee_id": row.try_get::<Option<Uuid>, _>("assignee_id").ok().flatten(),
         })
     }).collect();
 
@@ -685,21 +718,194 @@ async fn create_record(
             .map_err(|e| ApiError::Internal(e.to_string()))?;
         }
         "task" => {
-            let due_date: Option<chrono::NaiveDate> = data.get("due_date")
+            // Parse due_date as DateTime
+            let due_date: Option<chrono::DateTime<Utc>> = data.get("due_date")
                 .and_then(|v| v.as_str())
-                .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .or_else(|| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                        .ok()
+                        .map(|d| d.and_hms_opt(12, 0, 0).unwrap().and_utc())));
+            
+            // Get default user for created_by (required field)
+            let created_by: Option<Uuid> = data.get("created_by")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok())
+                .or_else(|| {
+                    // Will be fetched asynchronously below
+                    None
+                });
+            
+            // If no created_by provided, get first user for this tenant
+            let created_by = if let Some(uid) = created_by {
+                uid
+            } else {
+                let default_user: Option<Uuid> = sqlx::query_scalar(
+                    "SELECT id FROM users WHERE tenant_id = $1 LIMIT 1"
+                )
+                .bind(query.tenant_id)
+                .fetch_optional(&state.pool)
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?;
+                
+                default_user.ok_or_else(|| 
+                    ApiError::BadRequest("No users found. Please create a user first.".to_string())
+                )?
+            };
             
             sqlx::query(
-                r#"INSERT INTO tasks (id, tenant_id, title, description, status, priority, due_date, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#
+                r#"INSERT INTO tasks (id, tenant_id, title, description, status, priority, task_type, due_date, created_by, created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"#
             )
             .bind(id)
             .bind(query.tenant_id)
             .bind(data.get("title").and_then(|v| v.as_str()).unwrap_or(""))
             .bind(data.get("description").and_then(|v| v.as_str()))
-            .bind(data.get("status").and_then(|v| v.as_str()).unwrap_or("pending"))
-            .bind(data.get("priority").and_then(|v| v.as_str()).unwrap_or("medium"))
+            .bind(data.get("status").and_then(|v| v.as_str()).unwrap_or("open"))
+            .bind(data.get("priority").and_then(|v| v.as_str()).unwrap_or("normal"))
+            .bind(data.get("task_type").and_then(|v| v.as_str()).unwrap_or("todo"))
             .bind(due_date)
+            .bind(created_by)
+            .bind(now)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "viewing" => {
+            // Parse dates - support both datetime and start/end time fields
+            let scheduled_at: Option<chrono::DateTime<Utc>> = data.get("scheduled_at")
+                .or_else(|| data.get("start_time"))
+                .and_then(|v| v.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .or_else(|| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M")
+                        .ok()
+                        .map(|ndt| ndt.and_utc())));
+            
+            let scheduled_end: Option<chrono::DateTime<Utc>> = data.get("scheduled_end")
+                .or_else(|| data.get("end_time"))
+                .and_then(|v| v.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .or_else(|| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M")
+                        .ok()
+                        .map(|ndt| ndt.and_utc())));
+            
+            // Get property_id - required
+            let property_id: Option<Uuid> = data.get("property_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            
+            // Get contact_id - required
+            let contact_id: Option<Uuid> = data.get("contact_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            
+            // Get agent_id - optional
+            let agent_id: Option<Uuid> = data.get("agent_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            
+            sqlx::query(
+                r#"INSERT INTO viewings (id, tenant_id, property_id, contact_id, agent_id, scheduled_at, 
+                   scheduled_start, scheduled_end, duration_minutes, status, feedback, created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(property_id)
+            .bind(contact_id)
+            .bind(agent_id)
+            .bind(scheduled_at.unwrap_or(now))
+            .bind(scheduled_at)
+            .bind(scheduled_end)
+            .bind(data.get("duration_minutes").and_then(|v| v.as_i64()).unwrap_or(30) as i32)
+            .bind(data.get("status").and_then(|v| v.as_str()).unwrap_or("scheduled"))
+            .bind(data.get("feedback").and_then(|v| v.as_str()))
+            .bind(now)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "listing" => {
+            // Get property_id - required
+            let property_id: Option<Uuid> = data.get("property_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            
+            // Parse dates
+            let start_date: chrono::NaiveDate = data.get("start_date")
+                .and_then(|v| v.as_str())
+                .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+                .unwrap_or_else(|| now.date_naive());
+            
+            let end_date: Option<chrono::NaiveDate> = data.get("end_date")
+                .and_then(|v| v.as_str())
+                .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+            
+            sqlx::query(
+                r#"INSERT INTO listings (id, tenant_id, property_id, channel, channel_name, external_url,
+                   listing_price, listing_currency, start_date, end_date, status, headline, promo_price, 
+                   description, featured, created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(property_id)
+            .bind(data.get("channel").and_then(|v| v.as_str()))
+            .bind(data.get("channel_name").and_then(|v| v.as_str()))
+            .bind(data.get("external_url").and_then(|v| v.as_str()))
+            .bind(data.get("listing_price").or_else(|| data.get("list_price")).and_then(|v| v.as_f64()))
+            .bind(data.get("listing_currency").and_then(|v| v.as_str()).unwrap_or("AED"))
+            .bind(start_date)
+            .bind(end_date)
+            .bind(data.get("status").and_then(|v| v.as_str()).unwrap_or("draft"))
+            .bind(data.get("headline").and_then(|v| v.as_str()))
+            .bind(data.get("promo_price").or_else(|| data.get("promotional_price")).and_then(|v| v.as_f64()))
+            .bind(data.get("description").and_then(|v| v.as_str()))
+            .bind(data.get("featured").and_then(|v| v.as_bool()).unwrap_or(false))
+            .bind(now)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "offer" => {
+            // Get property_id - required
+            let property_id: Option<Uuid> = data.get("property_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            
+            // Get contact_id - required
+            let contact_id: Option<Uuid> = data.get("contact_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            
+            // Get deal_id - optional
+            let deal_id: Option<Uuid> = data.get("deal_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            
+            sqlx::query(
+                r#"INSERT INTO offers (id, tenant_id, property_id, contact_id, deal_id, offer_amount,
+                   currency, status, offer_type, financing_type, deposit_amount, conditions, 
+                   created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(property_id)
+            .bind(contact_id)
+            .bind(deal_id)
+            .bind(data.get("offer_amount").and_then(|v| v.as_f64()).unwrap_or(0.0))
+            .bind(data.get("currency").and_then(|v| v.as_str()).unwrap_or("USD"))
+            .bind(data.get("status").and_then(|v| v.as_str()).unwrap_or("draft"))
+            .bind(data.get("offer_type").and_then(|v| v.as_str()))
+            .bind(data.get("financing_type").or_else(|| data.get("finance_type")).and_then(|v| v.as_str()))
+            .bind(data.get("deposit_amount").and_then(|v| v.as_f64()))
+            .bind(data.get("conditions").and_then(|v| v.as_str()))
             .bind(now)
             .bind(now)
             .execute(&state.pool)
@@ -767,6 +973,40 @@ async fn get_record(
                 .await
                 .map_err(|e| ApiError::Internal(e.to_string()))?
         }
+        "deal" => {
+            sqlx::query(
+                r#"SELECT id, name, amount, stage, expected_close_date, created_at, updated_at
+                   FROM deals WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
+            )
+                .bind(id)
+                .bind(query.tenant_id)
+                .fetch_optional(&state.pool)
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?
+        }
+        "task" => {
+            sqlx::query(
+                r#"SELECT id, title, description, status, priority, due_date, completed_at, assignee_id, created_at, updated_at
+                   FROM tasks WHERE id = $1 AND tenant_id = $2"#
+            )
+                .bind(id)
+                .bind(query.tenant_id)
+                .fetch_optional(&state.pool)
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?
+        }
+        "listing" => {
+            sqlx::query(
+                r#"SELECT id, property_id, channel, channel_name, listing_price, listing_currency,
+                          start_date, end_date, status, featured, created_at, updated_at
+                   FROM listings WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
+            )
+                .bind(id)
+                .bind(query.tenant_id)
+                .fetch_optional(&state.pool)
+                .await
+                .map_err(|e| ApiError::Internal(e.to_string()))?
+        }
         _ => None,
     };
 
@@ -804,6 +1044,35 @@ async fn get_record(
                     "rent_amount": r.try_get::<Option<f64>, _>("rent_amount").ok().flatten(),
                     "currency": r.try_get::<Option<String>, _>("currency").ok().flatten(),
                     "description": r.try_get::<Option<String>, _>("description").ok().flatten(),
+                }),
+                "deal" => serde_json::json!({
+                    "id": r.try_get::<Uuid, _>("id").unwrap_or_default(),
+                    "name": r.try_get::<String, _>("name").unwrap_or_default(),
+                    "amount": r.try_get::<Option<i64>, _>("amount").ok().flatten(),
+                    "stage": r.try_get::<String, _>("stage").unwrap_or_default(),
+                    "expected_close_date": r.try_get::<Option<chrono::NaiveDate>, _>("expected_close_date").ok().flatten(),
+                }),
+                "task" => serde_json::json!({
+                    "id": r.try_get::<Uuid, _>("id").unwrap_or_default(),
+                    "title": r.try_get::<String, _>("title").unwrap_or_default(),
+                    "description": r.try_get::<Option<String>, _>("description").ok().flatten(),
+                    "status": r.try_get::<Option<String>, _>("status").ok().flatten().unwrap_or("pending".to_string()),
+                    "priority": r.try_get::<Option<String>, _>("priority").ok().flatten().unwrap_or("medium".to_string()),
+                    "due_date": r.try_get::<Option<chrono::DateTime<Utc>>, _>("due_date").ok().flatten(),
+                    "completed_at": r.try_get::<Option<chrono::DateTime<Utc>>, _>("completed_at").ok().flatten(),
+                    "assignee_id": r.try_get::<Option<Uuid>, _>("assignee_id").ok().flatten(),
+                }),
+                "listing" => serde_json::json!({
+                    "id": r.try_get::<Uuid, _>("id").unwrap_or_default(),
+                    "property_id": r.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
+                    "channel": r.try_get::<Option<String>, _>("channel").ok().flatten(),
+                    "channel_name": r.try_get::<Option<String>, _>("channel_name").ok().flatten(),
+                    "listing_price": r.try_get::<Option<f64>, _>("listing_price").ok().flatten(),
+                    "listing_currency": r.try_get::<Option<String>, _>("listing_currency").ok().flatten(),
+                    "start_date": r.try_get::<Option<chrono::NaiveDate>, _>("start_date").ok().flatten(),
+                    "end_date": r.try_get::<Option<chrono::NaiveDate>, _>("end_date").ok().flatten(),
+                    "status": r.try_get::<Option<String>, _>("status").ok().flatten(),
+                    "featured": r.try_get::<Option<bool>, _>("featured").ok().flatten(),
                 }),
                 _ => serde_json::json!({}),
             };
@@ -875,6 +1144,150 @@ async fn update_record(
             .bind(data.get("price").and_then(|v| v.as_f64()))
             .bind(data.get("rent_amount").and_then(|v| v.as_f64()))
             .bind(data.get("description").and_then(|v| v.as_str()))
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "company" => {
+            sqlx::query(
+                r#"UPDATE companies SET 
+                   name = COALESCE($3, name),
+                   domain = COALESCE($4, domain),
+                   industry = COALESCE($5, industry),
+                   phone = COALESCE($6, phone),
+                   updated_at = $7
+                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(data.get("name").and_then(|v| v.as_str()))
+            .bind(data.get("domain").and_then(|v| v.as_str()))
+            .bind(data.get("industry").and_then(|v| v.as_str()))
+            .bind(data.get("phone").and_then(|v| v.as_str()))
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "deal" => {
+            let expected_close_date = parse_date_field(&data, "expected_close_date");
+            sqlx::query(
+                r#"UPDATE deals SET 
+                   name = COALESCE($3, name),
+                   amount = COALESCE($4, amount),
+                   stage = COALESCE($5, stage),
+                   expected_close_date = COALESCE($6, expected_close_date),
+                   updated_at = $7
+                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(data.get("name").and_then(|v| v.as_str()))
+            .bind(data.get("amount").and_then(|v| v.as_f64()))
+            .bind(data.get("stage").and_then(|v| v.as_str()))
+            .bind(expected_close_date)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "task" => {
+            let due_date = parse_date_field(&data, "due_date");
+            sqlx::query(
+                r#"UPDATE tasks SET 
+                   title = COALESCE($3, title),
+                   description = COALESCE($4, description),
+                   status = COALESCE($5, status),
+                   priority = COALESCE($6, priority),
+                   due_date = COALESCE($7, due_date),
+                   updated_at = $8
+                   WHERE id = $1 AND tenant_id = $2"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(data.get("title").and_then(|v| v.as_str()))
+            .bind(data.get("description").and_then(|v| v.as_str()))
+            .bind(data.get("status").and_then(|v| v.as_str()))
+            .bind(data.get("priority").and_then(|v| v.as_str()))
+            .bind(due_date)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "viewing" => {
+            sqlx::query(
+                r#"UPDATE viewings SET 
+                   status = COALESCE($3, status),
+                   feedback = COALESCE($4, feedback),
+                   rating = COALESCE($5, rating),
+                   outcome = COALESCE($6, outcome),
+                   updated_at = $7
+                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(data.get("status").and_then(|v| v.as_str()))
+            .bind(data.get("feedback").and_then(|v| v.as_str()))
+            .bind(data.get("rating").and_then(|v| v.as_i64()).map(|v| v as i32))
+            .bind(data.get("outcome").and_then(|v| v.as_str()))
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "listing" => {
+            // Parse date fields using helper
+            let start_date = parse_date_field(&data, "start_date");
+            let end_date = parse_date_field(&data, "end_date");
+
+            sqlx::query(
+                r#"UPDATE listings SET 
+                   status = COALESCE($3, status),
+                   listing_price = COALESCE($4, listing_price),
+                   listing_currency = COALESCE($5, listing_currency),
+                   featured = COALESCE($6, featured),
+                   channel = COALESCE($7, channel),
+                   channel_name = COALESCE($8, channel_name),
+                   start_date = COALESCE($9, start_date),
+                   end_date = COALESCE($10, end_date),
+                   updated_at = $11
+                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(data.get("status").and_then(|v| v.as_str()))
+            .bind(data.get("listing_price").and_then(|v| v.as_f64()))
+            .bind(data.get("listing_currency").and_then(|v| v.as_str()))
+            .bind(data.get("featured").and_then(|v| v.as_bool()))
+            .bind(data.get("channel").and_then(|v| v.as_str()))
+            .bind(data.get("channel_name").and_then(|v| v.as_str()))
+            .bind(start_date)
+            .bind(end_date)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?;
+        }
+        "offer" => {
+            sqlx::query(
+                r#"UPDATE offers SET 
+                   status = COALESCE($3, status),
+                   offer_amount = COALESCE($4, offer_amount),
+                   currency = COALESCE($5, currency),
+                   conditions = COALESCE($6, conditions),
+                   financing_type = COALESCE($7, financing_type),
+                   updated_at = $8
+                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
+            )
+            .bind(id)
+            .bind(query.tenant_id)
+            .bind(data.get("status").and_then(|v| v.as_str()))
+            .bind(data.get("offer_amount").and_then(|v| v.as_f64()))
+            .bind(data.get("currency").and_then(|v| v.as_str()))
+            .bind(data.get("conditions").and_then(|v| v.as_str()))
+            .bind(data.get("financing_type").and_then(|v| v.as_str()))
             .bind(now)
             .execute(&state.pool)
             .await
