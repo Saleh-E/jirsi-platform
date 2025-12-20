@@ -17,6 +17,11 @@ CREATE TABLE tenants (
 CREATE INDEX idx_tenants_subdomain ON tenants(subdomain);
 CREATE INDEX idx_tenants_custom_domain ON tenants(custom_domain) WHERE custom_domain IS NOT NULL;
 
+-- Create system tenant for metadata
+INSERT INTO tenants (id, name, subdomain, plan, status, settings)
+VALUES ('b128c8da-6e56-485d-b2fe-e45fb7492b2e', 'System', 'system', 'system', 'active', '{}')
+ON CONFLICT DO NOTHING;
+
 -- Users
 CREATE TABLE users (
     id UUID PRIMARY KEY,

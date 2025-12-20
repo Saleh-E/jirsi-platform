@@ -8,3 +8,4 @@ pub mod config;
 pub mod middleware;
 pub mod seed;
 pub mod events;
+pub mod ai;

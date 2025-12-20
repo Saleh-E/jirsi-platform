@@ -21,6 +21,7 @@ mod state;
 mod error;
 mod seed;
 mod middleware;
+pub mod ai;
 
 use state::AppState;
 
@@ -37,8 +38,10 @@ async fn main() -> anyhow::Result<()> {
     let config = config::Config::from_env();
 
     // Create database pool
+    // Create database pool
     let pool = PgPoolOptions::new()
-        .max_connections(10)
+        .max_connections(5)
+        .acquire_timeout(std::time::Duration::from_secs(30))
         .connect(&config.database_url)
         .await?;
 
@@ -74,7 +77,11 @@ async fn main() -> anyhow::Result<()> {
         // WebSocket routes (real-time events)
         .merge(routes::ws::routes())
         // API routes (authenticated)
-        .nest("/api/v1", routes::api_routes())
+        .nest("/api/v1", routes::api_routes()
+            .layer(axum_middleware::from_fn_with_state(
+                state.clone(),
+                middleware::tenant::resolve_tenant,
+            )))
         // Add state
         .with_state(state)
         // Add middleware

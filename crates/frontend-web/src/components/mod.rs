@@ -27,4 +27,5 @@ pub mod bottom_nav;
 pub mod mobile_card;
 pub mod bottom_sheet;
 pub mod smart_input;
+pub mod node_graph;
 

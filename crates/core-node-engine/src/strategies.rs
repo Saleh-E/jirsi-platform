@@ -3,6 +3,7 @@
 //! Provides atomic, race-condition safe agent assignment for workflow automation.
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "backend")]
 use sqlx::PgPool;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -26,8 +27,10 @@ impl Default for AssignmentStrategy {
 }
 
 /// Service for handling agent assignment with various strategies
+#[cfg(feature = "backend")]
 pub struct AssignmentService;
 
+#[cfg(feature = "backend")]
 impl AssignmentService {
     /// Find the next agent using the specified strategy
     pub async fn find_agent(

@@ -213,5 +213,16 @@ pub fn get_node_templates() -> Vec<NodeCategory> {
                 },
             ],
         },
+        NodeCategory {
+            name: "AI & Agents".to_string(),
+            icon: "🤖".to_string(),
+            nodes: vec![
+                NodeTemplate {
+                    node_type: "ai_generate".to_string(),
+                    label: "AI Generate".to_string(),
+                    description: "Generate text using LLM".to_string(),
+                },
+            ],
+        },
     ]
 }

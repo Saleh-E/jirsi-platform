@@ -13,7 +13,7 @@ impl Config {
     pub fn from_env() -> Self {
         Self {
             database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5433/saas_platform".to_string()),
+                .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:15433/saas_platform".to_string()),
             port: env::var("PORT")
                 .ok()
                 .and_then(|p| p.parse().ok())

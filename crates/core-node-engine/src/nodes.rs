@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::executor::ExecutionContext;
+use crate::context::ExecutionContext;
 use crate::NodeEngineError;
 
 /// Trait for node handlers
@@ -39,6 +39,7 @@ impl NodeRegistry {
         registry.register(NodeType::DataSetField, Arc::new(SetFieldHandler));
         registry.register(NodeType::ActionSendEmail, Arc::new(SendEmailHandler));
         registry.register(NodeType::ConditionIf, Arc::new(ConditionIfHandler));
+        registry.register(NodeType::AiGenerate, Arc::new(AiGenerateHandler));
         
         registry
     }
@@ -173,8 +174,8 @@ impl NodeHandler for ConditionIfHandler {
         
         // Get old value for change detection (from trigger context)
         let old_value = context.values.get("$trigger")
-            .and_then(|t| t.get("old_values"))
-            .and_then(|old| old.get(condition_field))
+            .and_then(|t: &serde_json::Value| t.get("old_values"))
+            .and_then(|old: &serde_json::Value| old.get(condition_field))
             .cloned();
         
         let result = match operator {
@@ -361,7 +362,7 @@ impl NodeHandler for UpdateRecordHandler {
         let record_id = inputs.get("record_id")
             .or_else(|| {
                 context.values.get("$trigger")
-                    .and_then(|t| t.get("record_id"))
+                    .and_then(|t: &serde_json::Value| t.get("record_id"))
             })
             .cloned()
             .unwrap_or(Value::Null);
@@ -400,7 +401,7 @@ impl NodeHandler for DeleteRecordHandler {
         let record_id = inputs.get("record_id")
             .or_else(|| {
                 context.values.get("$trigger")
-                    .and_then(|t| t.get("record_id"))
+                    .and_then(|t: &serde_json::Value| t.get("record_id"))
             })
             .cloned()
             .unwrap_or(Value::Null);
@@ -412,5 +413,77 @@ impl NodeHandler for DeleteRecordHandler {
             "record_id": record_id,
             "deleted": true
         }))
+    }
+}
+
+/// AI Generate handler - generates text using LLM
+pub struct AiGenerateHandler;
+
+#[async_trait]
+impl NodeHandler for AiGenerateHandler {
+    async fn execute(
+        &self,
+        node: &NodeDef,
+        inputs: HashMap<String, Value>,
+        context: &mut ExecutionContext,
+    ) -> Result<Value, NodeEngineError> {
+        let prompt_template = node.config.get("prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+            
+        let system_prompt = node.config.get("system_prompt")
+            .and_then(|v| v.as_str());
+
+        // Simple template substitution: {{variable}}
+        let mut prompt = prompt_template.to_string();
+        for (key, val) in &inputs {
+            let placeholder = format!("{{{{{}}}}}", key);
+            let val_str = match val {
+                Value::String(s) => s.clone(),
+                _ => val.to_string(),
+            };
+            prompt = prompt.replace(&placeholder, &val_str);
+        }
+        
+        // Check for variables in context (like trigger data)
+        if let Some(trigger_data) = context.values.get("$trigger") {
+             if let Value::Object(map) = trigger_data {
+                for (key, val) in map {
+                    let placeholder = format!("{{{{trigger.{}}}}}", key);
+                    let val_str = match val {
+                        Value::String(s) => s.clone(),
+                        _ => val.to_string(),
+                    };
+                    prompt = prompt.replace(&placeholder, &val_str);
+                }
+             }
+        }
+        
+        tracing::info!(prompt = ?prompt, "Executing AI generation");
+
+        if let Some(ai_service) = &context.ai_service {
+            match ai_service.generate(&prompt, system_prompt).await {
+                Ok(generated_text) => {
+                    Ok(serde_json::json!({
+                        "text": generated_text,
+                        "generated": true
+                    }))
+                },
+                Err(e) => {
+                    tracing::error!(error = %e, "AI generation failed");
+                    Err(NodeEngineError::NodeExecutionFailed {
+                        node_id: node.id,
+                        message: format!("AI service error: {}", e),
+                    })
+                }
+            }
+        } else {
+            tracing::warn!("No AI service configured in context");
+            Ok(serde_json::json!({
+                "text": "AI Service not configured",
+                "generated": false,
+                "mock": true
+            }))
+        }
     }
 }

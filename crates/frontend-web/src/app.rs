@@ -3,7 +3,7 @@
 use leptos::*;
 use leptos_router::*;
 
-use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage, RegisterPage, ProfilePage, SettingsPage, ReportsPage, InboxPage, WorkflowEditorPage, WorkflowListPage};
+use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage, RegisterPage, ProfilePage, SettingsPage, ReportsPage, InboxPage, WorkflowEditorPage, WorkflowListPage, AutomationPage};
 use crate::pages::dashboard::DashboardPage;
 use crate::pages::public::{listings::PublicListingsPage, detail::PublicDetailPage};
 use crate::components::shell::Shell;
@@ -37,6 +37,7 @@ pub fn App() -> impl IntoView {
                     <Route path="app/dashboard" view=DashboardPage/>
                     <Route path="app/reports" view=ReportsPage/>
                     <Route path="app/inbox" view=InboxPage/>
+                    <Route path="app/automation" view=AutomationPage/>
                     
                     // Dynamic entity routes - MUST come last
                     <Route path="app/:app/entity/:entity" view=EntityListPage/>

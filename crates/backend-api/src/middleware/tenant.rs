@@ -62,6 +62,7 @@ pub struct TenantBranding {
 #[derive(Debug, Deserialize)]
 pub struct TenantQuery {
     pub tenant_slug: Option<String>,
+    pub tenant_id: Option<Uuid>,
 }
 
 /// Middleware to resolve tenant from various sources
@@ -74,6 +75,7 @@ pub async fn resolve_tenant(
     next: Next,
 ) -> Response {
     // 1. Check X-Tenant-Slug header
+    println!("DEBUG: resolve_tenant middleware called. Query: {:?}", query);
     let slug = request
         .headers()
         .get("X-Tenant-Slug")
@@ -83,16 +85,46 @@ pub async fn resolve_tenant(
     // 2. Fall back to Host header subdomain
     let slug = slug.or_else(|| extract_subdomain(&host));
     
-    // 3. Fall back to query parameter
+    // 3. Fall back to query parameter (slug)
     let slug = slug.or(query.tenant_slug);
     
+    // 4. Fall back to query parameter (id)
+    if slug.is_none() {
+        if let Some(id) = query.tenant_id {
+            match resolve_tenant_by_id(&state.pool, id).await {
+                Ok(Some(tenant)) => {
+                    request.extensions_mut().insert(tenant);
+                    return next.run(request).await;
+                }
+                Ok(None) => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(serde_json::json!({
+                            "error": "Tenant not found",
+                            "id": id
+                        }))
+                    ).into_response();
+                }
+                Err(e) => {
+                    tracing::error!("Database error resolving tenant by id: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "error": "Failed to resolve tenant"
+                        }))
+                    ).into_response();
+                }
+            }
+        }
+    }
+
     let slug = match slug {
         Some(s) if !s.is_empty() => s,
         _ => {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({
-                    "error": "Unable to determine tenant. Provide X-Tenant-Slug header, use subdomain, or add ?tenant_slug= query param"
+                    "error": "Unable to determine tenant. Provide X-Tenant-Slug header, use subdomain, or add ?tenant_slug= or ?tenant_id= query param"
                 }))
             ).into_response();
         }
@@ -161,6 +193,22 @@ async fn resolve_tenant_from_db(pool: &PgPool, subdomain: &str) -> Result<Option
         "#
     )
     .bind(subdomain)
+    .fetch_optional(pool)
+    .await?;
+    
+    Ok(result)
+}
+
+/// Query database for tenant by ID
+async fn resolve_tenant_by_id(pool: &PgPool, id: Uuid) -> Result<Option<ResolvedTenant>, sqlx::Error> {
+    let result = sqlx::query_as::<_, ResolvedTenant>(
+        r#"
+        SELECT id, name, subdomain, settings
+        FROM tenants
+        WHERE id = $1 AND status IN ('active', 'trial')
+        "#
+    )
+    .bind(id)
     .fetch_optional(pool)
     .await?;
     

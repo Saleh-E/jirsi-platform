@@ -117,6 +117,11 @@ fn render_node_form(node: NodeUI, on_update: Callback<(Uuid, Value)>) -> View {
         "assign_round_robin" | "assign_load_balanced" => {
             render_assignment_form(node_id, config, on_update).into_view()
         }
+
+        // AI Generate
+        "ai_generate" => {
+            render_ai_form(node_id, config, on_update).into_view()
+        }
         
         _ => {
             view! {
@@ -609,6 +614,54 @@ fn render_assignment_form(node_id: Uuid, config: Value, on_update: Callback<(Uui
                 <option value="support" selected=move || team_val.get() == "support">"Support Team"</option>
                 <option value="managers" selected=move || team_val.get() == "managers">"Managers Only"</option>
             </select>
+        </div>
+    }.into_view()
+}
+
+/// AI Generate form
+fn render_ai_form(node_id: Uuid, config: Value, on_update: Callback<(Uuid, Value)>) -> impl IntoView {
+    let prompt = config.get("prompt").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let system_prompt = config.get("system_prompt").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    
+    let (prompt_val, set_prompt) = create_signal(prompt);
+    let (sys_val, set_sys) = create_signal(system_prompt);
+    
+    let on_update_clone = on_update.clone();
+
+    view! {
+        <div class="inspector-section">
+            <label class="inspector-label">"System Prompt"</label>
+            <p class="inspector-help">"Instructions for the AI assistant"</p>
+             <textarea 
+                class="inspector-textarea"
+                placeholder="You are a helpful CRM assistant..."
+                prop:value=sys_val
+                on:input=move |ev| set_sys.set(event_target_value(&ev))
+                on:blur=move |_| {
+                    let new_config = json!({
+                        "prompt": prompt_val.get(),
+                        "system_prompt": sys_val.get()
+                    });
+                    on_update.call((node_id, new_config));
+                }
+            ></textarea>
+        </div>
+        <div class="inspector-section">
+            <label class="inspector-label">"User Prompt Template"</label>
+            <p class="inspector-help">"Use {{variable}} to insert values"</p>
+            <textarea 
+                class="inspector-textarea code"
+                placeholder="Summarize this email: {{email_body}}"
+                prop:value=prompt_val
+                on:input=move |ev| set_prompt.set(event_target_value(&ev))
+                on:blur=move |_| {
+                    let new_config = json!({
+                        "prompt": prompt_val.get(),
+                        "system_prompt": sys_val.get()
+                    });
+                    on_update_clone.call((node_id, new_config));
+                }
+            ></textarea>
         </div>
     }.into_view()
 }

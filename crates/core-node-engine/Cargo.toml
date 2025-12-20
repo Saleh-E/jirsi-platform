@@ -6,8 +6,6 @@ edition.workspace = true
 
 [dependencies]
 core-models = { path = "../core-models" }
-sqlx = { workspace = true }
-tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
@@ -15,4 +13,12 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 async-trait = "0.1"
+
+# Backend-only dependencies
+sqlx = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[features]
+default = ["backend"]
+backend = ["dep:sqlx", "dep:tokio"]
 

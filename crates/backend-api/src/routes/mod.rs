@@ -21,6 +21,7 @@ pub mod inbox;
 pub mod tenant;
 pub mod webhooks;
 pub mod integrations;
+pub mod records;
 pub mod ws;
 
 /// Build all API routes
@@ -51,7 +52,10 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         // Workflow graph routes (visual editor)
         .nest("/workflows", workflow_graph::routes())
         // Integration settings routes
+        // Integration settings routes
         .merge(integrations::routes())
+        // Generic Record API (RLS enabled)
+        .merge(records::routes())
 }
 
 

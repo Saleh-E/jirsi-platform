@@ -70,6 +70,8 @@ pub fn get_node_color(node_type: &str) -> &'static str {
         "#3b82f6" // blue
     } else if node_type.starts_with("assign") {
         "#a855f7" // purple
+    } else if node_type.starts_with("ai") {
+        "#f43f5e" // rose
     } else {
         "#6b7280" // gray
     }
@@ -90,6 +92,7 @@ pub fn get_node_icon(node_type: &str) -> &'static str {
         "action_create_record" => "➕",
         "assign_round_robin" => "🔄",
         "assign_load_balanced" => "⚖️",
+        "ai_generate" => "✨",
         _ => "⚙️",
     }
 }

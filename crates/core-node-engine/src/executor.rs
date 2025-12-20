@@ -12,12 +12,17 @@ use uuid::Uuid;
 
 use crate::nodes::NodeRegistry;
 use crate::NodeEngineError;
+use crate::context::ExecutionContext;
+
+use crate::ai::AiService;
+use std::sync::Arc;
 
 /// Graph executor - runs node graphs
 #[allow(dead_code)]
 pub struct GraphExecutor {
     pool: PgPool,
     registry: NodeRegistry,
+    ai_service: Option<Arc<dyn AiService>>,
 }
 
 impl GraphExecutor {
@@ -25,7 +30,13 @@ impl GraphExecutor {
         Self {
             pool,
             registry: NodeRegistry::new(),
+            ai_service: None,
         }
+    }
+
+    pub fn with_ai_service(mut self, service: Arc<dyn AiService>) -> Self {
+        self.ai_service = Some(service);
+        self
     }
 
     /// Execute a graph for a given trigger event
@@ -60,6 +71,7 @@ impl GraphExecutor {
         let mut context = ExecutionContext {
             values: HashMap::new(),
             logs: Vec::new(),
+            ai_service: self.ai_service.clone(),
         };
 
         // Initialize with trigger data
@@ -219,8 +231,4 @@ impl GraphExecutor {
     }
 }
 
-/// Execution context - holds values during graph execution
-pub struct ExecutionContext {
-    pub values: HashMap<String, Value>,
-    pub logs: Vec<Value>,
-}
+

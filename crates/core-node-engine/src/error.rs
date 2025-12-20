@@ -32,6 +32,7 @@ pub enum NodeEngineError {
     #[error("Max retries exceeded")]
     MaxRetriesExceeded,
 
+    #[cfg(feature = "backend")]
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 }
