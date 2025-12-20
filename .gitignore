@@ -32,3 +32,5 @@ node_modules/
 
 # Generated
 *.generated.*
+
+crates/frontend-web/dist/
