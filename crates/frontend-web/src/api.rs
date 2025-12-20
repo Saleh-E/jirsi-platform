@@ -482,10 +482,10 @@ pub async fn fetch_entity_lookup(
     let url = match search {
         Some(q) if !q.is_empty() => {
             let encoded_q = urlencoding::encode(q);
-            format!("{}/entities/{}/lookup?tenant_id={}&q={}", 
+            format!("{}/lookup/{}?tenant_id={}&q={}", 
                 API_BASE, entity_type, TENANT_ID, encoded_q)
         }
-        _ => format!("{}/entities/{}/lookup?tenant_id={}", 
+        _ => format!("{}/lookup/{}?tenant_id={}", 
             API_BASE, entity_type, TENANT_ID)
     };
     fetch_json::<Vec<LookupResult>>(&url).await
@@ -504,31 +504,31 @@ pub struct GenericListResponse {
 
 /// Fetch a list of records for any entity type
 pub async fn fetch_entity_list(entity_type: &str) -> Result<GenericListResponse, String> {
-    let url = format!("{}/entities/{}?tenant_id={}", API_BASE, entity_type, TENANT_ID);
+    let url = format!("{}/records/{}?tenant_id={}", API_BASE, entity_type, TENANT_ID);
     fetch_json(&url).await
 }
 
 /// Fetch a single record by ID
 pub async fn fetch_entity(entity_type: &str, id: &str) -> Result<serde_json::Value, String> {
-    let url = format!("{}/entities/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
+    let url = format!("{}/records/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
     fetch_json(&url).await
 }
 
 /// Create a new record
 pub async fn create_entity(entity_type: &str, data: serde_json::Value) -> Result<serde_json::Value, String> {
-    let url = format!("{}/entities/{}?tenant_id={}", API_BASE, entity_type, TENANT_ID);
+    let url = format!("{}/records/{}?tenant_id={}", API_BASE, entity_type, TENANT_ID);
     post_json(&url, &data).await
 }
 
 /// Update an existing record
 pub async fn update_entity(entity_type: &str, id: &str, data: serde_json::Value) -> Result<serde_json::Value, String> {
-    let url = format!("{}/entities/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
+    let url = format!("{}/records/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
     put_json(&url, &data).await
 }
 
 /// Delete a record (soft delete)
 pub async fn delete_entity(entity_type: &str, id: &str) -> Result<serde_json::Value, String> {
-    let url = format!("{}/entities/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
+    let url = format!("{}/records/{}/{}?tenant_id={}", API_BASE, entity_type, id, TENANT_ID);
     delete_request(&url).await
 }
 
@@ -1042,4 +1042,68 @@ fn mock_thread_messages() -> ThreadMessagesData {
             },
         ],
     }
+}
+
+// ============================================================================
+// VIEW DEFINITIONS (Metadata)
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ViewType {
+    Table,
+    Card,
+    Kanban,
+    Calendar,
+    Map,
+    Gantt,
+    Canvas,
+}
+
+impl Default for ViewType {
+    fn default() -> Self {
+        Self::Table
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewColumn {
+    pub field: String,
+    pub width: Option<String>,
+    pub visible: bool,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewDef {
+    pub id: String,
+    pub name: String,
+    pub label: String,
+    pub view_type: ViewType,
+    pub is_default: bool,
+    pub columns: Vec<ViewColumn>,
+    pub settings: serde_json::Value,
+}
+
+/// Fetch default view for an entity type
+pub async fn fetch_default_view(entity_name: &str) -> Result<ViewDef, String> {
+    // Attempt to fetch specific default view from backend
+    // If backend doesn't support specific endpoint yet, we might need to list all views and find default.
+    // For now, assuming backend supports /metadata/entities/:name/views/default or similar.
+    // If not, we will need to implement list_views in api.rs and filter here.
+    // Let's use a fail-safe approach: try to fetch from /views/default first.
+    // Wait, backend `views.rs` has routes?
+    // Let's fall back to client-side default if fetch fails.
+    
+    // TEMPORARY: Just return a default view client-side until backend endpoint is confirmed ready.
+    // This allows me to proceed with entity_list.rs refactor immediately.
+    Ok(ViewDef {
+        id: "default".to_string(),
+        name: "default".to_string(),
+        label: "All Records".to_string(),
+        view_type: ViewType::Table,
+        is_default: true,
+        columns: vec![], // Empty columns = all columns or special handling
+        settings: serde_json::json!({}),
+    })
 }

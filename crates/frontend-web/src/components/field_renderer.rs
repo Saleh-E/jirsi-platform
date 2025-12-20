@@ -6,6 +6,7 @@
 use leptos::*;
 use crate::api::{FieldDef, fetch_entity_lookup};
 use crate::components::smart_select::{SmartSelect, SelectOption};
+use crate::components::async_entity_select::{AsyncEntitySelect, AsyncEntityLabel};
 
 // ============================================================================
 // FIELD MODE - Defines rendering modes for fields
@@ -27,76 +28,7 @@ pub enum FieldMode {
 // ASYNC ENTITY SELECT - Uses lookup API for Link field dropdowns
 // ============================================================================
 
-/// Async entity select - fetches options from lookup endpoint
-/// This is the CRITICAL component for Link field dropdowns
-#[component]
-pub fn AsyncEntitySelect(
-    /// Target entity type (e.g., "property", "contact")
-    target_entity: String,
-    /// Currently selected value (UUID)
-    #[prop(optional)] value: Option<String>,
-    /// Callback when selection changes
-    #[prop(into)] on_change: Callback<String>,
-    /// Placeholder text
-    #[prop(optional)] placeholder: Option<String>,
-    /// Whether the field is disabled
-    #[prop(optional)] disabled: bool,
-) -> impl IntoView {
-    let (options, set_options) = create_signal::<Vec<SelectOption>>(Vec::new());
-    let (loading, set_loading) = create_signal(true);
-    let (selected_value, set_selected_value) = create_signal(value.clone());
-    
-    let target_entity_stored = store_value(target_entity.clone());
-    
-    // Fetch all options on mount (SmartSelect handles client-side filtering)
-    create_effect(move |_| {
-        let entity = target_entity_stored.get_value();
-        spawn_local(async move {
-            set_loading.set(true);
-            match fetch_entity_lookup(&entity, None).await {
-                Ok(results) => {
-                    let opts: Vec<SelectOption> = results
-                        .into_iter()
-                        .map(|r| SelectOption::new(r.id, r.label))
-                        .collect();
-                    set_options.set(opts);
-                }
-                Err(e) => {
-                    web_sys::console::error_1(&format!("Lookup error: {}", e).into());
-                    set_options.set(vec![]);
-                }
-            }
-            set_loading.set(false);
-        });
-    });
-    
-    // Handle selection change
-    let handle_change = move |val: String| {
-        set_selected_value.set(Some(val.clone()));
-        on_change.call(val);
-    };
-    
-    view! {
-        <div class="async-entity-select">
-            {move || {
-                if loading.get() && options.get().is_empty() {
-                    view! { <span class="loading-indicator">"Loading..."</span> }.into_view()
-                } else {
-                    view! {
-                        <SmartSelect
-                            options=options.get()
-                            value=selected_value.get().unwrap_or_default()
-                            on_change=handle_change
-                            allow_search=true
-                            placeholder=placeholder.clone().unwrap_or_else(|| "Select...".to_string())
-                            disabled=disabled
-                        />
-                    }.into_view()
-                }
-            }}
-        </div>
-    }
-}
+// Inline AsyncEntitySelect removed in favor of crate::components::async_entity_select::AsyncEntitySelect
 
 /// Renders a field value based on its FieldDef type
 /// This is the core component for metadata-driven rendering
@@ -110,14 +42,15 @@ pub fn FieldValueRenderer(
     
     view! {
         {move || {
-            render_field_value(&field_type, &value, editable)
+            render_field_value(&field, &value, editable)
         }}
     }
 }
 
 /// Render field value based on type
-fn render_field_value(field_type: &str, value: &serde_json::Value, _editable: bool) -> impl IntoView {
-    match field_type {
+fn render_field_value(field: &FieldDef, value: &serde_json::Value, _editable: bool) -> impl IntoView {
+    let field_type = field.get_field_type();
+    match field_type.as_str() {
         // Image - render as img tag
         "image" => {
             let url = value.as_str().unwrap_or("").to_string();
@@ -163,14 +96,24 @@ fn render_field_value(field_type: &str, value: &serde_json::Value, _editable: bo
             }.into_view()
         }
         
-        // Link - render as clickable link
+        // Link - render as AsyncEntityLabel
         "link" => {
-            // For now, just show the ID - in practice this would resolve to a name
             let id = value.as_str().unwrap_or("").to_string();
-            let short_id = if id.len() > 8 { &id[..8] } else { &id };
+            if id.is_empty() {
+                return view! { <span>"-"</span> }.into_view();
+            }
+
+             // Extract target entity from field definition
+             // field.field_type is JSON: {"type": "Link", "target": "contact"}
+             let target = field.field_type.as_object()
+                 .and_then(|o| o.get("target"))
+                 .and_then(|v| v.as_str())
+                 .unwrap_or("contact") // Fallback
+                 .to_string();
+
             view! {
-                <a href=format!("#/record/{}", id) class="field-link">
-                    {short_id.to_string()}"..."
+                 <a href=format!("#/app/crm/entity//{}/record/{}", target, id) class="field-link" on:click=move |ev| ev.stop_propagation()>
+                    <AsyncEntityLabel entity_type=target id=id />
                 </a>
             }.into_view()
         }
@@ -325,11 +268,11 @@ pub fn EditableFieldValue(
             {move || {
                 let ft = field_type_for_edit.clone();
                 if editing.get() {
-                    render_edit_input(&ft, current_value.get(), set_editing, set_current_value, on_change.clone()).into_view()
+                    render_edit_input(&field, current_value.get(), set_editing, set_current_value, on_change.clone()).into_view()
                 } else {
                     view! {
                         <div class="editable-field-view" title="Double-click to edit">
-                            {render_field_value(&field_type, &current_value.get(), false)}
+                            {render_field_value(&field, &current_value.get(), false)}
                         </div>
                     }.into_view()
                 }
@@ -340,13 +283,14 @@ pub fn EditableFieldValue(
 
 /// Render the appropriate input control for editing based on field type
 fn render_edit_input(
-    field_type: &str,
+    field: &FieldDef,
     current_value: serde_json::Value,
     set_editing: WriteSignal<bool>,
     set_current_value: WriteSignal<serde_json::Value>,
     on_change: Callback<serde_json::Value>,
 ) -> impl IntoView {
-    match field_type {
+    let field_type = field.get_field_type(); 
+    match field_type.as_str() {
         // Boolean - render as checkbox
         "boolean" => {
             let checked = current_value.as_bool().unwrap_or(false);
@@ -505,6 +449,48 @@ fn render_edit_input(
                 />
             }.into_view()
         }
+
+        // Link - AsyncEntitySelect
+        "link" => {
+             // Extract target entity from field definition
+             // field.field_type is JSON: {"type": "Link", "target": "contact"}
+             let target = field.field_type.as_object()
+                 .and_then(|o| o.get("target"))
+                 .and_then(|v| v.as_str())
+                 .unwrap_or("contact") // Fallback
+                 .to_string();
+             
+             let val = current_value.as_str().map(|s| {
+                 uuid::Uuid::parse_str(s).ok()
+             }).flatten();
+             
+             // Create a signal for the component to update
+             // We need to sync this signal back to set_current_value/on_change
+             let link_val = create_rw_signal(val);
+             
+             // Effect to propagate changes back to parent
+             create_effect(move |_| {
+                 if let Some(uid) = link_val.get() {
+                     let json_val = serde_json::Value::String(uid.to_string());
+                     set_current_value.set(json_val.clone());
+                     on_change.call(json_val);
+                     // We don't auto-close editing for links as user might want to see the new label?
+                     // But usually select = done.
+                     set_editing.set(false);
+                 }
+             });
+
+             view! {
+                 <div class="field-input-link-wrapper" style="min-width: 200px;">
+                     <AsyncEntitySelect
+                         entity_type=target
+                         value=link_val
+                         placeholder=format!("Select {}...", field.label)
+                     />
+                 </div>
+             }.into_view()
+        }
+
         
         // Default: Text input for all other types
         _ => {

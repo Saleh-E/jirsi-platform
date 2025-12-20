@@ -9,10 +9,10 @@
 
 use leptos::*;
 use crate::api::FieldDef as ApiFieldDef;
-use crate::models::ViewColumn;
+use crate::api::ViewColumn;
 use crate::api::{put_json, add_field_option, delete_field_option, API_BASE, TENANT_ID};
 use crate::components::smart_select::{SmartSelect, SelectOption};
-use crate::components::field_renderer::AsyncEntitySelect;
+use crate::components::async_entity_select::{AsyncEntitySelect, AsyncEntityLabel};
 
 /// Smart Table with inline editing support
 #[component]
@@ -207,6 +207,20 @@ fn SmartTableCell(
     let field_name_stored = store_value(field_name.clone());
     let row_id_stored = store_value(row_id.clone());
     let entity_type_stored = store_value(entity_type.clone());
+
+    // Extract target entity for Link fields
+    let target_entity = field_def.as_ref()
+        .and_then(|f| {
+             // field_type can be {"Link": {"target_entity": "property"}}
+             if let Some(obj) = f.field_type.as_object() {
+                 if let Some(link_obj) = obj.get("Link").and_then(|v| v.as_object()) {
+                     return link_obj.get("target_entity").and_then(|v| v.as_str()).map(|s| s.to_string());
+                 }
+             }
+             None
+        })
+        .unwrap_or_else(|| "entity".to_string());
+    let target_entity_stored = store_value(target_entity);
     
     // Use SHARED options from parent if provided, otherwise fall back to field_def options
     // This ensures all cells in the same column share the same options
@@ -532,31 +546,34 @@ fn SmartTableCell(
                             let current = local_value.get_value().as_str().unwrap_or("").to_string();
                             
                             // Get target entity from field_type definition
-                            let target_entity = field_def.as_ref()
-                                .and_then(|f| {
-                                    // field_type can be {"Link": {"target_entity": "property"}}
-                                    if let Some(obj) = f.field_type.as_object() {
-                                        if let Some(link_obj) = obj.get("Link").and_then(|v| v.as_object()) {
-                                            return link_obj.get("target_entity").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                        }
+                            let current = local_value.get_value().as_str().unwrap_or("").to_string();
+                            
+                            // Get target entity from stored value
+                            let target_entity = target_entity_stored.get_value();
+                            
+                            // Setup Signal adapter for AsyncEntitySelect (requires RwSignal<Option<Uuid>>)
+                            let initial_uuid = local_value.get_value().as_str()
+                                .and_then(|s| uuid::Uuid::parse_str(s).ok());
+                            let link_signal = create_rw_signal(initial_uuid);
+
+                            // Sync back to table cell value when changed
+                            create_effect(move |_| {
+                                if let Some(uid) = link_signal.get() {
+                                    // Verify it changed before saving to avoid loops/double save
+                                    let current_str = local_value.get_value().as_str().unwrap_or("").to_string();
+                                    if current_str != uid.to_string() {
+                                        local_value.set_value(serde_json::Value::String(uid.to_string()));
+                                        save_cell();
+                                        set_editing_cell.set(None);
                                     }
-                                    None
-                                })
-                                .unwrap_or_else(|| "entity".to_string());
-                            
-                            // Handle selection change and auto-save
-                            let handle_link_change = move |val: String| {
-                                local_value.set_value(serde_json::Value::String(val));
-                                save_cell();
-                                set_editing_cell.set(None);
-                            };
-                            
+                                }
+                            });
+
                             view! {
                                 <div class="cell-edit-wrapper cell-link-select" on:click=|ev| ev.stop_propagation()>
                                     <AsyncEntitySelect
-                                        target_entity=target_entity
-                                        value=current
-                                        on_change=handle_link_change
+                                        entity_type=target_entity
+                                        value=link_signal
                                         placeholder="Select...".to_string()
                                     />
                                 </div>
@@ -587,7 +604,15 @@ fn SmartTableCell(
                     }
                 } else {
                     // Display mode
-                    render_cell_display(&ft, &local_value.get_value())
+                    // Display mode
+                    match ft.to_lowercase().as_str() {
+                        "link" => {
+                            let current = local_value.get_value().as_str().unwrap_or("").to_string();
+                            let target = target_entity_stored.get_value();
+                            view! { <AsyncEntityLabel entity_type=target id=current /> }.into_view()
+                        },
+                        _ => render_cell_display(&ft, &local_value.get_value())
+                    }
                 }
             }}
         </td>

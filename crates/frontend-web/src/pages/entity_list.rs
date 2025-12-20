@@ -8,7 +8,7 @@
 use leptos::*;
 use leptos_router::*;
 use crate::api::{
-    fetch_field_defs, fetch_entity_list, FieldDef,
+    fetch_field_defs, fetch_entity_list, FieldDef, ViewColumn, ViewType, fetch_default_view
 };
 use crate::components::view_switcher::{ViewSwitcher, ViewDefResponse};
 use crate::components::kanban::{KanbanView, KanbanConfig};
@@ -17,7 +17,7 @@ use crate::components::map::{MapView, MapConfig};
 use crate::components::table::SmartTable;
 use crate::components::create_modal::CreateModal;
 use crate::context::mobile::use_mobile;
-use crate::models::ViewColumn;
+
 
 /// Main entity list page component
 #[component]
@@ -38,6 +38,9 @@ pub fn EntityListPage() -> impl IntoView {
     // View switching state
     let (current_view_type, set_current_view_type) = create_signal("table".to_string());
     let (current_view_settings, set_current_view_settings) = create_signal(serde_json::Value::Null);
+    
+    // NEW: Columns state driven by ViewDef
+    let (current_columns, set_current_columns) = create_signal(Vec::<ViewColumn>::new());
     
     // Sync view type from URL query param (reactive)
     create_effect(move |_| {
@@ -77,11 +80,23 @@ pub fn EntityListPage() -> impl IntoView {
         });
     });
     
-    // Get list columns (fields with show_in_list = true)
+    // Get list columns (Priority: ViewDef columns -> Fallback: show_in_list fields)
     let list_columns = move || {
+        let view_cols = current_columns.get();
+        if !view_cols.is_empty() {
+            return view_cols;
+        }
+        
+        // Fallback: Generate generic columns from fields marked show_in_list
         fields.get()
             .into_iter()
             .filter(|f| f.show_in_list)
+            .map(|f| ViewColumn {
+                field: f.name,
+                width: None,
+                visible: true,
+                sort_order: f.sort_order,
+            })
             .collect::<Vec<_>>()
     };
     
@@ -127,6 +142,7 @@ pub fn EntityListPage() -> impl IntoView {
                     let new_view = view_def.view_type.clone();
                     set_current_view_type.set(new_view.clone());
                     set_current_view_settings.set(view_def.settings.clone());
+                    set_current_columns.set(view_def.columns.clone());
                     
                     // Update URL query param
                     let etype = entity_type();
@@ -243,7 +259,6 @@ pub fn EntityListPage() -> impl IntoView {
                     },
                     _ => {
                         // Default: Table view (or Mobile Card view)
-                        let cols = list_columns();
                         
                         if is_mobile() {
                             // Mobile Card View
@@ -251,7 +266,9 @@ pub fn EntityListPage() -> impl IntoView {
                                 <div class="mobile-card-list">
                                     {move || {
                                         let etype = entity_type();
-                                        let cols = list_columns();
+                                        // Mobile view still needs to know which fields to show
+                                        // Uses same cols logic but renders differently
+                                        let cols_ref = list_columns(); 
                                         data.get().into_iter().map(|row| {
                                             let record_id = row.get("id")
                                                 .and_then(|v| v.as_str())
@@ -261,14 +278,14 @@ pub fn EntityListPage() -> impl IntoView {
                                             let row_path = format!("/app/crm/entity/{}/{}", etype_clone, record_id);
                                             
                                             // Get title from first column
-                                            let title = cols.first()
-                                                .and_then(|f| row.get(&f.name))
+                                            let title = cols_ref.first()
+                                                .and_then(|c| row.get(&c.field))
                                                 .map(|v| format_field_value(v, "text"))
                                                 .unwrap_or_else(|| "Untitled".to_string());
                                             
                                             // Get subtitle from second column
-                                            let subtitle = cols.get(1)
-                                                .and_then(|f| row.get(&f.name))
+                                            let subtitle = cols_ref.get(1)
+                                                .and_then(|c| row.get(&c.field))
                                                 .map(|v| format_field_value(v, "text"))
                                                 .unwrap_or_default();
                                             
@@ -325,19 +342,14 @@ pub fn EntityListPage() -> impl IntoView {
                         } else {
                             // Desktop Table View with SmartTable (inline editing)
                             let etype = entity_type();
-                            let cols_as_viewcolumns: Vec<ViewColumn> = cols.iter().map(|f| {
-                                ViewColumn {
-                                    field: f.name.clone(),
-                                    visible: true,
-                                    width: None,
-                                }
-                            }).collect();
+                            // Direct pass-through of ViewColumns
+                            let view_cols = list_columns();
                             let api_fields = fields.get();
                             let navigate = use_navigate();
                             
                             view! {
                                 <SmartTable
-                                    columns=cols_as_viewcolumns
+                                    columns=view_cols
                                     fields=api_fields
                                     data=data.get()
                                     entity_type=etype.clone()

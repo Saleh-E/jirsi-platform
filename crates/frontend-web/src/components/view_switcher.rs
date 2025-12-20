@@ -5,7 +5,7 @@
 use leptos::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsValue;
-use crate::api::{fetch_json, API_BASE, TENANT_ID};
+use crate::api::{fetch_json, API_BASE, TENANT_ID, ViewColumn};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ViewDefResponse {
@@ -15,6 +15,8 @@ pub struct ViewDefResponse {
     pub view_type: String,
     pub is_default: bool,
     pub settings: serde_json::Value,
+    #[serde(default)]
+    pub columns: Vec<ViewColumn>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -51,6 +53,7 @@ fn get_default_views() -> Vec<ViewDefResponse> {
             view_type: "table".to_string(),
             is_default: true,
             settings: serde_json::json!({}),
+            columns: vec![],
         },
         ViewDefResponse {
             id: "default_kanban".to_string(),
@@ -59,6 +62,7 @@ fn get_default_views() -> Vec<ViewDefResponse> {
             view_type: "kanban".to_string(),
             is_default: false,
             settings: serde_json::json!({"group_field": "lifecycle_stage"}),
+            columns: vec![],
         },
         ViewDefResponse {
             id: "default_calendar".to_string(),
@@ -67,6 +71,7 @@ fn get_default_views() -> Vec<ViewDefResponse> {
             view_type: "calendar".to_string(),
             is_default: false,
             settings: serde_json::json!({"date_field": "created_at"}),
+            columns: vec![],
         },
         ViewDefResponse {
             id: "default_map".to_string(),
@@ -75,6 +80,7 @@ fn get_default_views() -> Vec<ViewDefResponse> {
             view_type: "map".to_string(),
             is_default: false,
             settings: serde_json::json!({}),
+            columns: vec![],
         },
     ]
 }
