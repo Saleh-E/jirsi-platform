@@ -6,7 +6,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
 
 // Demo tenant ID (from seeded data)
-pub const TENANT_ID: &str = "b128c8da-6e56-485d-b2fe-e45fb7492b2e";
+pub const TENANT_ID: &str = "0e147821-5cbc-4a23-8bd8-3f5b1a784ea5";
 
 // Backend API base URL
 pub const API_BASE: &str = "http://localhost:3000/api/v1";

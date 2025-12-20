@@ -21,7 +21,7 @@ pub mod inbox;
 pub mod tenant;
 pub mod webhooks;
 pub mod integrations;
-pub mod records;
+
 pub mod ws;
 
 /// Build all API routes
@@ -34,7 +34,7 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         // Metadata routes (authentication enforced via extractors in handlers)
         .nest("/metadata", metadata::routes())
         // Entity CRUD routes (authentication enforced via extractors in handlers)
-        .nest("/entities", entities::routes())
+        .merge(entities::routes())
         // Association routes (linking records together)
         .nest("/associations", associations::routes())
         // Interactions routes (timeline/activities)
@@ -54,8 +54,7 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         // Integration settings routes
         // Integration settings routes
         .merge(integrations::routes())
-        // Generic Record API (RLS enabled)
-        .merge(records::routes())
+
 }
 
 

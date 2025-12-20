@@ -79,11 +79,22 @@ async fn seed_entity_metadata_tx(
     .await?;
 
     // Contact fields
-    seed_field_tx(tx, tenant_id, contact_id, "first_name", "First Name", "text", true, true, 1).await?;
-    seed_field_tx(tx, tenant_id, contact_id, "last_name", "Last Name", "text", true, true, 2).await?;
-    seed_field_tx(tx, tenant_id, contact_id, "email", "Email", "email", false, true, 3).await?;
-    seed_field_tx(tx, tenant_id, contact_id, "phone", "Phone", "phone", false, true, 4).await?;
-    seed_field_tx(tx, tenant_id, contact_id, "lifecycle_stage", "Lifecycle Stage", "select", false, true, 5).await?;
+    // Contact fields
+    seed_field_tx(tx, tenant_id, contact_id, "first_name", "First Name", "text", true, true, 1, None).await?;
+    seed_field_tx(tx, tenant_id, contact_id, "last_name", "Last Name", "text", true, true, 2, None).await?;
+    seed_field_tx(tx, tenant_id, contact_id, "email", "Email", "email", false, true, 3, None).await?;
+    seed_field_tx(tx, tenant_id, contact_id, "phone", "Phone", "phone", false, true, 4, None).await?;
+    
+    let lifecycle_options = serde_json::json!([
+        {"value": "subscriber", "label": "Subscriber"},
+        {"value": "lead", "label": "Lead"},
+        {"value": "marketing_qualified", "label": "Marketing Qualified"},
+        {"value": "opportunity", "label": "Opportunity"},
+        {"value": "customer", "label": "Customer"},
+        {"value": "evangelist", "label": "Evangelist"},
+        {"value": "other", "label": "Other"}
+    ]);
+    seed_field_tx(tx, tenant_id, contact_id, "lifecycle_stage", "Lifecycle Stage", "select", false, true, 5, Some(lifecycle_options)).await?;
 
     // Create Company entity type
     let company_id = Uuid::new_v4();
@@ -102,10 +113,21 @@ async fn seed_entity_metadata_tx(
     .await?;
 
     // Company fields
-    seed_field_tx(tx, tenant_id, company_id, "name", "Company Name", "text", true, true, 1).await?;
-    seed_field_tx(tx, tenant_id, company_id, "domain", "Domain", "url", false, true, 2).await?;
-    seed_field_tx(tx, tenant_id, company_id, "industry", "Industry", "select", false, true, 3).await?;
-    seed_field_tx(tx, tenant_id, company_id, "phone", "Phone", "phone", false, true, 4).await?;
+    // Company fields
+    seed_field_tx(tx, tenant_id, company_id, "name", "Company Name", "text", true, true, 1, None).await?;
+    seed_field_tx(tx, tenant_id, company_id, "domain", "Domain", "url", false, true, 2, None).await?;
+    
+    let industry_options = serde_json::json!([
+        {"value": "tech", "label": "Technology"},
+        {"value": "finance", "label": "Finance"},
+        {"value": "health", "label": "Healthcare"},
+        {"value": "retail", "label": "Retail"},
+        {"value": "manufacturing", "label": "Manufacturing"},
+        {"value": "other", "label": "Other"}
+    ]);
+    seed_field_tx(tx, tenant_id, company_id, "industry", "Industry", "select", false, true, 3, Some(industry_options)).await?;
+    
+    seed_field_tx(tx, tenant_id, company_id, "phone", "Phone", "phone", false, true, 4, None).await?;
 
     // Create Deal entity type
     let deal_id = Uuid::new_v4();
@@ -124,10 +146,22 @@ async fn seed_entity_metadata_tx(
     .await?;
 
     // Deal fields
-    seed_field_tx(tx, tenant_id, deal_id, "name", "Deal Name", "text", true, true, 1).await?;
-    seed_field_tx(tx, tenant_id, deal_id, "amount", "Amount", "money", false, true, 2).await?;
-    seed_field_tx(tx, tenant_id, deal_id, "stage", "Stage", "select", true, true, 3).await?;
-    seed_field_tx(tx, tenant_id, deal_id, "expected_close_date", "Expected Close", "date", false, true, 4).await?;
+    // Deal fields
+    seed_field_tx(tx, tenant_id, deal_id, "name", "Deal Name", "text", true, true, 1, None).await?;
+    seed_field_tx(tx, tenant_id, deal_id, "amount", "Amount", "money", false, true, 2, None).await?;
+    
+    let stage_options = serde_json::json!([
+        {"value": "appointment_scheduled", "label": "Appointment Scheduled"},
+        {"value": "qualified_to_buy", "label": "Qualified To Buy"},
+        {"value": "presentation_scheduled", "label": "Presentation Scheduled"},
+        {"value": "decision_maker_bought_in", "label": "Decision Maker Bought-In"},
+        {"value": "contract_sent", "label": "Contract Sent"},
+        {"value": "closed_won", "label": "Closed Won"},
+        {"value": "closed_lost", "label": "Closed Lost"}
+    ]);
+    seed_field_tx(tx, tenant_id, deal_id, "stage", "Stage", "select", true, true, 3, Some(stage_options)).await?;
+    
+    seed_field_tx(tx, tenant_id, deal_id, "expected_close_date", "Expected Close", "date", false, true, 4, None).await?;
 
     Ok(())
 }
@@ -156,16 +190,33 @@ async fn seed_property_entity_tx(
     .await?;
 
     // Property fields
-    seed_field_tx(tx, tenant_id, property_id, "title", "Title", "text", true, true, 1).await?;
-    seed_field_tx(tx, tenant_id, property_id, "price", "Price", "money", true, true, 2).await?;
-    seed_field_tx(tx, tenant_id, property_id, "status", "Status", "select", true, true, 3).await?;
-    seed_field_tx(tx, tenant_id, property_id, "property_type", "Property Type", "select", false, true, 4).await?;
-    seed_field_tx(tx, tenant_id, property_id, "bedrooms", "Bedrooms", "number", false, true, 5).await?;
-    seed_field_tx(tx, tenant_id, property_id, "bathrooms", "Bathrooms", "number", false, true, 6).await?;
-    seed_field_tx(tx, tenant_id, property_id, "area_sqm", "Area (sqm)", "number", false, true, 7).await?;
-    seed_field_tx(tx, tenant_id, property_id, "address", "Address", "text", false, true, 8).await?;
-    seed_field_tx(tx, tenant_id, property_id, "city", "City", "text", false, true, 9).await?;
-    seed_field_tx(tx, tenant_id, property_id, "description", "Description", "textarea", false, false, 10).await?;
+    // Property fields
+    seed_field_tx(tx, tenant_id, property_id, "title", "Title", "text", true, true, 1, None).await?;
+    seed_field_tx(tx, tenant_id, property_id, "price", "Price", "money", true, true, 2, None).await?;
+    
+    let status_options = serde_json::json!([
+        {"value": "active", "label": "Active"},
+        {"value": "under_offer", "label": "Under Offer"},
+        {"value": "sold", "label": "Sold"},
+        {"value": "rented", "label": "Rented"},
+        {"value": "withdrawn", "label": "Withdrawn"}
+    ]);
+    seed_field_tx(tx, tenant_id, property_id, "status", "Status", "select", true, true, 3, Some(status_options)).await?;
+    
+    let type_options = serde_json::json!([
+        {"value": "apartment", "label": "Apartment"},
+        {"value": "house", "label": "House"},
+        {"value": "commercial", "label": "Commercial"},
+        {"value": "land", "label": "Land"}
+    ]);
+    seed_field_tx(tx, tenant_id, property_id, "property_type", "Property Type", "select", false, true, 4, Some(type_options)).await?;
+    
+    seed_field_tx(tx, tenant_id, property_id, "bedrooms", "Bedrooms", "number", false, true, 5, None).await?;
+    seed_field_tx(tx, tenant_id, property_id, "bathrooms", "Bathrooms", "number", false, true, 6, None).await?;
+    seed_field_tx(tx, tenant_id, property_id, "area_sqm", "Area (sqm)", "number", false, true, 7, None).await?;
+    seed_field_tx(tx, tenant_id, property_id, "address", "Address", "text", false, true, 8, None).await?;
+    seed_field_tx(tx, tenant_id, property_id, "city", "City", "text", false, true, 9, None).await?;
+    seed_field_tx(tx, tenant_id, property_id, "description", "Description", "textarea", false, false, 10, None).await?;
 
     Ok(())
 }
@@ -181,14 +232,15 @@ async fn seed_field_tx(
     is_required: bool,
     show_in_list: bool,
     sort_order: i32,
+    options: Option<serde_json::Value>,
 ) -> Result<(), sqlx::Error> {
     let now = Utc::now();
     let id = Uuid::new_v4();
     
     sqlx::query(
         r#"
-        INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, is_required, show_in_list, sort_order, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, is_required, show_in_list, sort_order, options, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#
     )
     .bind(id)
@@ -200,6 +252,7 @@ async fn seed_field_tx(
     .bind(is_required)
     .bind(show_in_list)
     .bind(sort_order)
+    .bind(options)
     .bind(now)
     .bind(now)
     .execute(&mut **tx)
@@ -713,11 +766,21 @@ async fn seed_entity_metadata(pool: &PgPool, tenant_id: Uuid) -> Result<(), sqlx
     .await?;
 
     // Contact fields
-    seed_field(pool, tenant_id, contact_id, "first_name", "First Name", "text", true, true, 1).await?;
-    seed_field(pool, tenant_id, contact_id, "last_name", "Last Name", "text", true, true, 2).await?;
-    seed_field(pool, tenant_id, contact_id, "email", "Email", "email", false, true, 3).await?;
-    seed_field(pool, tenant_id, contact_id, "phone", "Phone", "phone", false, true, 4).await?;
-    seed_field(pool, tenant_id, contact_id, "lifecycle_stage", "Lifecycle Stage", "select", false, true, 5).await?;
+    seed_field(pool, tenant_id, contact_id, "first_name", "First Name", "text", true, true, 1, None).await?;
+    seed_field(pool, tenant_id, contact_id, "last_name", "Last Name", "text", true, true, 2, None).await?;
+    seed_field(pool, tenant_id, contact_id, "email", "Email", "email", false, true, 3, None).await?;
+    seed_field(pool, tenant_id, contact_id, "phone", "Phone", "phone", false, true, 4, None).await?;
+    
+    let lifecycle_options = serde_json::json!([
+        {"value": "subscriber", "label": "Subscriber"},
+        {"value": "lead", "label": "Lead"},
+        {"value": "marketing_qualified", "label": "Marketing Qualified"},
+        {"value": "opportunity", "label": "Opportunity"},
+        {"value": "customer", "label": "Customer"},
+        {"value": "evangelist", "label": "Evangelist"},
+        {"value": "other", "label": "Other"}
+    ]);
+    seed_field(pool, tenant_id, contact_id, "lifecycle_stage", "Lifecycle Stage", "select", false, true, 5, Some(lifecycle_options)).await?;
 
     // Create Company entity type
     let company_id = Uuid::new_v4();
@@ -736,10 +799,20 @@ async fn seed_entity_metadata(pool: &PgPool, tenant_id: Uuid) -> Result<(), sqlx
     .await?;
 
     // Company fields
-    seed_field(pool, tenant_id, company_id, "name", "Company Name", "text", true, true, 1).await?;
-    seed_field(pool, tenant_id, company_id, "domain", "Domain", "url", false, true, 2).await?;
-    seed_field(pool, tenant_id, company_id, "industry", "Industry", "select", false, true, 3).await?;
-    seed_field(pool, tenant_id, company_id, "phone", "Phone", "phone", false, true, 4).await?;
+    seed_field(pool, tenant_id, company_id, "name", "Company Name", "text", true, true, 1, None).await?;
+    seed_field(pool, tenant_id, company_id, "domain", "Domain", "url", false, true, 2, None).await?;
+    
+    let industry_options = serde_json::json!([
+        {"value": "tech", "label": "Technology"},
+        {"value": "finance", "label": "Finance"},
+        {"value": "health", "label": "Healthcare"},
+        {"value": "retail", "label": "Retail"},
+        {"value": "manufacturing", "label": "Manufacturing"},
+        {"value": "other", "label": "Other"}
+    ]);
+    seed_field(pool, tenant_id, company_id, "industry", "Industry", "select", false, true, 3, Some(industry_options)).await?;
+    
+    seed_field(pool, tenant_id, company_id, "phone", "Phone", "phone", false, true, 4, None).await?;
 
     // Create Deal entity type
     let deal_id = Uuid::new_v4();
@@ -758,15 +831,26 @@ async fn seed_entity_metadata(pool: &PgPool, tenant_id: Uuid) -> Result<(), sqlx
     .await?;
 
     // Deal fields
-    seed_field(pool, tenant_id, deal_id, "name", "Deal Name", "text", true, true, 1).await?;
-    seed_field(pool, tenant_id, deal_id, "amount", "Amount", "money", false, true, 2).await?;
-    seed_field(pool, tenant_id, deal_id, "stage", "Stage", "select", true, true, 3).await?;
-    seed_field(pool, tenant_id, deal_id, "expected_close_date", "Expected Close", "date", false, true, 4).await?;
+    seed_field(pool, tenant_id, deal_id, "name", "Deal Name", "text", true, true, 1, None).await?;
+    seed_field(pool, tenant_id, deal_id, "amount", "Amount", "money", false, true, 2, None).await?;
+    
+    let stage_options = serde_json::json!([
+        {"value": "appointment_scheduled", "label": "Appointment Scheduled"},
+        {"value": "qualified_to_buy", "label": "Qualified To Buy"},
+        {"value": "presentation_scheduled", "label": "Presentation Scheduled"},
+        {"value": "decision_maker_bought_in", "label": "Decision Maker Bought-In"},
+        {"value": "contract_sent", "label": "Contract Sent"},
+        {"value": "closed_won", "label": "Closed Won"},
+        {"value": "closed_lost", "label": "Closed Lost"}
+    ]);
+    seed_field(pool, tenant_id, deal_id, "stage", "Stage", "select", true, true, 3, Some(stage_options)).await?;
+    
+    seed_field(pool, tenant_id, deal_id, "expected_close_date", "Expected Close", "date", false, true, 4, None).await?;
 
     Ok(())
 }
 
-/// Helper to seed a single field definition
+// Helper to seed a single field definition (UPDATED signature)
 async fn seed_field(
     pool: &PgPool,
     tenant_id: Uuid,
@@ -777,14 +861,15 @@ async fn seed_field(
     is_required: bool,
     show_in_list: bool,
     sort_order: i32,
+    options: Option<serde_json::Value>,
 ) -> Result<(), sqlx::Error> {
     let now = Utc::now();
     let id = Uuid::new_v4();
     
     sqlx::query(
         r#"
-        INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, is_required, show_in_list, sort_order, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, is_required, show_in_list, sort_order, options, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         "#
     )
     .bind(id)
@@ -796,6 +881,7 @@ async fn seed_field(
     .bind(is_required)
     .bind(show_in_list)
     .bind(sort_order)
+    .bind(options)
     .bind(now)
     .bind(now)
     .execute(pool)
@@ -803,6 +889,7 @@ async fn seed_field(
 
     Ok(())
 }
+
 
 /// Seed association definitions
 async fn seed_associations(pool: &PgPool, tenant_id: Uuid) -> Result<(), sqlx::Error> {

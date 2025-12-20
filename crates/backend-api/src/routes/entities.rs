@@ -1,1325 +1,477 @@
-//! Generic entity CRUD routes
-
 use axum::{
-    Router,
-    routing::{get, post, put, delete},
-    extract::{State, Path, Query},
+    extract::{Path, Query, State},
+    http::StatusCode,
     Json,
+    response::IntoResponse,
+    routing::{get, post, put, delete},
+    Router,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use uuid::Uuid;
-use chrono::Utc;
-
 use crate::state::AppState;
-use crate::error::ApiError;
-use super::workflows::execute_triggered_workflows;
+use crate::middleware::tenant::ResolvedTenant;
+use core_models::{FieldDef, FieldType}; 
 
-/// Helper function to parse date string from JSON value
-/// Handles "YYYY-MM-DD" format and ISO datetime strings
-fn parse_date_field(data: &serde_json::Value, field_name: &str) -> Option<chrono::NaiveDate> {
-    data.get(field_name)
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .and_then(|s| {
-            // Try YYYY-MM-DD format first
-            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .ok()
-                .or_else(|| {
-                    // Also try ISO datetime format (take just the date part)
-                    if s.len() >= 10 {
-                        chrono::NaiveDate::parse_from_str(&s[..10], "%Y-%m-%d").ok()
-                    } else {
-                        None
-                    }
-                })
-        })
-}
-
-/// Helper to parse datetime field from JSON value
-fn parse_datetime_field(data: &serde_json::Value, field_name: &str) -> Option<chrono::DateTime<chrono::Utc>> {
-    data.get(field_name)
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-}
-
-pub fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/:entity_type", get(list_records))
-        .route("/:entity_type", post(create_record))
-        .route("/:entity_type/lookup", get(lookup_entity))
-        .route("/:entity_type/:id", get(get_record))
-        .route("/:entity_type/:id", put(update_record))
-        .route("/:entity_type/:id", delete(delete_record))
-}
+// ============================================================================
+// Types
+// ============================================================================
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 pub struct ListQuery {
-    pub tenant_id: Uuid,
     pub page: Option<i32>,
     pub per_page: Option<i32>,
-    pub sort_by: Option<String>,
-    pub sort_desc: Option<bool>,
     pub search: Option<String>,
+    pub view_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct ListResponse {
-    pub data: Vec<serde_json::Value>,
+    pub data: Vec<Value>,
     pub total: i64,
     pub page: i32,
     pub per_page: i32,
 }
 
-// ============================================================================
-// LOOKUP ENDPOINT - Universal lookup for Link fields
-// ============================================================================
+#[derive(Debug, Deserialize)]
+pub struct LookupQuery {
+    pub q: Option<String>,
+}
 
 #[derive(Debug, Serialize)]
 pub struct LookupResult {
     pub id: Uuid,
     pub label: String,
+    pub sub_label: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct LookupQuery {
-    pub tenant_id: Uuid,
-    /// Search term for filtering results
-    pub q: Option<String>,
+// ============================================================================
+// Routes
+// ============================================================================
+
+pub fn routes() -> Router<Arc<AppState>> {
+    Router::new()
+        // Record CRUD
+        // Mounted at /api/v1/entities usually, but user requested /records. 
+        // We will support BOTH standard REST /:entity_code and explicit /records/:entity_code 
+        // to satisfy all requirements/legacy compatibility if needed.
+        // However, standard REST convention for "entities" module usually implies mounting at /entities.
+        // If main.rs mounts this at /records, then paths are /:entity_code.
+        // If main.rs mounts this at /api/v1, then full paths needed.
+        // Let's assume we replace the old entities router which was mounted at /entities or /api/v1.
+        
+        // For compliance with "Action A: POST /api/v1/records/:entity_code", we define absolute paths here
+        // assuming this router is merged into the api_v1 router.
+        
+        // Generic CRUD
+        .route("/records/:entity_code", get(list_records).post(create_record))
+        .route("/records/:entity_code/:id", get(get_record).put(update_record).delete(delete_record))
+        
+        // Legacy/Standard alias (so /entities/contact also works if needed, or for fetching contacts via old frontend)
+        .route("/entities/:entity_code", get(list_records).post(create_record))
+        .route("/entities/:entity_code/:id", get(get_record).put(update_record).delete(delete_record))
+        
+        // Lookup
+        .route("/lookup/:entity_code", get(lookup_entity))
 }
 
-/// Get the display field for an entity type (used for lookup labels)
-fn get_display_field_for_entity(entity_type: &str) -> &'static str {
-    match entity_type {
-        "contact" => "first_name",  // Will combine with last_name
-        "company" => "name",
-        "deal" => "name",
-        "property" => "title",
-        "listing" => "channel_name",
-        "viewing" => "id",  // Fallback
-        "offer" => "id",
-        "contract" => "contract_number",
-        "task" => "title",
-        "user" => "email",
-        _ => "name",
-    }
-}
+// ============================================================================
+// Handlers
+// ============================================================================
 
-/// Get the table name for an entity type
-fn get_table_name_for_entity(entity_type: &str) -> &'static str {
-    match entity_type {
-        "contact" => "contacts",
-        "company" => "companies",
-        "deal" => "deals",
-        "property" => "properties",
-        "listing" => "listings",
-        "viewing" => "viewings",
-        "offer" => "offers",
-        "contract" => "contracts",
-        "task" => "tasks",
-        "user" => "users",
-        _ => "unknown",
-    }
-}
-
-/// Universal lookup endpoint for fetching options for Link fields
-pub async fn lookup_entity(
-    State(state): State<Arc<AppState>>,
-    Path(entity_type): Path<String>,
-    Query(params): Query<LookupQuery>,
-) -> Result<Json<Vec<LookupResult>>, ApiError> {
-    use sqlx::Row;
-    
-    // Validate entity type exists
-    let _entity = state.metadata
-        .get_entity_type(params.tenant_id, &entity_type)
-        .await?;
-    
-    let search_pattern = params.q.as_ref()
-        .map(|q| format!("%{}%", q))
-        .unwrap_or_else(|| "%".to_string());
-    
-    // Special handling for migrated entities
-    let results = if ["contact", "deal", "property", "task", "viewing"].contains(&entity_type.as_str()) {
-        // Resolve entity_type_id
-        let et_row = sqlx::query("SELECT id FROM entity_types WHERE name = $1 AND tenant_id = $2")
-            .bind(&entity_type)
-            .bind(params.tenant_id)
-            .fetch_optional(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?
-            .ok_or_else(|| ApiError::Internal(format!("Entity type '{}' not found", entity_type)))?;
-        let et_id: Uuid = et_row.get("id");
-
-        let display_field = match entity_type.as_str() {
-            "contact" => "last_name", // We sort by first name usually but filter by multiple
-            "property" => "title",
-            "deal" => "name",
-            "task" => "title",
-            "viewing" => "id", // No good label for viewing
-            _ => "id",
-        };
-
-        // For contacts we search first/last/email. For others, just the display field.
-        let filter_cond = if entity_type == "contact" {
-            "(data->>'first_name' ILIKE $3 OR data->>'last_name' ILIKE $3 OR data->>'email' ILIKE $3)"
-        } else {
-            // dynamic field name in json path require string construction or careful binding
-            // simplified: we'll match on specific known fields
-            match entity_type.as_str() {
-                "property" => "(data->>'title' ILIKE $3 OR data->>'reference' ILIKE $3)",
-                "deal" => "(data->>'name' ILIKE $3)",
-                "task" => "(data->>'title' ILIKE $3)",
-                _ => "true", // fallback
-            }
-        };
-
-        let sql = format!(
-            r#"
-            SELECT id, data
-            FROM entity_records 
-            WHERE tenant_id = $1 
-              AND entity_type_id = $2
-              AND deleted_at IS NULL
-              AND {}
-            ORDER BY created_at DESC
-            LIMIT 20
-            "#,
-            filter_cond
-        );
-
-        let rows = sqlx::query(&sql)
-        .bind(params.tenant_id)
-        .bind(et_id)
-        .bind(&search_pattern)
-        .fetch_all(&state.pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-        
-        rows.iter().map(|row| {
-            let id: Uuid = row.try_get("id").unwrap_or_default();
-            let data: serde_json::Value = row.try_get("data").unwrap_or(serde_json::json!({}));
-            
-            let label = match entity_type.as_str() {
-                "contact" => {
-                    let first = data.get("first_name").and_then(|v| v.as_str()).unwrap_or("");
-                    let last = data.get("last_name").and_then(|v| v.as_str()).unwrap_or("");
-                    format!("{} {}", first, last).trim().to_string()
-                },
-                "property" => data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled Property").to_string(),
-                "deal" => data.get("name").and_then(|v| v.as_str()).unwrap_or("Untitled Deal").to_string(),
-                "task" => data.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled Task").to_string(),
-                _ => id.to_string(),
-            };
-            
-            LookupResult {
-                id,
-                label: if label.is_empty() { id.to_string() } else { label },
-            }
-        }).collect()
-    } else {
-        // Generic lookup for other entities
-        let table_name = get_table_name_for_entity(&entity_type);
-        let display_field = get_display_field_for_entity(&entity_type);
-        
-        if table_name == "unknown" {
-            return Ok(Json(vec![]));
-        }
-        
-        // Build query based on entity type
-        let query = match entity_type.as_str() {
-            "user" => {
-                // Users table doesn't have deleted_at
-                format!(
-                    "SELECT id, {} as label FROM {} WHERE tenant_id = $1 AND {} ILIKE $2 ORDER BY {} LIMIT 20",
-                    display_field, table_name, display_field, display_field
-                )
-            }
-            _ => {
-                format!(
-                    "SELECT id, {} as label FROM {} WHERE tenant_id = $1 AND deleted_at IS NULL AND {} ILIKE $2 ORDER BY {} LIMIT 20",
-                    display_field, table_name, display_field, display_field
-                )
-            }
-        };
-        
-        let rows = sqlx::query(&query)
-            .bind(params.tenant_id)
-            .bind(&search_pattern)
-            .fetch_all(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        
-        rows.iter().map(|row| {
-            let id: Uuid = row.try_get("id").unwrap_or_default();
-            let label: String = row.try_get("label").unwrap_or_else(|_| id.to_string());
-            LookupResult { id, label }
-        }).collect()
-    };
-    
-    Ok(Json(results))
-}
-
-
+/// GET /records/:entity_code
 async fn list_records(
     State(state): State<Arc<AppState>>,
-    Path(entity_type): Path<String>,
+    Path(entity_code): Path<String>,
     Query(query): Query<ListQuery>,
-) -> Result<Json<ListResponse>, ApiError> {
-    
-    
-    let page = query.page.unwrap_or(1);
-    let per_page = query.per_page.unwrap_or(25).min(100);
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+) -> impl IntoResponse {
+    let mut conn = match get_rls_connection(&state.pool, tenant.id).await {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
+
+    // 1. Resolve Entity Type
+    let entity_type = match state.metadata.get_entity_type(tenant.id, &entity_code).await {
+        Ok(e) => e,
+        Err(_) => return (StatusCode::NOT_FOUND, format!("Entity type '{}' not found", entity_code)).into_response(),
+    };
+
+    // 2. Pagination
+    let page = query.page.unwrap_or(1).max(1);
+    let per_page = query.per_page.unwrap_or(25).min(100).max(1);
     let offset = (page - 1) * per_page;
 
-    // Validate entity type exists
-    let _entity = state.metadata
-        .get_entity_type(query.tenant_id, &entity_type)
-        .await?;
-
-    let search = query.search.clone();
-
-    // Map entity type to table and query 
-    let (data, total) = match entity_type.as_str() {
-        "contact" => query_contacts(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        "company" => query_companies(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        "deal" => query_deals(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        "property" => query_properties(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        "listing" => query_listings(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        "viewing" => query_viewings(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        "offer" => query_offers(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        "contract" => query_contracts(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        "task" => query_tasks(&state.pool, query.tenant_id, per_page, offset, search.as_deref()).await?,
-        _ => (Vec::new(), 0),
-    };
-
-    Ok(Json(ListResponse {
-        data,
-        total,
-        page,
-        per_page,
-    }))
-}
-
-async fn query_contacts(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
+    // 3. View Logic (Filtering/Sorting)
+    let sort_clause = "ORDER BY created_at DESC".to_string();
     
-    // Resolve entity_type_id
-    let et_row = sqlx::query("SELECT id FROM entity_types WHERE name = 'contact' AND tenant_id = $1")
-        .bind(tenant_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?
-        .ok_or_else(|| ApiError::Internal("Contact entity type not found".to_string()))?;
-    let et_id: Uuid = et_row.get("id");
-
-    let search_pattern = search.map(|s| format!("%{}%", s));
-    
-    // Get total count
-    let count_sql = if search.is_some() {
-        "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL AND (data->>'first_name' ILIKE $3 OR data->>'last_name' ILIKE $3 OR data->>'email' ILIKE $3)"
-    } else {
-        "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL"
-    };
-    
-    let count_row = if let Some(ref pattern) = search_pattern {
-        sqlx::query(count_sql).bind(tenant_id).bind(et_id).bind(pattern).fetch_one(pool).await
-    } else {
-        sqlx::query(count_sql).bind(tenant_id).bind(et_id).fetch_one(pool).await
-    }.map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
-
-    // Get records
-    let rows = if let Some(ref pattern) = search_pattern {
-        sqlx::query(
-            r#"
-            SELECT id, data, created_at, updated_at
-            FROM entity_records 
-            WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL AND (data->>'first_name' ILIKE $5 OR data->>'last_name' ILIKE $5 OR data->>'email' ILIKE $5)
-            ORDER BY created_at DESC
-            LIMIT $3 OFFSET $4
-            "#,
-        )
-        .bind(tenant_id)
-        .bind(et_id)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .bind(pattern)
-        .fetch_all(pool)
-        .await
-    } else {
-        sqlx::query(
-            r#"
-            SELECT id, data, created_at, updated_at
-            FROM entity_records 
-            WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL
-            ORDER BY created_at DESC
-            LIMIT $3 OFFSET $4
-            "#,
-        )
-        .bind(tenant_id)
-        .bind(et_id)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(pool)
-        .await
-    }.map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
-        let id: Uuid = row.try_get("id").unwrap_or_default();
-        let mut data: serde_json::Map<String, serde_json::Value> = row.try_get::<serde_json::Value, _>("data").unwrap_or(serde_json::json!({})).as_object().unwrap_or(&serde_json::Map::new()).clone();
-        
-        // Ensure ID and metadata are included in the flat response if needed, 
-        // but frontend might expect them at top level. 
-        // The migration put everything in `data`, so `first_name` etc are there.
-        // `id` needs to be distinct.
-        data.insert("id".to_string(), serde_json::json!(id));
-        
-        serde_json::Value::Object(data)
-    }).collect();
-
-    Ok((data, total))
-}
-
-async fn query_companies(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    _search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
-    
-    let count_row = sqlx::query("SELECT COUNT(*) as count FROM companies WHERE tenant_id = $1 AND deleted_at IS NULL")
-        .bind(tenant_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
-
-    let rows = sqlx::query(
-        r#"
-        SELECT id, name, domain, industry, phone, created_at, updated_at
-        FROM companies 
-        WHERE tenant_id = $1 AND deleted_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT $2 OFFSET $3
-        "#,
-    )
-    .bind(tenant_id)
-    .bind(limit as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
-        serde_json::json!({
-            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
-            "name": row.try_get::<String, _>("name").unwrap_or_default(),
-            "domain": row.try_get::<Option<String>, _>("domain").ok().flatten(),
-            "industry": row.try_get::<Option<String>, _>("industry").ok().flatten(),
-            "phone": row.try_get::<Option<String>, _>("phone").ok().flatten(),
-        })
-    }).collect();
-
-    Ok((data, total))
-}
-
-// Helper to extract fields from JSONB for deals
-async fn query_deals(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
-
-    // Resolve entity_type_id for 'deal'
-    let et_row = sqlx::query("SELECT id FROM entity_types WHERE name = 'deal' AND tenant_id = $1")
-        .bind(tenant_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?
-        .ok_or_else(|| ApiError::Internal("Entity type 'deal' not found".to_string()))?;
-    let et_id: Uuid = et_row.get("id");
-
-    let search_pattern = search.map(|s| format!("%{}%", s));
-
-     // Get total count
-    let count_sql = if search.is_some() {
-        "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL AND (data->>'name' ILIKE $3)"
-    } else {
-        "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL"
-    };
-    
-    let count_row = if let Some(ref pattern) = search_pattern {
-        sqlx::query(count_sql).bind(tenant_id).bind(et_id).bind(pattern).fetch_one(pool).await
-    } else {
-        sqlx::query(count_sql).bind(tenant_id).bind(et_id).fetch_one(pool).await
-    }.map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
-
-    // Get records
-    let rows = if let Some(ref pattern) = search_pattern {
-        sqlx::query(
-            r#"
-            SELECT id, data, created_at, updated_at
-            FROM entity_records 
-            WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL AND (data->>'name' ILIKE $5)
-            ORDER BY created_at DESC
-            LIMIT $3 OFFSET $4
-            "#,
-        )
-        .bind(tenant_id)
-        .bind(et_id)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .bind(pattern)
-        .fetch_all(pool)
-        .await
-    } else {
-        sqlx::query(
-            r#"
-            SELECT id, data, created_at, updated_at
-            FROM entity_records 
-            WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL
-            ORDER BY created_at DESC
-            LIMIT $3 OFFSET $4
-            "#,
-        )
-        .bind(tenant_id)
-        .bind(et_id)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(pool)
-        .await
-    }.map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let data: Vec<serde_json::Value> = rows.into_iter().map(|row| {
-        let mut map = row.try_get::<serde_json::Value, _>("data").unwrap_or(serde_json::json!({})).as_object().unwrap_or(&serde_json::Map::new()).clone();
-        map.insert("id".to_string(), serde_json::Value::String(row.try_get::<Uuid, _>("id").unwrap_or_default().to_string()));
-        map.insert("created_at".to_string(), serde_json::Value::String(row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at").unwrap_or_default().to_rfc3339()));
-        map.insert("updated_at".to_string(), serde_json::Value::String(row.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at").unwrap_or_default().to_rfc3339()));
-        serde_json::Value::Object(map)
-    }).collect();
-
-    Ok((data, total))
-}
-
-async fn query_properties(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
-    
-    // Resolve entity_type_id for 'property'
-    let et_row = sqlx::query("SELECT id FROM entity_types WHERE name = 'property' AND tenant_id = $1")
-        .bind(tenant_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?
-        .ok_or_else(|| ApiError::Internal("Entity type 'property' not found".to_string()))?;
-    let et_id: Uuid = et_row.get("id");
-
-    let search_pattern = search.map(|s| format!("%{}%", s));
-    
-    // Get total count
-    let count_sql = if search.is_some() {
-        "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL AND (data->>'title' ILIKE $3 OR data->>'reference' ILIKE $3 OR data->>'city' ILIKE $3)"
-    } else {
-        "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL"
-    };
-    
-    let count_row = if let Some(ref pattern) = search_pattern {
-        sqlx::query(count_sql).bind(tenant_id).bind(et_id).bind(pattern).fetch_one(pool).await
-    } else {
-        sqlx::query(count_sql).bind(tenant_id).bind(et_id).fetch_one(pool).await
-    }.map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
-
-    // Get records
-    let rows = if let Some(ref pattern) = search_pattern {
-        sqlx::query(
-            r#"
-            SELECT id, data, created_at, updated_at
-            FROM entity_records 
-            WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL AND (data->>'title' ILIKE $5 OR data->>'reference' ILIKE $5 OR data->>'city' ILIKE $5)
-            ORDER BY created_at DESC
-            LIMIT $3 OFFSET $4
-            "#,
-        )
-        .bind(tenant_id)
-        .bind(et_id)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .bind(pattern)
-        .fetch_all(pool)
-        .await
-    } else {
-        sqlx::query(
-            r#"
-            SELECT id, data, created_at, updated_at
-            FROM entity_records 
-            WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL
-            ORDER BY created_at DESC
-            LIMIT $3 OFFSET $4
-            "#,
-        )
-        .bind(tenant_id)
-        .bind(et_id)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(pool)
-        .await
-    }.map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let data: Vec<serde_json::Value> = rows.into_iter().map(|row| {
-        let mut map = row.try_get::<serde_json::Value, _>("data").unwrap_or(serde_json::json!({})).as_object().unwrap_or(&serde_json::Map::new()).clone();
-        map.insert("id".to_string(), serde_json::Value::String(row.try_get::<Uuid, _>("id").unwrap_or_default().to_string()));
-        map.insert("created_at".to_string(), serde_json::Value::String(row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at").unwrap_or_default().to_rfc3339()));
-        map.insert("updated_at".to_string(), serde_json::Value::String(row.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at").unwrap_or_default().to_rfc3339()));
-        serde_json::Value::Object(map)
-    }).collect();
-
-    Ok((data, total))
-}
-
-async fn query_listings(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    _search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
-    
-    let count_row = sqlx::query("SELECT COUNT(*) as count FROM listings WHERE tenant_id = $1 AND deleted_at IS NULL")
-        .bind(tenant_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
-
-    let rows = sqlx::query(
-        r#"SELECT id, property_id, channel, channel_name, listing_price, listing_currency,
-                  start_date, end_date, status, featured, created_at
-           FROM listings WHERE tenant_id = $1 AND deleted_at IS NULL
-           ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
-    )
-    .bind(tenant_id)
-    .bind(limit as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
-        serde_json::json!({
-            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
-            "property_id": row.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
-            "channel": row.try_get::<Option<String>, _>("channel").ok().flatten(),
-            "channel_name": row.try_get::<Option<String>, _>("channel_name").ok().flatten(),
-            "listing_price": row.try_get::<Option<f64>, _>("listing_price").ok().flatten(),
-            "listing_currency": row.try_get::<Option<String>, _>("listing_currency").ok().flatten(),
-            "start_date": row.try_get::<Option<chrono::NaiveDate>, _>("start_date").ok().flatten(),
-            "end_date": row.try_get::<Option<chrono::NaiveDate>, _>("end_date").ok().flatten(),
-            "status": row.try_get::<Option<String>, _>("status").ok().flatten(),
-            "featured": row.try_get::<Option<bool>, _>("featured").ok().flatten(),
-        })
-    }).collect();
-
-    Ok((data, total))
-}
-
-// Helper to extract fields from JSONB for viewings
-async fn query_viewings(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    _search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
-
-    // Resolve entity_type_id for 'viewing'
-    let et_row = sqlx::query("SELECT id FROM entity_types WHERE name = 'viewing' AND tenant_id = $1")
-        .bind(tenant_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?
-        .ok_or_else(|| ApiError::Internal("Entity type 'viewing' not found".to_string()))?;
-    let et_id: Uuid = et_row.get("id");
-    
-    // Get total count
+    // 4. Query
     let count_sql = "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL";
-    
-    let count_row = sqlx::query(count_sql).bind(tenant_id).bind(et_id).fetch_one(pool).await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
+    let count_row = sqlx::query(count_sql)
+        .bind(tenant.id)
+        .bind(entity_type.id)
+        .fetch_one(&mut *conn)
+        .await;
 
-    // Get records
-    let rows = sqlx::query(
-        r#"
-        SELECT id, data, created_at, updated_at
-        FROM entity_records 
-        WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL
-        ORDER BY data->>'scheduled_at' DESC
-        LIMIT $3 OFFSET $4
-        "#,
-    )
-    .bind(tenant_id)
-    .bind(et_id)
-    .bind(limit as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let data: Vec<serde_json::Value> = rows.into_iter().map(|row| {
-        let mut map = row.try_get::<serde_json::Value, _>("data").unwrap_or(serde_json::json!({})).as_object().unwrap_or(&serde_json::Map::new()).clone();
-        map.insert("id".to_string(), serde_json::Value::String(row.try_get::<Uuid, _>("id").unwrap_or_default().to_string()));
-        map.insert("created_at".to_string(), serde_json::Value::String(row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at").unwrap_or_default().to_rfc3339()));
-        map.insert("updated_at".to_string(), serde_json::Value::String(row.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at").unwrap_or_default().to_rfc3339()));
-        serde_json::Value::Object(map)
-    }).collect();
-
-    Ok((data, total))
-}
-
-async fn query_offers(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    _search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
-    
-    let count_row = sqlx::query("SELECT COUNT(*) as count FROM offers WHERE tenant_id = $1 AND deleted_at IS NULL")
-        .bind(tenant_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
-
-    let rows = sqlx::query(
-        r#"SELECT id, property_id, contact_id, offer_amount, currency, status, 
-                  submitted_at, expires_at, created_at
-           FROM offers WHERE tenant_id = $1 AND deleted_at IS NULL
-           ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
-    )
-    .bind(tenant_id)
-    .bind(limit as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
-        serde_json::json!({
-            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
-            "property_id": row.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
-            "contact_id": row.try_get::<Option<Uuid>, _>("contact_id").ok().flatten(),
-            "offer_amount": row.try_get::<Option<f64>, _>("offer_amount").ok().flatten(),
-            "currency": row.try_get::<Option<String>, _>("currency").ok().flatten(),
-            "status": row.try_get::<Option<String>, _>("status").ok().flatten(),
-        })
-    }).collect();
-
-    Ok((data, total))
-}
-
-async fn query_contracts(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    _search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
-    
-    let count_row = sqlx::query("SELECT COUNT(*) as count FROM contracts WHERE tenant_id = $1 AND deleted_at IS NULL")
-        .bind(tenant_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
-
-    let rows = sqlx::query(
-        r#"SELECT id, contract_number, contract_type, property_id, start_date, end_date,
-                  amount, currency, status, signed_at, created_at
-           FROM contracts WHERE tenant_id = $1 AND deleted_at IS NULL
-           ORDER BY created_at DESC LIMIT $2 OFFSET $3"#
-    )
-    .bind(tenant_id)
-    .bind(limit as i64)
-    .bind(offset as i64)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    let data: Vec<serde_json::Value> = rows.iter().map(|row| {
-        serde_json::json!({
-            "id": row.try_get::<Uuid, _>("id").unwrap_or_default(),
-            "contract_number": row.try_get::<Option<String>, _>("contract_number").ok().flatten(),
-            "contract_type": row.try_get::<Option<String>, _>("contract_type").ok().flatten(),
-            "property_id": row.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
-            "start_date": row.try_get::<Option<chrono::NaiveDate>, _>("start_date").ok().flatten(),
-            "end_date": row.try_get::<Option<chrono::NaiveDate>, _>("end_date").ok().flatten(),
-            "amount": row.try_get::<Option<f64>, _>("amount").ok().flatten(),
-            "status": row.try_get::<Option<String>, _>("status").ok().flatten(),
-        })
-    }).collect();
-
-    Ok((data, total))
-}
-
-async fn query_tasks(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    limit: i32,
-    offset: i32,
-    search: Option<&str>,
-) -> Result<(Vec<serde_json::Value>, i64), ApiError> {
-    use sqlx::Row;
-    
-    // Resolve entity_type_id for 'task'
-    let et_row = sqlx::query("SELECT id FROM entity_types WHERE name = 'task' AND tenant_id = $1")
-        .bind(tenant_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?
-        .ok_or_else(|| ApiError::Internal("Entity type 'task' not found".to_string()))?;
-    let et_id: Uuid = et_row.get("id");
-
-    let search_pattern = search.map(|s| format!("%{}%", s));
-    
-    // Get total count
-    let count_sql = if search.is_some() {
-        "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL AND (data->>'title' ILIKE $3)"
-    } else {
-        "SELECT COUNT(*) as count FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL"
+    let total: i64 = match count_row {
+        Ok(r) => r.try_get("count").unwrap_or(0),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
 
-    let count_row = if let Some(ref pattern) = search_pattern {
-        sqlx::query(count_sql).bind(tenant_id).bind(et_id).bind(pattern).fetch_one(pool).await
-    } else {
-        sqlx::query(count_sql).bind(tenant_id).bind(et_id).fetch_one(pool).await
-    }.map_err(|e| ApiError::Internal(e.to_string()))?;
-    let total: i64 = count_row.try_get("count").unwrap_or(0);
+    let sql = format!(
+        "SELECT id, data, created_at, updated_at FROM entity_records WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL {} LIMIT $3 OFFSET $4",
+        sort_clause
+    );
 
-    // Get records
-    let rows = if let Some(ref pattern) = search_pattern {
-        sqlx::query(
-            r#"
-            SELECT id, data, created_at, updated_at
-            FROM entity_records 
-            WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL AND (data->>'title' ILIKE $5)
-            ORDER BY created_at DESC
-            LIMIT $3 OFFSET $4
-            "#,
-        )
-        .bind(tenant_id)
-        .bind(et_id)
-        .bind(limit as i64)
+    let rows = sqlx::query(&sql)
+        .bind(tenant.id)
+        .bind(entity_type.id)
+        .bind(per_page as i64)
         .bind(offset as i64)
-        .bind(pattern)
-        .fetch_all(pool)
-        .await
-    } else {
-        sqlx::query(
-            r#"
-            SELECT id, data, created_at, updated_at
-            FROM entity_records 
-            WHERE tenant_id = $1 AND entity_type_id = $2 AND deleted_at IS NULL
-            ORDER BY created_at DESC
-            LIMIT $3 OFFSET $4
-            "#,
-        )
-        .bind(tenant_id)
-        .bind(et_id)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(pool)
-        .await
-    }.map_err(|e| ApiError::Internal(e.to_string()))?;
+        .fetch_all(&mut *conn)
+        .await;
 
-    let data: Vec<serde_json::Value> = rows.into_iter().map(|row| {
-        let mut map = row.try_get::<serde_json::Value, _>("data").unwrap_or(serde_json::json!({})).as_object().unwrap_or(&serde_json::Map::new()).clone();
-        map.insert("id".to_string(), serde_json::Value::String(row.try_get::<Uuid, _>("id").unwrap_or_default().to_string()));
-        map.insert("created_at".to_string(), serde_json::Value::String(row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at").unwrap_or_default().to_rfc3339()));
-        map.insert("updated_at".to_string(), serde_json::Value::String(row.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at").unwrap_or_default().to_rfc3339()));
-        serde_json::Value::Object(map)
-    }).collect();
+    match rows {
+        Ok(results) => {
+             let data: Vec<Value> = results.iter().map(|row| {
+                let mut map = row.try_get::<Value, _>("data").unwrap_or(serde_json::json!({})).as_object().unwrap_or(&serde_json::Map::new()).clone();
+                // Inject system fields
+                map.insert("id".to_string(), serde_json::json!(row.get::<Uuid, _>("id")));
+                map.insert("created_at".to_string(), serde_json::json!(row.get::<chrono::DateTime<chrono::Utc>, _>("created_at")));
+                map.insert("updated_at".to_string(), serde_json::json!(row.get::<chrono::DateTime<chrono::Utc>, _>("updated_at")));
+                Value::Object(map)
+            }).collect();
 
-    Ok((data, total))
+            Json(ListResponse { data, total, page, per_page }).into_response()
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
 }
 
+/// POST /records/:entity_code
 async fn create_record(
     State(state): State<Arc<AppState>>,
-    Path(entity_type): Path<String>,
-    Query(query): Query<ListQuery>,
-    Json(data): Json<serde_json::Value>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let now = Utc::now();
-    let id = Uuid::new_v4();
+    Path(entity_code): Path<String>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    Json(payload): Json<Value>,
+) -> impl IntoResponse {
+    let mut conn = match get_rls_connection(&state.pool, tenant.id).await {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
 
-    // Validate entity type
-    let _entity = state.metadata
-        .get_entity_type(query.tenant_id, &entity_type)
-        .await?;
+    // 1. Resolve Metadata
+    let fields = match state.metadata.get_fields_by_entity_name(tenant.id, &entity_code).await {
+        Ok(f) => f,
+        Err(e) => return (StatusCode::BAD_REQUEST, format!("Invalid entity type: {}", e)).into_response(),
+    };
+    
+    let entity_type = state.metadata.get_entity_type(tenant.id, &entity_code).await.unwrap();
 
-    match entity_type.as_str() {
-        "contact" => {
-            sqlx::query(
-                r#"INSERT INTO entity_records (id, tenant_id, entity_type_id, data, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6)"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(_entity.id)
-            .bind(&data)
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "company" => {
-            sqlx::query(
-                r#"INSERT INTO companies (id, tenant_id, name, domain, industry, phone, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(data.get("name").and_then(|v| v.as_str()).unwrap_or(""))
-            .bind(data.get("domain").and_then(|v| v.as_str()))
-            .bind(data.get("industry").and_then(|v| v.as_str()))
-            .bind(data.get("phone").and_then(|v| v.as_str()))
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "deal" => {
-            sqlx::query(
-                r#"INSERT INTO entity_records (id, tenant_id, entity_type_id, data, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6)"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(_entity.id)
-            .bind(&data)
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "property" => {
-            sqlx::query(
-                r#"INSERT INTO entity_records (id, tenant_id, entity_type_id, data, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6)"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(_entity.id)
-            .bind(&data)
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "task" => {
-            sqlx::query(
-                r#"INSERT INTO entity_records (id, tenant_id, entity_type_id, data, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6)"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(_entity.id)
-            .bind(&data)
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "viewing" => {
-            sqlx::query(
-                r#"INSERT INTO entity_records (id, tenant_id, entity_type_id, data, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6)"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(_entity.id)
-            .bind(&data)
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
+    // 2. Validate
+    let processed_data = match validate_and_process_payload(&fields, &payload, false) {
+        Ok(d) => d,
+        Err(msg) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": msg}))).into_response(),
+    };
 
-        "listing" => {
-            // Get property_id - required
-            let property_id: Option<Uuid> = data.get("property_id")
-                .and_then(|v| v.as_str())
-                .and_then(|s| Uuid::parse_str(s).ok());
-            
-            // Parse dates
-            let start_date: chrono::NaiveDate = data.get("start_date")
-                .and_then(|v| v.as_str())
-                .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-                .unwrap_or_else(|| now.date_naive());
-            
-            let end_date: Option<chrono::NaiveDate> = data.get("end_date")
-                .and_then(|v| v.as_str())
-                .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
-            
-            sqlx::query(
-                r#"INSERT INTO listings (id, tenant_id, property_id, channel, channel_name, external_url,
-                   listing_price, listing_currency, start_date, end_date, status, headline, promo_price, 
-                   description, featured, created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(property_id)
-            .bind(data.get("channel").and_then(|v| v.as_str()))
-            .bind(data.get("channel_name").and_then(|v| v.as_str()))
-            .bind(data.get("external_url").and_then(|v| v.as_str()))
-            .bind(data.get("listing_price").or_else(|| data.get("list_price")).and_then(|v| v.as_f64()))
-            .bind(data.get("listing_currency").and_then(|v| v.as_str()).unwrap_or("AED"))
-            .bind(start_date)
-            .bind(end_date)
-            .bind(data.get("status").and_then(|v| v.as_str()).unwrap_or("draft"))
-            .bind(data.get("headline").and_then(|v| v.as_str()))
-            .bind(data.get("promo_price").or_else(|| data.get("promotional_price")).and_then(|v| v.as_f64()))
-            .bind(data.get("description").and_then(|v| v.as_str()))
-            .bind(data.get("featured").and_then(|v| v.as_bool()).unwrap_or(false))
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "offer" => {
-            // Get property_id - required
-            let property_id: Option<Uuid> = data.get("property_id")
-                .and_then(|v| v.as_str())
-                .and_then(|s| Uuid::parse_str(s).ok());
-            
-            // Get contact_id - required
-            let contact_id: Option<Uuid> = data.get("contact_id")
-                .and_then(|v| v.as_str())
-                .and_then(|s| Uuid::parse_str(s).ok());
-            
-            // Get deal_id - optional
-            let deal_id: Option<Uuid> = data.get("deal_id")
-                .and_then(|v| v.as_str())
-                .and_then(|s| Uuid::parse_str(s).ok());
-            
-            sqlx::query(
-                r#"INSERT INTO offers (id, tenant_id, property_id, contact_id, deal_id, offer_amount,
-                   currency, status, offer_type, financing_type, deposit_amount, conditions, 
-                   created_at, updated_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(property_id)
-            .bind(contact_id)
-            .bind(deal_id)
-            .bind(data.get("offer_amount").and_then(|v| v.as_f64()).unwrap_or(0.0))
-            .bind(data.get("currency").and_then(|v| v.as_str()).unwrap_or("USD"))
-            .bind(data.get("status").and_then(|v| v.as_str()).unwrap_or("draft"))
-            .bind(data.get("offer_type").and_then(|v| v.as_str()))
-            .bind(data.get("financing_type").or_else(|| data.get("finance_type")).and_then(|v| v.as_str()))
-            .bind(data.get("deposit_amount").and_then(|v| v.as_f64()))
-            .bind(data.get("conditions").and_then(|v| v.as_str()))
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        _ => return Err(ApiError::NotFound(format!("Entity type {} not supported for create", entity_type))),
+    // 3. Insert
+    let new_id = Uuid::new_v4();
+    let result = sqlx::query(
+        "INSERT INTO entity_records (id, tenant_id, entity_type_id, data) VALUES ($1, $2, $3, $4) RETURNING id"
+    )
+    .bind(new_id)
+    .bind(tenant.id)
+    .bind(entity_type.id)
+    .bind(processed_data)
+    .fetch_one(&mut *conn)
+    .await;
+
+    match result {
+        Ok(row) => {
+            Json(serde_json::json!({
+                "id": row.get::<Uuid, _>("id"),
+                "status": "created"
+            })).into_response()
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
-
-    // Trigger workflows asynchronously (fire and forget - don't block HTTP response)
-    let pool = state.pool.clone();
-    let tenant = query.tenant_id;
-    let et = entity_type.clone();
-    let new_data = data.clone();
-    tokio::spawn(async move {
-        let _ = execute_triggered_workflows(
-            &pool,
-            tenant,
-            "record_created",
-            &et,
-            id,
-            None,
-            new_data,
-        ).await;
-    });
-
-    Ok(Json(serde_json::json!({ "id": id, "created": true })))
 }
 
+/// GET /records/:entity_code/:id
 async fn get_record(
     State(state): State<Arc<AppState>>,
-    Path((entity_type, id)): Path<(String, Uuid)>,
-    Query(query): Query<ListQuery>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    use sqlx::Row;
-
-    let row = match entity_type.as_str() {
-        "contact" => {
-            sqlx::query("SELECT id, data FROM entity_records WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL")
-                .bind(id)
-                .bind(query.tenant_id)
-                .fetch_optional(&state.pool)
-                .await
-                .map_err(|e| ApiError::Internal(e.to_string()))?
-        }
-        "company" => {
-            sqlx::query("SELECT id, name, domain, industry, phone FROM companies WHERE id = $1 AND tenant_id = $2")
-                .bind(id)
-                .bind(query.tenant_id)
-                .fetch_optional(&state.pool)
-                .await
-                .map_err(|e| ApiError::Internal(e.to_string()))?
-        }
-
-        "deal" | "task" | "property" | "viewing" => {
-            sqlx::query("SELECT id, data FROM entity_records WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL")
-                .bind(id)
-                .bind(query.tenant_id)
-                .fetch_optional(&state.pool)
-                .await
-                .map_err(|e| ApiError::Internal(e.to_string()))?
-        }
-        "listing" => {
-            sqlx::query(
-                r#"SELECT id, property_id, channel, channel_name, listing_price, listing_currency,
-                          start_date, end_date, status, featured, created_at, updated_at
-                   FROM listings WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
-            )
-                .bind(id)
-                .bind(query.tenant_id)
-                .fetch_optional(&state.pool)
-                .await
-                .map_err(|e| ApiError::Internal(e.to_string()))?
-        }
-        _ => None,
+    Path((_entity_code, id)): Path<(String, Uuid)>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+) -> impl IntoResponse {
+    let mut conn = match get_rls_connection(&state.pool, tenant.id).await {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
 
-    match row {
-        Some(r) => {
-            let data = match entity_type.as_str() {
-                "contact" | "deal" | "task" | "property" | "viewing" => {
-                    let mut data: serde_json::Map<String, serde_json::Value> = r.try_get::<serde_json::Value, _>("data").unwrap_or(serde_json::json!({})).as_object().unwrap_or(&serde_json::Map::new()).clone();
-                    data.insert("id".to_string(), serde_json::json!(r.try_get::<Uuid, _>("id").unwrap_or_default()));
-                    serde_json::Value::Object(data)
-                },
-                "company" => serde_json::json!({
-                    "id": r.try_get::<Uuid, _>("id").unwrap_or_default(),
-                    "name": r.try_get::<String, _>("name").unwrap_or_default(),
-                    "domain": r.try_get::<Option<String>, _>("domain").ok().flatten(),
-                    "industry": r.try_get::<Option<String>, _>("industry").ok().flatten(),
-                }),
+    let result = sqlx::query("SELECT id, data FROM entity_records WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL")
+        .bind(id)
+        .bind(tenant.id)
+        .fetch_optional(&mut *conn)
+        .await;
 
-                "listing" => serde_json::json!({
-                    "id": r.try_get::<Uuid, _>("id").unwrap_or_default(),
-                    "property_id": r.try_get::<Option<Uuid>, _>("property_id").ok().flatten(),
-                    "channel": r.try_get::<Option<String>, _>("channel").ok().flatten(),
-                    "channel_name": r.try_get::<Option<String>, _>("channel_name").ok().flatten(),
-                    "listing_price": r.try_get::<Option<f64>, _>("listing_price").ok().flatten(),
-                    "listing_currency": r.try_get::<Option<String>, _>("listing_currency").ok().flatten(),
-                    "start_date": r.try_get::<Option<chrono::NaiveDate>, _>("start_date").ok().flatten(),
-                    "end_date": r.try_get::<Option<chrono::NaiveDate>, _>("end_date").ok().flatten(),
-                    "status": r.try_get::<Option<String>, _>("status").ok().flatten(),
-                    "featured": r.try_get::<Option<bool>, _>("featured").ok().flatten(),
-                }),
-                _ => serde_json::json!({}),
-            };
-            Ok(Json(data))
-        }
-        None => Err(ApiError::NotFound(format!("Record {} not found", id))),
+    match result {
+        Ok(Some(row)) => {
+            let mut data = row.get::<Value, _>("data");
+            if let Some(obj) = data.as_object_mut() {
+                obj.insert("id".to_string(), serde_json::json!(row.get::<Uuid, _>("id")));
+            }
+            Json(data).into_response()
+        },
+        Ok(None) => (StatusCode::NOT_FOUND, "Record not found").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
 
+/// PUT /records/:entity_code/:id
 async fn update_record(
     State(state): State<Arc<AppState>>,
-    Path((entity_type, id)): Path<(String, Uuid)>,
-    Query(query): Query<ListQuery>,
-    Json(data): Json<serde_json::Value>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let now = Utc::now();
-
-    match entity_type.as_str() {
-        "contact" => {
-            sqlx::query(
-                r#"UPDATE entity_records SET 
-                   data = data || $3,
-                   updated_at = $4
-                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(&data)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "property" | "deal" | "task" | "viewing" => {
-             sqlx::query(
-                r#"UPDATE entity_records SET 
-                   data = data || $3,
-                   updated_at = $4
-                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(&data)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "listing" => {
-            // Parse date fields using helper
-            let start_date = parse_date_field(&data, "start_date");
-            let end_date = parse_date_field(&data, "end_date");
-
-            sqlx::query(
-                r#"UPDATE listings SET 
-                   status = COALESCE($3, status),
-                   listing_price = COALESCE($4, listing_price),
-                   listing_currency = COALESCE($5, listing_currency),
-                   featured = COALESCE($6, featured),
-                   channel = COALESCE($7, channel),
-                   channel_name = COALESCE($8, channel_name),
-                   start_date = COALESCE($9, start_date),
-                   end_date = COALESCE($10, end_date),
-                   updated_at = $11
-                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(data.get("status").and_then(|v| v.as_str()))
-            .bind(data.get("listing_price").and_then(|v| v.as_f64()))
-            .bind(data.get("listing_currency").and_then(|v| v.as_str()))
-            .bind(data.get("featured").and_then(|v| v.as_bool()))
-            .bind(data.get("channel").and_then(|v| v.as_str()))
-            .bind(data.get("channel_name").and_then(|v| v.as_str()))
-            .bind(start_date)
-            .bind(end_date)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        "offer" => {
-            sqlx::query(
-                r#"UPDATE offers SET 
-                   status = COALESCE($3, status),
-                   offer_amount = COALESCE($4, offer_amount),
-                   currency = COALESCE($5, currency),
-                   conditions = COALESCE($6, conditions),
-                   financing_type = COALESCE($7, financing_type),
-                   updated_at = $8
-                   WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
-            )
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(data.get("status").and_then(|v| v.as_str()))
-            .bind(data.get("offer_amount").and_then(|v| v.as_f64()))
-            .bind(data.get("currency").and_then(|v| v.as_str()))
-            .bind(data.get("conditions").and_then(|v| v.as_str()))
-            .bind(data.get("financing_type").and_then(|v| v.as_str()))
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        }
-        _ => return Err(ApiError::NotFound(format!("Entity type {} not supported for update", entity_type))),
-    }
-
-    // Trigger workflows asynchronously (fire and forget - don't block HTTP response)
-    let pool = state.pool.clone();
-    let tenant = query.tenant_id;
-    let et = entity_type.clone();
-    let new_data = data.clone();
-    tokio::spawn(async move {
-        let _ = execute_triggered_workflows(
-            &pool,
-            tenant,
-            "field_changed",
-            &et,
-            id,
-            None, // TODO: fetch old_values before update for comparison
-            new_data,
-        ).await;
-    });
-
-    Ok(Json(serde_json::json!({ "id": id, "updated": true })))
-}
-
-async fn delete_record(
-    State(state): State<Arc<AppState>>,
-    Path((entity_type, id)): Path<(String, Uuid)>,
-    Query(query): Query<ListQuery>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let now = Utc::now();
-
-    // Migrated entities (Entity Records)
-    if ["contact", "deal", "task", "property", "viewing"].contains(&entity_type.as_str()) {
-        sqlx::query("UPDATE entity_records SET deleted_at = $3 WHERE id = $1 AND tenant_id = $2")
-            .bind(id)
-            .bind(query.tenant_id)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| ApiError::Internal(e.to_string()))?;
-        return Ok(Json(serde_json::json!({ "deleted": true })));
-    }
-
-    // Legacy tables handling
-    let table = match entity_type.as_str() {
-        "company" => "companies",
-        "listing" => "listings",
-        "offer" => "offers",
-        "contract" => "contracts",
-        _ => return Err(ApiError::NotFound(format!("Entity type {} not found", entity_type))),
+    Path((entity_code, id)): Path<(String, Uuid)>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    Json(payload): Json<Value>,
+) -> impl IntoResponse {
+    let mut conn = match get_rls_connection(&state.pool, tenant.id).await {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
 
-    let sql = format!("UPDATE {} SET deleted_at = $3 WHERE id = $1 AND tenant_id = $2", table);
-    sqlx::query(&sql)
-        .bind(id)
-        .bind(query.tenant_id)
-        .bind(now)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let fields = match state.metadata.get_fields_by_entity_name(tenant.id, &entity_code).await {
+        Ok(f) => f,
+        Err(_) => return (StatusCode::NOT_FOUND, "Entity type not found").into_response(),
+    };
 
-    Ok(Json(serde_json::json!({ "deleted": true })))
+    // Validate (is_update = true -> allow partials)
+    let processed_data = match validate_and_process_payload(&fields, &payload, true) {
+        Ok(d) => d,
+        Err(msg) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": msg}))).into_response(),
+    };
+
+    // Update using JSONB merge (|| operator)
+    let result = sqlx::query(
+        "UPDATE entity_records SET data = data || $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3 RETURNING id"
+    )
+    .bind(processed_data)
+    .bind(id)
+    .bind(tenant.id)
+    .execute(&mut *conn)
+    .await;
+
+    match result {
+        Ok(r) => {
+            if r.rows_affected() > 0 {
+                Json(serde_json::json!({"status": "updated"})).into_response()
+            } else {
+                (StatusCode::NOT_FOUND, "Record not found").into_response()
+            }
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+/// DELETE /records/:entity_code/:id
+async fn delete_record(
+    State(state): State<Arc<AppState>>,
+    Path((_entity_code, id)): Path<(String, Uuid)>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+) -> impl IntoResponse {
+    let mut conn = match get_rls_connection(&state.pool, tenant.id).await {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
+
+    // Soft delete
+    let result = sqlx::query("UPDATE entity_records SET deleted_at = NOW() WHERE id = $1 AND tenant_id = $2")
+        .bind(id)
+        .bind(tenant.id)
+        .execute(&mut *conn)
+        .await;
+
+    match result {
+        Ok(r) => {
+            if r.rows_affected() > 0 {
+                Json(serde_json::json!({"status": "deleted"})).into_response()
+            } else {
+                 (StatusCode::NOT_FOUND, "Record not found").into_response()
+            }
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+/// GET /lookup/:entity_code?q=search_term
+async fn lookup_entity(
+    State(state): State<Arc<AppState>>,
+    Path(entity_code): Path<String>,
+    Query(query): Query<LookupQuery>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+) -> impl IntoResponse {
+    let mut conn = match get_rls_connection(&state.pool, tenant.id).await {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
+
+    let entity_type = match state.metadata.get_entity_type(tenant.id, &entity_code).await {
+        Ok(e) => e,
+        Err(_) => return (StatusCode::NOT_FOUND, "Entity type not found").into_response(),
+    };
+
+    // Determine display field. Currently inferred from code.
+    // Future: add `display_field` col to entity_types
+    let display_field_sql = match entity_code.as_str() {
+        "contact" => "data->>'first_name' || ' ' || data->>'last_name'",
+        "company" | "deal" => "data->>'name'",
+        "task" | "property" => "data->>'title'",
+        "contract" => "data->>'contract_number'",
+        _ => "data->>'name'", // Fallback
+    };
+    
+    // Search filter
+    let search_term = query.q.unwrap_or_default();
+    let search_pattern = format!("%{}%", search_term);
+    
+    let sql = format!(
+        r#"
+        SELECT id, {} as label
+        FROM entity_records 
+        WHERE tenant_id = $1 
+          AND entity_type_id = $2 
+          AND deleted_at IS NULL
+          AND ({} ILIKE $3)
+        ORDER BY created_at DESC
+        LIMIT 20
+        "#,
+        display_field_sql, display_field_sql 
+    );
+
+    let rows = sqlx::query(&sql)
+        .bind(tenant.id)
+        .bind(entity_type.id)
+        .bind(search_pattern)
+        .fetch_all(&mut *conn)
+        .await;
+
+    match rows {
+        Ok(results) => {
+            let data: Vec<LookupResult> = results.iter().map(|row| {
+                 LookupResult {
+                     id: row.get("id"),
+                     label: row.get::<String, _>("label").trim().to_string(),
+                     sub_label: None,
+                 }
+            }).collect();
+            Json(data).into_response()
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+async fn get_rls_connection(pool: &PgPool, tenant_id: Uuid) -> Result<sqlx::pool::PoolConnection<sqlx::Postgres>, sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    sqlx::query("SELECT set_config('app.current_tenant', $1::text, false)")
+        .bind(tenant_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(conn)
+}
+
+fn validate_and_process_payload(
+    fields: &[FieldDef], 
+    payload: &Value, 
+    is_update: bool
+) -> Result<Value, String> {
+    let mut processed = payload.clone();
+
+    if !processed.is_object() {
+        return Err("Payload must be a JSON object".to_string());
+    }
+    
+    let obj = processed.as_object_mut().unwrap();
+
+    for field in fields {
+        let value = obj.get(&field.name);
+
+        // 1. Default Value (if missing on CREATE)
+        if value.is_none() && !is_update {
+            if let Some(default) = &field.default_value {
+                obj.insert(field.name.clone(), default.clone());
+            }
+        }
+        
+        let value = obj.get(&field.name); // Refresh
+
+        // 2. Required Check
+        if field.is_required && !is_update {
+             if value.is_none() || value.unwrap().is_null() {
+                  return Err(format!("Field '{}' is required", field.label));
+             }
+        }
+
+        // 3. Type Validation
+        if let Some(v) = value {
+            if !v.is_null() {
+                validate_field_type(field, v)?;
+            }
+        }
+    }
+    
+    Ok(processed)
+}
+
+fn validate_field_type(field: &FieldDef, value: &Value) -> Result<(), String> {
+    match field.field_type {
+        FieldType::Text | FieldType::TextArea | FieldType::Email | FieldType::Phone | FieldType::Url => {
+            if !value.is_string() {
+                return Err(format!("Field '{}' must be a text string", field.label));
+            }
+            if let Some(val) = &field.validation {
+                let s = value.as_str().unwrap();
+                if let Some(min) = val.min_length {
+                    if (s.len() as i32) < min { return Err(format!("'{}' strictly needs {} characters", field.label, min)); }
+                }
+                if let Some(max) = val.max_length {
+                     if (s.len() as i32) > max { return Err(format!("'{}' exceeds max {} characters", field.label, max)); }
+                }
+            }
+        },
+        FieldType::Number { .. } | FieldType::Money { .. } | FieldType::Score { .. } => {
+             if !value.is_number() {
+                 return Err(format!("Field '{}' must be a number", field.label));
+             }
+             if let Some(val) = &field.validation {
+                 let n = value.as_f64().unwrap();
+                 if let Some(min) = val.min_value {
+                     if n < min { return Err(format!("'{}' must be >= {}", field.label, min)); }
+                 }
+                 if let Some(max) = val.max_value {
+                     if n > max { return Err(format!("'{}' must be <= {}", field.label, max)); }
+                 }
+             }
+        },
+        FieldType::Boolean => {
+             if !value.is_boolean() {
+                 return Err(format!("Field '{}' must be a boolean", field.label));
+             }
+        },
+        FieldType::Date => {
+             if !value.is_string() { return Err(format!("Date field '{}' must be string", field.label)); }
+        },
+        FieldType::DateTime => {
+             if !value.is_string() { return Err(format!("DateTime field '{}' must be string", field.label)); }
+        },
+        FieldType::Link { .. } => {
+             if !value.is_string() { return Err(format!("Link field '{}' must be a valid ID string", field.label)); }
+        }
+        _ => {}
+    }
+    Ok(())
 }

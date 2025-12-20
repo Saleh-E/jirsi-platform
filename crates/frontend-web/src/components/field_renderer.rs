@@ -450,6 +450,31 @@ fn render_edit_input(
             }.into_view()
         }
 
+        // Select - SmartSelect
+        "select" => {
+            let val = current_value.as_str().unwrap_or("").to_string();
+            let opts_list = field.get_options();
+            let select_opts: Vec<SelectOption> = opts_list.into_iter()
+                .map(|(v, l)| SelectOption::new(v, l))
+                .collect();
+            
+            view! {
+                 <div class="field-input-select" style="min-width: 150px;">
+                     <SmartSelect
+                         options=select_opts
+                         value=val
+                         on_change=move |new_val| {
+                             let json_val = serde_json::Value::String(new_val);
+                             set_current_value.set(json_val.clone());
+                             on_change.call(json_val);
+                             set_editing.set(false);
+                         }
+                         placeholder=format!("Select {}...", field.label)
+                     />
+                 </div>
+            }.into_view()
+        }
+
         // Link - AsyncEntitySelect
         "link" => {
              // Extract target entity from field definition

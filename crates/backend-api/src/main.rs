@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
         .connect(&config.database_url)
         .await?;
 
-    tracing::info!("Connected to database");
+    tracing::info!("Connected to database: {}", config.database_url);
 
     // Run migrations (skip if already done)
     match sqlx::migrate!("../../migrations").run(&pool).await {
