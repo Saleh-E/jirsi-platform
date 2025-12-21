@@ -15,40 +15,42 @@ pub fn AsyncEntitySelect(
     let (is_open, set_is_open) = create_signal(false);
     let (search_query, set_search_query) = create_signal(String::new());
     
-    // Store entity type for async closures
-    let entity_type_stored = store_value(entity_type.clone());
+    // Capture entity type for async closures (separate clones for separate moves)
+    let entity_type_for_label = entity_type.clone();
+    let entity_type_for_search = entity_type.clone();
     
     // Resource to resolve the label of the CURRENTLY selected value
     let selected_value_label = create_resource(
         move || value.get(),
-        move |id| async move {
-            if let Some(uid) = id {
-                let etype = entity_type_stored.get_value();
-                // Fetch full entity to get its name/title/label
-                // We manually implement generic label extraction here (client-side fallback to server logic)
-                match fetch_entity(&etype, &uid.to_string()).await {
-                    Ok(data) => {
-                       // Try common label fields
-                       data.get("name")
-                           .or_else(|| data.get("title"))
-                           .or_else(|| data.get("label"))
-                           .or_else(|| data.get("first_name")) // Contact hint
-                           .and_then(|v| v.as_str())
-                           .map(|s| s.to_string())
-                           .or_else(|| {
-                               // Composite fallback for contact
-                               if let (Some(f), Some(l)) = (data.get("first_name"), data.get("last_name")) {
-                                   Some(format!("{} {}", f.as_str().unwrap_or(""), l.as_str().unwrap_or("")))
-                               } else {
-                                   Some(uid.to_string())
-                               }
-                           })
-                           .unwrap_or(uid.to_string())
-                    },
-                    Err(_) => uid.to_string()
+        move |id| {
+            let etype = entity_type_for_label.clone();
+            async move {
+                if let Some(uid) = id {
+                    // Fetch full entity to get its name/title/label
+                    match fetch_entity(&etype, &uid.to_string()).await {
+                        Ok(data) => {
+                           // Try common label fields
+                           data.get("name")
+                               .or_else(|| data.get("title"))
+                               .or_else(|| data.get("label"))
+                               .or_else(|| data.get("first_name")) // Contact hint
+                               .and_then(|v| v.as_str())
+                               .map(|s| s.to_string())
+                               .or_else(|| {
+                                   // Composite fallback for contact
+                                   if let (Some(f), Some(l)) = (data.get("first_name"), data.get("last_name")) {
+                                       Some(format!("{} {}", f.as_str().unwrap_or(""), l.as_str().unwrap_or("")))
+                                   } else {
+                                       Some(uid.to_string())
+                                   }
+                               })
+                               .unwrap_or(uid.to_string())
+                        },
+                        Err(_) => uid.to_string()
+                    }
+                } else {
+                    String::new()
                 }
-            } else {
-                String::new()
             }
         }
     );
@@ -57,13 +59,15 @@ pub fn AsyncEntitySelect(
     // We trigger this only when open or searching
     let search_results = create_resource(
         move || (is_open.get(), search_query.get()),
-        move |(open, query)| async move {
-            if !open {
-                return vec![];
+        move |(open, query)| {
+            let etype = entity_type_for_search.clone();
+            async move {
+                if !open {
+                    return vec![];
+                }
+                // Call generic lookup
+                fetch_entity_lookup(&etype, Some(&query)).await.unwrap_or_else(|_| vec![])
             }
-            let etype = entity_type_stored.get_value();
-            // Call generic lookup
-            fetch_entity_lookup(&etype, Some(&query)).await.unwrap_or_else(|_| vec![])
         }
     );
 
@@ -171,42 +175,52 @@ pub fn AsyncEntityLabel(
     #[prop(into)] id: String,
     #[prop(optional, into)] class: String,
 ) -> impl IntoView {
-    let entity_type_stored = store_value(entity_type);
-    let id_stored = store_value(id.clone());
-    
+    // Capture entity_type for the resource fetcher
+    let entity_type_clone = entity_type.clone();
+    let id_clone = id.clone();
+
     // Resource to fetch label
     let label_resource = create_resource(
-        move || id_stored.get_value(),
-        move |uid_str| async move {
-             if uid_str.is_empty() { return String::new(); }
-             
-             let etype = entity_type_stored.get_value();
-             match fetch_entity(&etype, &uid_str).await {
-                Ok(data) => {
-                   data.get("name")
-                       .or_else(|| data.get("title"))
-                       .or_else(|| data.get("label"))
-                       .or_else(|| data.get("first_name"))
-                       .and_then(|v| v.as_str())
-                       .map(|s| s.to_string())
-                       .or_else(|| {
-                           if let (Some(f), Some(l)) = (data.get("first_name"), data.get("last_name")) {
-                               Some(format!("{} {}", f.as_str().unwrap_or(""), l.as_str().unwrap_or("")))
-                           } else {
-                               Some(uid_str.clone())
-                           }
-                       })
-                       .unwrap_or(uid_str.clone())
-                },
-                Err(_) => uid_str
+        move || id_clone.clone(),
+        move |uid_str| {
+            let etype = entity_type_clone.clone();
+            async move {
+                if uid_str.is_empty() { return String::new(); }
+                
+                match fetch_entity(&etype, &uid_str).await {
+                    Ok(data) => {
+                       data.get("name")
+                           .or_else(|| data.get("title"))
+                           .or_else(|| data.get("label"))
+                           .or_else(|| data.get("first_name"))
+                           .and_then(|v| v.as_str())
+                           .map(|s| s.to_string())
+                           .or_else(|| {
+                               if let (Some(f), Some(l)) = (data.get("first_name"), data.get("last_name")) {
+                                   Some(format!("{} {}", f.as_str().unwrap_or(""), l.as_str().unwrap_or("")))
+                               } else {
+                                   Some(uid_str.clone())
+                               }
+                           })
+                           .unwrap_or(uid_str.clone())
+                    },
+                    Err(_) => uid_str
+                }
             }
         }
     );
     
+    // Capture id for view fallback safely
+    let id_stored_fallback = store_value(id.clone());
+    
+    let display_content = move || {
+        label_resource.get().unwrap_or_else(|| id_stored_fallback.with_value(|v| v.clone()))
+    };
+    
     view! {
         <span class=format!("async-entity-label {}", class)>
              <Suspense fallback=move || view! { <span class="loading-label">"..."</span> }>
-                 {move || label_resource.get().unwrap_or_else(|| id_stored.get_value())}
+                 {display_content}
              </Suspense>
         </span>
     }

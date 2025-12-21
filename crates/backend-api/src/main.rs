@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
     // Create database pool
     // Create database pool
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(2)
         .acquire_timeout(std::time::Duration::from_secs(30))
         .connect(&config.database_url)
         .await?;
@@ -96,9 +96,23 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting server on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.layer(axum::middleware::map_response(set_opfs_headers))).await?;
 
     Ok(())
+}
+
+async fn set_opfs_headers(response: axum::response::Response) -> axum::response::Response {
+    let mut response = response;
+    let headers = response.headers_mut();
+    headers.insert(
+        "Cross-Origin-Opener-Policy",
+        "same-origin".parse().unwrap(),
+    );
+    headers.insert(
+        "Cross-Origin-Embedder-Policy",
+        "require-corp".parse().unwrap(),
+    );
+    response
 }
 
 async fn health_check() -> impl IntoResponse {

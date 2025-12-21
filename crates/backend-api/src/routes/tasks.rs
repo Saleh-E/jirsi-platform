@@ -23,10 +23,12 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/:id", delete(delete_task))
 }
 
+use crate::middleware::database::RlsConn;
+use crate::middleware::tenant::ResolvedTenant;
+
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct TaskQuery {
-    pub tenant_id: Uuid,
     pub linked_entity_type: Option<String>,
     pub linked_entity_id: Option<Uuid>,
     pub status: Option<String>,
@@ -53,7 +55,6 @@ pub struct TaskResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTaskRequest {
-    pub tenant_id: Uuid,
     pub title: String,
     #[serde(default)]
     pub description: Option<String>,
@@ -83,8 +84,9 @@ pub struct TaskListResponse {
 }
 
 async fn list_tasks(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
     Query(query): Query<TaskQuery>,
+    mut conn: RlsConn,
 ) -> Result<Json<TaskListResponse>, ApiError> {
     use sqlx::Row;
     
@@ -93,47 +95,52 @@ async fn list_tasks(
     let offset = (page - 1) * per_page;
 
     // Build query with optional filters
-    let mut sql = String::from("SELECT id, title, description, due_date, priority, status, task_type, linked_entity_type, linked_entity_id, assignee_id, created_by, created_at FROM tasks WHERE tenant_id = $1");
-    let mut count_sql = String::from("SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1");
-    
-    if query.linked_entity_id.is_some() {
-        sql.push_str(" AND linked_entity_id = $4");
-        count_sql.push_str(" AND linked_entity_id = $2");
-    }
-    if query.status.is_some() {
-        sql.push_str(" AND status = $5");
-    }
-    
-    sql.push_str(" ORDER BY due_date ASC NULLS LAST, created_at DESC LIMIT $2 OFFSET $3");
+    let (count_sql, data_sql, has_entity_filter) = if let Some(entity_id) = query.linked_entity_id {
+        (
+            "SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1 AND linked_entity_id = $2",
+            "SELECT id, title, description, due_date, priority, status, task_type, linked_entity_type, linked_entity_id, assignee_id, created_by, created_at FROM tasks WHERE tenant_id = $1 AND linked_entity_id = $4 ORDER BY due_date ASC NULLS LAST LIMIT $2 OFFSET $3",
+            true
+        )
+    } else {
+        (
+            "SELECT COUNT(*) as count FROM tasks WHERE tenant_id = $1",
+            "SELECT id, title, description, due_date, priority, status, task_type, linked_entity_type, linked_entity_id, assignee_id, created_by, created_at FROM tasks WHERE tenant_id = $1 ORDER BY due_date ASC NULLS LAST LIMIT $2 OFFSET $3",
+            false
+        )
+    };
 
     // Get count
-    let count_row = if let Some(entity_id) = query.linked_entity_id {
-        sqlx::query(&count_sql).bind(query.tenant_id).bind(entity_id).fetch_one(&state.pool).await
+    let count_row = if has_entity_filter {
+        sqlx::query(count_sql)
+            .bind(tenant.id)
+            .bind(query.linked_entity_id.unwrap())
+            .fetch_one(&mut **conn)
+            .await
     } else {
-        sqlx::query(&count_sql).bind(query.tenant_id).fetch_one(&state.pool).await
+        sqlx::query(count_sql)
+            .bind(tenant.id)
+            .fetch_one(&mut **conn)
+            .await
     }.map_err(|e| ApiError::Internal(e.to_string()))?;
+    
     let total: i64 = count_row.try_get("count").unwrap_or(0);
 
-    // Get data - simplified query without all filters for now
-    let rows = if let Some(entity_id) = query.linked_entity_id {
-        sqlx::query(
-            "SELECT id, title, description, due_date, priority, status, task_type, linked_entity_type, linked_entity_id, assignee_id, created_by, created_at FROM tasks WHERE tenant_id = $1 AND linked_entity_id = $4 ORDER BY due_date ASC NULLS LAST LIMIT $2 OFFSET $3"
-        )
-        .bind(query.tenant_id)
-        .bind(per_page as i64)
-        .bind(offset as i64)
-        .bind(entity_id)
-        .fetch_all(&state.pool)
-        .await
+    // Get data
+    let rows = if has_entity_filter {
+        sqlx::query(data_sql)
+            .bind(tenant.id)
+            .bind(per_page as i64)
+            .bind(offset as i64)
+            .bind(query.linked_entity_id.unwrap())
+            .fetch_all(&mut **conn)
+            .await
     } else {
-        sqlx::query(
-            "SELECT id, title, description, due_date, priority, status, task_type, linked_entity_type, linked_entity_id, assignee_id, created_by, created_at FROM tasks WHERE tenant_id = $1 ORDER BY due_date ASC NULLS LAST LIMIT $2 OFFSET $3"
-        )
-        .bind(query.tenant_id)
-        .bind(per_page as i64)
-        .bind(offset as i64)
-        .fetch_all(&state.pool)
-        .await
+        sqlx::query(data_sql)
+            .bind(tenant.id)
+            .bind(per_page as i64)
+            .bind(offset as i64)
+            .fetch_all(&mut **conn)
+            .await
     }.map_err(|e| ApiError::Internal(e.to_string()))?;
 
     let data: Vec<TaskResponse> = rows.iter().map(|row| {
@@ -157,7 +164,8 @@ async fn list_tasks(
 }
 
 async fn create_task(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Json(req): Json<CreateTaskRequest>,
 ) -> Result<Json<TaskResponse>, ApiError> {
     let now = Utc::now();
@@ -171,7 +179,7 @@ async fn create_task(
         "#,
     )
     .bind(id)
-    .bind(req.tenant_id)
+    .bind(tenant.id)
     .bind(&req.title)
     .bind(&req.description)
     .bind(req.due_date)
@@ -183,7 +191,7 @@ async fn create_task(
     .bind(req.created_by)
     .bind(now)
     .bind(now)
-    .execute(&state.pool)
+    .execute(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -204,9 +212,9 @@ async fn create_task(
 }
 
 async fn get_task(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Path(id): Path<Uuid>,
-    Query(query): Query<TaskQuery>,
 ) -> Result<Json<TaskResponse>, ApiError> {
     use sqlx::Row;
 
@@ -214,8 +222,8 @@ async fn get_task(
         "SELECT id, title, description, due_date, priority, status, task_type, linked_entity_type, linked_entity_id, assignee_id, created_by, created_at FROM tasks WHERE id = $1 AND tenant_id = $2"
     )
     .bind(id)
-    .bind(query.tenant_id)
-    .fetch_optional(&state.pool)
+    .bind(tenant.id)
+    .fetch_optional(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -239,9 +247,9 @@ async fn get_task(
 }
 
 async fn update_task(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Path(id): Path<Uuid>,
-    Query(query): Query<TaskQuery>,
     Json(data): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let now = Utc::now();
@@ -250,10 +258,10 @@ async fn update_task(
     if let Some(status) = data.get("status").and_then(|v| v.as_str()) {
         sqlx::query("UPDATE tasks SET status = $3, updated_at = $4 WHERE id = $1 AND tenant_id = $2")
             .bind(id)
-            .bind(query.tenant_id)
+            .bind(tenant.id)
             .bind(status)
             .bind(now)
-            .execute(&state.pool)
+            .execute(&mut **conn)
             .await
             .map_err(|e| ApiError::Internal(e.to_string()))?;
     }
@@ -262,14 +270,14 @@ async fn update_task(
 }
 
 async fn delete_task(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Path(id): Path<Uuid>,
-    Query(query): Query<TaskQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     sqlx::query("DELETE FROM tasks WHERE id = $1 AND tenant_id = $2")
         .bind(id)
-        .bind(query.tenant_id)
-        .execute(&state.pool)
+        .bind(tenant.id)
+        .execute(&mut **conn)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 

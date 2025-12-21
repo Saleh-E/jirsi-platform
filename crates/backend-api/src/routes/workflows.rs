@@ -229,10 +229,6 @@ async fn execute_update_record(
     action: &WorkflowAction,
     context: &mut WorkflowContext,
 ) -> Result<(), String> {
-    let entity = action.config.get("entity")
-        .and_then(|v| v.as_str())
-        .ok_or("Missing entity in update_record")?;
-    
     let set_fields = action.config.get("set_fields")
         .ok_or("Missing set_fields in update_record")?;
     
@@ -245,23 +241,18 @@ async fn execute_update_record(
     let record_id = Uuid::parse_str(&record_id_str)
         .map_err(|e| format!("Invalid record_id: {}", e))?;
     
-    // Build dynamic update based on entity type
-    let table = entity_to_table(entity);
     let resolved_fields = resolve_fields(set_fields, context);
     
-    // Simple update for status field
-    if let Some(status) = resolved_fields.get("status").and_then(|v| v.as_str()) {
-        sqlx::query(&format!(
-            "UPDATE {} SET status = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3",
-            table
-        ))
-        .bind(status)
-        .bind(record_id)
-        .bind(context.tenant_id)
-        .execute(pool)
-        .await
-        .map_err(|e| format!("Failed to update record: {}", e))?;
-    }
+    // Update using JSONB merge on entity_records table
+    sqlx::query(
+        "UPDATE entity_records SET data = data || $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3"
+    )
+    .bind(resolved_fields)
+    .bind(record_id)
+    .bind(context.tenant_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update record: {}", e))?;
     
     Ok(())
 }
@@ -272,7 +263,7 @@ async fn execute_create_record(
     action: &WorkflowAction,
     context: &mut WorkflowContext,
 ) -> Result<(), String> {
-    let entity = action.config.get("entity")
+    let entity_code = action.config.get("entity")
         .and_then(|v| v.as_str())
         .ok_or("Missing entity in create_record")?;
     
@@ -290,50 +281,21 @@ async fn execute_create_record(
         );
     }
     
-    // Create record based on entity type
-    match entity {
-        "task" => {
-            let title = resolved_fields.get("title").and_then(|v| v.as_str()).unwrap_or("Auto-created task");
-            let description = resolved_fields.get("description").and_then(|v| v.as_str());
-            
-            sqlx::query(
-                "INSERT INTO tasks (id, tenant_id, title, description, status, created_at, updated_at) 
-                 VALUES ($1, $2, $3, $4, 'pending', NOW(), NOW())"
-            )
-            .bind(new_id)
-            .bind(context.tenant_id)
-            .bind(title)
-            .bind(description)
-            .execute(pool)
-            .await
-            .map_err(|e| format!("Failed to create task: {}", e))?;
-        }
-        "contract" => {
-            let property_id = resolved_fields.get("property_id")
-                .and_then(|v| v.as_str())
-                .and_then(|s| Uuid::parse_str(s).ok());
-            let contract_type = resolved_fields.get("contract_type").and_then(|v| v.as_str()).unwrap_or("sale");
-            let status = resolved_fields.get("status").and_then(|v| v.as_str()).unwrap_or("draft");
-            
-            sqlx::query(
-                "INSERT INTO contracts (id, tenant_id, property_id, contract_type, status, created_at, updated_at) 
-                 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())"
-            )
-            .bind(new_id)
-            .bind(context.tenant_id)
-            .bind(property_id)
-            .bind(contract_type)
-            .bind(status)
-            .execute(pool)
-            .await
-            .map_err(|e| format!("Failed to create contract: {}", e))?;
-        }
-        _ => {
-            warn!("Unsupported entity type for create_record: {}", entity);
-        }
-    }
+    // Create record in entity_records
+    sqlx::query(
+        "INSERT INTO entity_records (id, tenant_id, entity_type_id, data, created_at, updated_at) 
+         SELECT $1, $2, id, $3, NOW(), NOW() FROM entity_types WHERE name = $4 AND tenant_id = $5"
+    )
+    .bind(new_id)
+    .bind(context.tenant_id)
+    .bind(resolved_fields)
+    .bind(entity_code)
+    .bind(context.tenant_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to create record in entity_records: {}", e))?;
     
-    info!("Created {} record: {}", entity, new_id);
+    info!("Created {} record: {}", entity_code, new_id);
     Ok(())
 }
 
@@ -363,19 +325,24 @@ async fn execute_log_activity(
         .map(|s| resolve_variable(s, context))
         .unwrap_or_else(|| "Workflow executed".to_string());
     
+    let content = action.config.get("content")
+        .and_then(|v| v.as_str())
+        .map(|s| resolve_variable(s, context));
+
     sqlx::query(
-        "INSERT INTO activity_log (id, tenant_id, activity_type, title, entity_type, entity_id, occurred_at, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())"
+        "INSERT INTO interactions (id, tenant_id, interaction_type, title, content, entity_type, entity_id, occurred_at, created_at, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), '00000000-0000-0000-0000-000000000000')"
     )
     .bind(Uuid::new_v4())
     .bind(context.tenant_id)
     .bind(activity_type)
     .bind(&title)
+    .bind(&content)
     .bind(entity_type)
     .bind(entity_id)
     .execute(pool)
     .await
-    .map_err(|e| format!("Failed to log activity: {}", e))?;
+    .map_err(|e| format!("Failed to log interaction: {}", e))?;
     
     info!("Logged activity: {}", title);
     Ok(())
@@ -489,21 +456,7 @@ fn resolve_fields(set_fields: &Value, context: &WorkflowContext) -> Value {
     }
 }
 
-/// Convert entity type to database table name
-fn entity_to_table(entity: &str) -> String {
-    match entity {
-        "contact" => "contacts",
-        "company" => "companies",
-        "deal" => "deals",
-        "property" => "properties",
-        "listing" => "listings",
-        "viewing" => "viewings",
-        "offer" => "offers",
-        "contract" => "contracts",
-        "task" => "tasks",
-        _ => entity,
-    }.to_string()
-}
+// Removed entity_to_table as we now use entity_records for everything
 
 /// Log workflow execution to database
 async fn log_workflow_execution(

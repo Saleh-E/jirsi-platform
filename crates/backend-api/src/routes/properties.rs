@@ -10,7 +10,9 @@ use sqlx::{Row, postgres::PgRow};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use axum::extract::Extension;
 use crate::{error::ApiError, state::AppState};
+use crate::middleware::tenant::ResolvedTenant;
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
@@ -42,10 +44,11 @@ pub struct PropertyListResponse {
 
 async fn list_properties(
     State(state): State<Arc<AppState>>,
+    Extension(tenant): Extension<ResolvedTenant>,
     Query(query): Query<PropertyQuery>,
 ) -> Result<Json<PropertyListResponse>, ApiError> {
     let count_row: PgRow = sqlx::query("SELECT COUNT(*) as count FROM properties WHERE tenant_id = $1 AND deleted_at IS NULL")
-        .bind(query.tenant_id)
+        .bind(tenant.id)
         .fetch_one(&state.pool)
         .await
         .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
@@ -61,7 +64,7 @@ async fn list_properties(
         LIMIT $2 OFFSET $3
         "#,
     )
-    .bind(query.tenant_id)
+    .bind(tenant.id)
     .bind(query.limit as i64)
     .bind(query.offset as i64)
     .fetch_all(&state.pool)
@@ -106,7 +109,8 @@ pub struct CreatePropertyRequest {
 
 async fn create_property(
     State(state): State<Arc<AppState>>,
-    Query(query): Query<PropertyQuery>,
+    Extension(tenant): Extension<ResolvedTenant>,
+    Query(_query): Query<PropertyQuery>,
     Json(body): Json<CreatePropertyRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let id = Uuid::new_v4();
@@ -118,7 +122,7 @@ async fn create_property(
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"#
     )
     .bind(id)
-    .bind(query.tenant_id)
+    .bind(tenant.id)
     .bind(&body.reference)
     .bind(&body.title)
     .bind(&body.description)
@@ -141,14 +145,15 @@ async fn create_property(
 
 async fn get_property(
     State(state): State<Arc<AppState>>,
+    Extension(tenant): Extension<ResolvedTenant>,
     Path(id): Path<Uuid>,
-    Query(query): Query<PropertyQuery>,
+    Query(_query): Query<PropertyQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let row: PgRow = sqlx::query(
         r#"SELECT * FROM properties WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
     )
     .bind(id)
-    .bind(query.tenant_id)
+    .bind(tenant.id)
     .fetch_optional(&state.pool)
     .await
     .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?
@@ -174,8 +179,9 @@ async fn get_property(
 
 async fn update_property(
     State(state): State<Arc<AppState>>,
+    Extension(tenant): Extension<ResolvedTenant>,
     Path(id): Path<Uuid>,
-    Query(query): Query<PropertyQuery>,
+    Query(_query): Query<PropertyQuery>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let now = chrono::Utc::now();
@@ -189,7 +195,7 @@ async fn update_property(
            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#
     )
     .bind(id)
-    .bind(query.tenant_id)
+    .bind(tenant.id)
     .bind(body.get("title").and_then(|v| v.as_str()))
     .bind(body.get("status").and_then(|v| v.as_str()))
     .bind(body.get("price").and_then(|v| v.as_i64()))
@@ -203,14 +209,15 @@ async fn update_property(
 
 async fn delete_property(
     State(state): State<Arc<AppState>>,
+    Extension(tenant): Extension<ResolvedTenant>,
     Path(id): Path<Uuid>,
-    Query(query): Query<PropertyQuery>,
+    Query(_query): Query<PropertyQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let now = chrono::Utc::now();
     
     sqlx::query("UPDATE properties SET deleted_at = $3 WHERE id = $1 AND tenant_id = $2")
         .bind(id)
-        .bind(query.tenant_id)
+        .bind(tenant.id)
         .bind(now)
         .execute(&state.pool)
         .await
@@ -222,8 +229,9 @@ async fn delete_property(
 // Viewings
 async fn list_viewings(
     State(state): State<Arc<AppState>>,
+    Extension(tenant): Extension<ResolvedTenant>,
     Path(property_id): Path<Uuid>,
-    Query(query): Query<PropertyQuery>,
+    Query(_query): Query<PropertyQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let rows: Vec<PgRow> = sqlx::query(
         r#"SELECT v.*, c.first_name, c.last_name 
@@ -233,7 +241,7 @@ async fn list_viewings(
            ORDER BY v.scheduled_at DESC"#
     )
     .bind(property_id)
-    .bind(query.tenant_id)
+    .bind(tenant.id)
     .fetch_all(&state.pool)
     .await
     .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
@@ -262,15 +270,16 @@ pub struct CreateViewingRequest {
 
 async fn create_viewing(
     State(state): State<Arc<AppState>>,
+    Extension(tenant): Extension<ResolvedTenant>,
     Path(property_id): Path<Uuid>,
-    Query(query): Query<PropertyQuery>,
+    Query(_query): Query<PropertyQuery>,
     Json(body): Json<CreateViewingRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let id = Uuid::new_v4();
     
     // Get any agent - simplified assignment
     let agent_id: Uuid = sqlx::query_scalar::<_, Uuid>("SELECT id FROM users WHERE tenant_id = $1 LIMIT 1")
-        .bind(query.tenant_id)
+        .bind(tenant.id)
         .fetch_one(&state.pool)
         .await
         .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
@@ -280,7 +289,7 @@ async fn create_viewing(
            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())"#
     )
     .bind(id)
-    .bind(query.tenant_id)
+    .bind(tenant.id)
     .bind(property_id)
     .bind(body.contact_id)
     .bind(agent_id)
@@ -296,8 +305,9 @@ async fn create_viewing(
 // Offers
 async fn list_offers(
     State(state): State<Arc<AppState>>,
+    Extension(tenant): Extension<ResolvedTenant>,
     Path(property_id): Path<Uuid>,
-    Query(query): Query<PropertyQuery>,
+    Query(_query): Query<PropertyQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let rows: Vec<PgRow> = sqlx::query(
         r#"SELECT o.*, c.first_name, c.last_name 
@@ -307,7 +317,7 @@ async fn list_offers(
            ORDER BY o.submitted_at DESC"#
     )
     .bind(property_id)
-    .bind(query.tenant_id)
+    .bind(tenant.id)
     .fetch_all(&state.pool)
     .await
     .map_err(|e: sqlx::Error| ApiError::Internal(e.to_string()))?;
@@ -338,8 +348,9 @@ pub struct CreateOfferRequest {
 
 async fn create_offer(
     State(state): State<Arc<AppState>>,
+    Extension(tenant): Extension<ResolvedTenant>,
     Path(property_id): Path<Uuid>,
-    Query(query): Query<PropertyQuery>,
+    Query(_query): Query<PropertyQuery>,
     Json(body): Json<CreateOfferRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let id = Uuid::new_v4();
@@ -349,7 +360,7 @@ async fn create_offer(
            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())"#
     )
     .bind(id)
-    .bind(query.tenant_id)
+    .bind(tenant.id)
     .bind(property_id)
     .bind(body.contact_id)
     .bind(body.amount)

@@ -9,6 +9,7 @@ pub mod form;
 pub mod kanban;
 pub mod calendar;
 pub mod map;
+pub mod log_activity_modal;
 pub mod view_switcher;
 pub mod create_modal;
 pub mod canvas;
@@ -29,4 +30,5 @@ pub mod bottom_sheet;
 pub mod smart_input;
 pub mod node_graph;
 pub mod async_entity_select;
+pub mod sync_indicator;
 

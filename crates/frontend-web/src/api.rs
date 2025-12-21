@@ -6,7 +6,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
 
 // Demo tenant ID (from seeded data)
-pub const TENANT_ID: &str = "0e147821-5cbc-4a23-8bd8-3f5b1a784ea5";
+pub const TENANT_ID: &str = "1b1d26f2-3b0e-4d3f-bc9f-62d7193274af";
 
 // Backend API base URL
 pub const API_BASE: &str = "http://localhost:3000/api/v1";
@@ -81,6 +81,10 @@ pub async fn fetch_json<T: for<'de> Deserialize<'de>>(url: &str) -> Result<T, St
         .set("Content-Type", "application/json")
         .map_err(|e| format!("Header error: {:?}", e))?;
 
+    request.headers()
+        .set("X-Tenant-Slug", "demo")
+        .map_err(|e| format!("Header error: {:?}", e))?;
+
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
         .await
         .map_err(|e| format!("Fetch error: {:?}", e))?;
@@ -102,19 +106,19 @@ pub async fn fetch_json<T: for<'de> Deserialize<'de>>(url: &str) -> Result<T, St
 
 /// Fetch contacts from API
 pub async fn fetch_contacts() -> Result<ListResponse<Contact>, String> {
-    let url = format!("{}/entities/contact?tenant_id={}", API_BASE, TENANT_ID);
+    let url = format!("{}/entities/contact", API_BASE);
     fetch_json(&url).await
 }
 
 /// Fetch companies from API
 pub async fn fetch_companies() -> Result<ListResponse<Company>, String> {
-    let url = format!("{}/entities/company?tenant_id={}", API_BASE, TENANT_ID);
+    let url = format!("{}/entities/company", API_BASE);
     fetch_json(&url).await
 }
 
 /// Fetch deals from API
 pub async fn fetch_deals() -> Result<ListResponse<Deal>, String> {
-    let url = format!("{}/entities/deal?tenant_id={}", API_BASE, TENANT_ID);
+    let url = format!("{}/entities/deal", API_BASE);
     fetch_json(&url).await
 }
 
@@ -347,6 +351,10 @@ pub async fn delete_request(url: &str) -> Result<serde_json::Value, String> {
     let request = Request::new_with_str_and_init(url, &opts)
         .map_err(|e| format!("Request error: {:?}", e))?;
 
+    request.headers()
+        .set("X-Tenant-Slug", "demo")
+        .map_err(|e| format!("Header error: {:?}", e))?;
+
     let resp_value = JsFuture::from(window.fetch_with_request(&request))
         .await
         .map_err(|e| format!("Fetch error: {:?}", e))?;
@@ -409,19 +417,19 @@ pub async fn patch_json<B: Serialize, T: for<'de> Deserialize<'de>>(url: &str, b
 
 /// Fetch all entity types for the tenant
 pub async fn fetch_entity_types() -> Result<Vec<EntityType>, String> {
-    let url = format!("{}/metadata/entities?tenant_id={}", API_BASE, TENANT_ID);
+    let url = format!("{}/metadata/entities", API_BASE);
     fetch_json(&url).await
 }
 
 /// Fetch a single entity type by name
 pub async fn fetch_entity_type(name: &str) -> Result<EntityType, String> {
-    let url = format!("{}/metadata/entities/{}?tenant_id={}", API_BASE, name, TENANT_ID);
+    let url = format!("{}/metadata/entities/{}", API_BASE, name);
     fetch_json(&url).await
 }
 
 /// Fetch field definitions for an entity type
 pub async fn fetch_field_defs(entity_name: &str) -> Result<Vec<FieldDef>, String> {
-    let url = format!("{}/metadata/entities/{}/fields?tenant_id={}", API_BASE, entity_name, TENANT_ID);
+    let url = format!("{}/metadata/entities/{}/fields", API_BASE, entity_name);
     fetch_json(&url).await
 }
 
@@ -434,8 +442,8 @@ pub async fn add_field_option(
     label: Option<&str>,
 ) -> Result<serde_json::Value, String> {
     let url = format!(
-        "{}/metadata/entities/{}/fields/{}/options?tenant_id={}", 
-        API_BASE, entity_name, field_id, TENANT_ID
+        "{}/metadata/entities/{}/fields/{}/options", 
+        API_BASE, entity_name, field_id
     );
     
     let body = serde_json::json!({
@@ -544,6 +552,7 @@ pub struct Association {
     pub target_id: String,
     pub role: Option<String>,
     pub is_primary: bool,
+    pub target_label: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -621,11 +630,18 @@ pub struct InteractionListResponse {
     pub total: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InteractionSummary {
+    pub total_count: i64,
+    pub last_interaction: Option<String>,
+    pub counts_by_type: std::collections::HashMap<String, i64>,
+}
+
 /// Fetch interactions (activity timeline) for a record
 pub async fn fetch_interactions(entity_type: &str, record_id: &str) -> Result<InteractionListResponse, String> {
     let url = format!(
-        "{}/interactions?tenant_id={}&entity_type={}&record_id={}",
-        API_BASE, TENANT_ID, entity_type, record_id
+        "{}/interactions?entity_type={}&record_id={}&tenant_id={}",
+        API_BASE, entity_type, record_id, TENANT_ID
     );
     fetch_json(&url).await
 }
@@ -641,7 +657,6 @@ pub async fn create_interaction(
 ) -> Result<serde_json::Value, String> {
     let url = format!("{}/interactions?tenant_id={}", API_BASE, TENANT_ID);
     let body = serde_json::json!({
-        "tenant_id": TENANT_ID,
         "entity_type": entity_type,
         "record_id": record_id,
         "interaction_type": interaction_type,
@@ -650,6 +665,15 @@ pub async fn create_interaction(
         "created_by": created_by
     });
     post_json(&url, &body).await
+}
+
+/// Fetch interaction summary for a record
+pub async fn fetch_interaction_summary(entity_type: &str, record_id: &str) -> Result<InteractionSummary, String> {
+    let url = format!(
+        "{}/interactions/summary/{}/{}?tenant_id={}",
+        API_BASE, entity_type, record_id, TENANT_ID
+    );
+    fetch_json(&url).await
 }
 
 // ============================================================================
@@ -1077,33 +1101,39 @@ pub struct ViewColumn {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViewDef {
     pub id: String,
+    pub entity_type_id: String,
     pub name: String,
     pub label: String,
-    pub view_type: ViewType,
+    pub view_type: String,
     pub is_default: bool,
+    pub is_system: bool,
+    pub created_by: Option<String>,
     pub columns: Vec<ViewColumn>,
+    pub filters: serde_json::Value,
+    pub sort: serde_json::Value,
     pub settings: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewListResponse {
+    pub data: Vec<ViewDef>,
+    pub total: i64,
 }
 
 /// Fetch default view for an entity type
 pub async fn fetch_default_view(entity_name: &str) -> Result<ViewDef, String> {
-    // Attempt to fetch specific default view from backend
-    // If backend doesn't support specific endpoint yet, we might need to list all views and find default.
-    // For now, assuming backend supports /metadata/entities/:name/views/default or similar.
-    // If not, we will need to implement list_views in api.rs and filter here.
-    // Let's use a fail-safe approach: try to fetch from /views/default first.
-    // Wait, backend `views.rs` has routes?
-    // Let's fall back to client-side default if fetch fails.
+    let url = format!("{}/views?tenant_id={}&entity_code={}", API_BASE, TENANT_ID, entity_name);
+    let resp: ViewListResponse = fetch_json(&url).await?;
     
-    // TEMPORARY: Just return a default view client-side until backend endpoint is confirmed ready.
-    // This allows me to proceed with entity_list.rs refactor immediately.
-    Ok(ViewDef {
-        id: "default".to_string(),
-        name: "default".to_string(),
-        label: "All Records".to_string(),
-        view_type: ViewType::Table,
-        is_default: true,
-        columns: vec![], // Empty columns = all columns or special handling
-        settings: serde_json::json!({}),
-    })
+    // The backend returns views ordered by is_default DESC, so the first one is the default
+    resp.data.into_iter()
+        .find(|v| v.is_default)
+        .ok_or_else(|| "Default view not found".to_string())
+}
+
+/// Fetch all views for an entity type
+pub async fn fetch_views(entity_name: &str) -> Result<Vec<ViewDef>, String> {
+    let url = format!("{}/views?tenant_id={}&entity_code={}", API_BASE, TENANT_ID, entity_name);
+    let resp: ViewListResponse = fetch_json(&url).await?;
+    Ok(resp.data)
 }

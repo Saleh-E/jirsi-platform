@@ -21,9 +21,11 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/threads/:entity_id/reply", post(send_reply))
 }
 
+use crate::middleware::database::RlsConn;
+use crate::middleware::tenant::ResolvedTenant;
+
 #[derive(Debug, Deserialize)]
 pub struct ThreadsQuery {
-    pub tenant_id: Uuid,
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
@@ -68,7 +70,6 @@ pub struct MessagesListResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ReplyRequest {
-    pub tenant_id: Uuid,
     pub interaction_type: String,
     pub title: String,
     #[serde(default)]
@@ -78,8 +79,8 @@ pub struct ReplyRequest {
 
 /// GET /inbox/threads - List all conversation threads
 async fn list_threads(
-    State(state): State<Arc<AppState>>,
-    Query(query): Query<ThreadsQuery>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
     use sqlx::Row;
 
@@ -122,8 +123,8 @@ async fn list_threads(
     "#;
 
     let rows = sqlx::query(sql)
-        .bind(query.tenant_id)
-        .fetch_all(&state.pool)
+        .bind(tenant.id)
+        .fetch_all(&mut **conn)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -138,7 +139,7 @@ async fn list_threads(
         let last_interaction_type: String = row.try_get("last_interaction_type").unwrap_or_default();
 
         // Fetch entity name based on type
-        let entity_name = get_entity_name(&state.pool, &entity_type, entity_id).await;
+        let entity_name = get_entity_name(&mut conn, &entity_type, entity_id).await;
 
         // Create preview from content or title
         let preview = last_content
@@ -164,9 +165,9 @@ async fn list_threads(
 
 /// GET /inbox/threads/:entity_id/messages - Get full message history for a thread
 async fn get_thread_messages(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
     Path(entity_id): Path<Uuid>,
-    Query(query): Query<ThreadsQuery>,
+    mut conn: RlsConn,
 ) -> Result<Json<MessagesListResponse>, ApiError> {
     use sqlx::Row;
 
@@ -175,8 +176,8 @@ async fn get_thread_messages(
         "SELECT DISTINCT entity_type FROM interactions WHERE record_id = $1 AND tenant_id = $2 LIMIT 1"
     )
     .bind(entity_id)
-    .bind(query.tenant_id)
-    .fetch_optional(&state.pool)
+    .bind(tenant.id)
+    .fetch_optional(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -184,7 +185,7 @@ async fn get_thread_messages(
         .map(|r| r.try_get("entity_type").unwrap_or_default())
         .unwrap_or_else(|| "contact".to_string());
 
-    let entity_name = get_entity_name(&state.pool, &entity_type, entity_id).await;
+    let entity_name = get_entity_name(&mut conn, &entity_type, entity_id).await;
 
     // Fetch all messages for this thread
     let sql = r#"
@@ -203,17 +204,14 @@ async fn get_thread_messages(
 
     let rows = sqlx::query(sql)
         .bind(entity_id)
-        .bind(query.tenant_id)
-        .fetch_all(&state.pool)
+        .bind(tenant.id)
+        .fetch_all(&mut **conn)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     let messages: Vec<ThreadMessageResponse> = rows.iter().map(|row| {
         let interaction_type: String = row.try_get("interaction_type").unwrap_or_default();
         
-        // Determine direction based on interaction type
-        // Inbound: email, message (from customer)
-        // Outbound: note (internal), call (agent initiated)
         let direction = match interaction_type.to_lowercase().as_str() {
             "email" | "message" => "inbound",
             _ => "outbound",
@@ -240,8 +238,9 @@ async fn get_thread_messages(
 
 /// POST /inbox/threads/:entity_id/reply - Send a reply in a thread
 async fn send_reply(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
     Path(entity_id): Path<Uuid>,
+    mut conn: RlsConn,
     Json(req): Json<ReplyRequest>,
 ) -> Result<Json<ThreadMessageResponse>, ApiError> {
     let now = Utc::now();
@@ -252,8 +251,8 @@ async fn send_reply(
         "SELECT DISTINCT entity_type FROM interactions WHERE record_id = $1 AND tenant_id = $2 LIMIT 1"
     )
     .bind(entity_id)
-    .bind(req.tenant_id)
-    .fetch_optional(&state.pool)
+    .bind(tenant.id)
+    .fetch_optional(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -272,7 +271,7 @@ async fn send_reply(
         "#,
     )
     .bind(id)
-    .bind(req.tenant_id)
+    .bind(tenant.id)
     .bind(&entity_type)
     .bind(entity_id)
     .bind(&req.interaction_type)
@@ -282,11 +281,9 @@ async fn send_reply(
     .bind(now)
     .bind(now)
     .bind(now)
-    .execute(&state.pool)
+    .execute(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
-
-    // TODO: Trigger "On Reply" workflows here
 
     Ok(Json(ThreadMessageResponse {
         id,
@@ -301,7 +298,7 @@ async fn send_reply(
 }
 
 /// Helper to get entity name by type and ID
-async fn get_entity_name(pool: &sqlx::PgPool, entity_type: &str, entity_id: Uuid) -> String {
+async fn get_entity_name(conn: &mut RlsConn, entity_type: &str, entity_id: Uuid) -> String {
     use sqlx::Row;
 
     match entity_type {
@@ -310,7 +307,7 @@ async fn get_entity_name(pool: &sqlx::PgPool, entity_type: &str, entity_id: Uuid
                 "SELECT first_name, last_name FROM contacts WHERE id = $1"
             )
             .bind(entity_id)
-            .fetch_optional(pool)
+            .fetch_optional(&mut ***conn)
             .await
             .ok()
             .flatten();
@@ -325,7 +322,7 @@ async fn get_entity_name(pool: &sqlx::PgPool, entity_type: &str, entity_id: Uuid
         "company" => {
             let row = sqlx::query("SELECT name FROM companies WHERE id = $1")
                 .bind(entity_id)
-                .fetch_optional(pool)
+                .fetch_optional(&mut ***conn)
                 .await
                 .ok()
                 .flatten();
@@ -336,7 +333,7 @@ async fn get_entity_name(pool: &sqlx::PgPool, entity_type: &str, entity_id: Uuid
         "deal" => {
             let row = sqlx::query("SELECT name FROM deals WHERE id = $1")
                 .bind(entity_id)
-                .fetch_optional(pool)
+                .fetch_optional(&mut ***conn)
                 .await
                 .ok()
                 .flatten();

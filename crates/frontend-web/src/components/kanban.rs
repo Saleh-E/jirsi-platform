@@ -27,11 +27,11 @@ pub struct KanbanColumn {
 pub fn KanbanView(
     entity_type: String,
     config: KanbanConfig,
-    #[prop(optional)] field_options: Option<Vec<(String, String)>>,
+    #[prop(optional)] field_options: Vec<(String, String)>,
 ) -> impl IntoView {
     let entity_type_stored = store_value(entity_type.clone());
     let config_stored = store_value(config);
-    let options_stored = store_value(field_options.unwrap_or_default());
+    let options_stored = store_value(field_options);
     
     // State for columns and records
     let (columns, set_columns) = create_signal::<Vec<KanbanColumn>>(Vec::new());
@@ -149,21 +149,26 @@ pub fn KanbanView(
                                                         let mut data = serde_json::Map::new();
                                                         data.insert(cfg.group_by_field.clone(), serde_json::json!(new_status));
                                                         
-                                                        // Correct URL: /entities/{entity_type}/{record_id}
+                                                        // Correct URL: /records/{entity_code}/{record_id}
                                                         let url = format!(
-                                                            "{}/entities/{}/{}?tenant_id={}",
-                                                            API_BASE, et, record_id, TENANT_ID
+                                                            "{}/records/{}/{}",
+                                                            API_BASE, et, record_id
                                                         );
-                                                        let _ = put_json::<serde_json::Value>(
+                                                        
+                                                        match put_json::<serde_json::Value>(
                                                             &url,
                                                             &serde_json::Value::Object(data)
-                                                        ).await;
-                                                        
-                                                        // Refresh data after update
+                                                        ).await {
+                                                            Ok(_) => {
+                                                                set_refresh.update(|n| *n += 1);
+                                                            }
+                                                            Err(e) => {
+                                                                logging::log!("Failed to update Kanban status: {}", e);
+                                                            }
+                                                        }
                                                     });
                                                     
                                                     set_dragging_id.set(None);
-                                                    set_refresh.update(|n| *n += 1);
                                                 }
                                             }
                                         >

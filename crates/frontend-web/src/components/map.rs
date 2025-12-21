@@ -1,9 +1,59 @@
 //! Map View Component - Metadata-driven map view
-//! Displays records on a map using latitude/longitude fields
+//! Displays records on a map using Leaflet via JS interop
 
 use leptos::*;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 use crate::api::{fetch_entity_list, API_BASE, TENANT_ID};
+
+// Binding to global L (Leaflet)
+// Binding to global L (Leaflet)
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = "L", js_name = map)]
+    fn leaflet_map(id: &str) -> MapObj;
+    
+    #[wasm_bindgen(js_namespace = "L")]
+    fn tileLayer(url: &str, options: &JsValue) -> LayerObj;
+    
+    #[wasm_bindgen(js_namespace = "L", js_name = marker)]
+    fn leaflet_marker(coords: &js_sys::Array) -> MarkerObj;
+    
+    #[wasm_bindgen(js_namespace = "L")]
+    fn icon(options: &JsValue) -> IconObj;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    type MapObj;
+    #[wasm_bindgen(method)]
+    fn setView(this: &MapObj, center: &js_sys::Array, zoom: u8) -> MapObj;
+    #[wasm_bindgen(method)]
+    fn addLayer(this: &MapObj, layer: &LayerObj) -> MapObj;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    type LayerObj;
+    #[wasm_bindgen(method)]
+    fn addTo(this: &LayerObj, map: &MapObj) -> LayerObj;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    type MarkerObj;
+    #[wasm_bindgen(method)]
+    fn addTo(this: &MarkerObj, map: &MapObj) -> MarkerObj;
+    #[wasm_bindgen(method)]
+    fn bindPopup(this: &MarkerObj, content: &str) -> MarkerObj;
+    #[wasm_bindgen(method)]
+    fn setIcon(this: &MarkerObj, icon: &IconObj) -> MarkerObj;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    type IconObj;
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MapConfig {
@@ -32,13 +82,13 @@ pub fn MapView(
     entity_type: String,
     config: MapConfig,
 ) -> impl IntoView {
-    let config_stored = store_value(config);
+    let config_stored = store_value(config.clone());
+    let map_id = format!("map-{}", uuid::Uuid::new_v4());
     
     // State
     let (markers, set_markers) = create_signal::<Vec<MapMarker>>(Vec::new());
     let (loading, set_loading) = create_signal(true);
     let (error, set_error) = create_signal::<Option<String>>(None);
-    let (selected_marker, set_selected_marker) = create_signal::<Option<String>>(None);
     
     // Fetch records
     let entity_for_effect = entity_type.clone();
@@ -55,12 +105,18 @@ pub fn MapView(
                     let records = response.data;
                     let map_markers: Vec<MapMarker> = records.into_iter()
                         .filter_map(|record| {
-                            // Get lat/lng
+                            // Get lat/lng - try numeric first, then string parse
                             let lat = record.get(&cfg.lat_field)
-                                .and_then(|v| v.as_f64())?;
+                                .and_then(|v| v.as_f64())
+                                .or_else(|| record.get(&cfg.lat_field).and_then(|v| v.as_str()).and_then(|s| s.parse::<f64>().ok()))?;
+                                
                             let lng = record.get(&cfg.lng_field)
-                                .and_then(|v| v.as_f64())?;
+                                .and_then(|v| v.as_f64())
+                                .or_else(|| record.get(&cfg.lng_field).and_then(|v| v.as_str()).and_then(|s| s.parse::<f64>().ok()))?;
                             
+                            // Basic validation
+                            if lat == 0.0 && lng == 0.0 { return None; }
+
                             let title = record.get(&cfg.popup_title_field)
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("Unknown")
@@ -70,7 +126,7 @@ pub fn MapView(
                                 .and_then(|f| record.get(f))
                                 .and_then(|v| v.as_str())
                                 .map(|s| get_marker_color(s))
-                                .unwrap_or_else(|| "#3b82f6".to_string());
+                                .unwrap_or_else(|| "blue".to_string());
                             
                             // Build popup HTML
                             let popup_fields: Vec<String> = cfg.popup_fields.iter()
@@ -86,7 +142,7 @@ pub fn MapView(
                                     })
                                 })
                                 .collect();
-                            let popup_html = format!("<h4>{}</h4>{}", title, popup_fields.join("<br>"));
+                            let popup_html = format!("<div class='map-popup'><h4>{}</h4>{}</div>", title, popup_fields.join("<br>"));
                             
                             let id = record.get("id")
                                 .and_then(|v| v.as_str())
@@ -116,65 +172,38 @@ pub fn MapView(
         });
     });
     
-    // Default center (Dubai)
-    let default_center = config_stored.get_value().default_center.unwrap_or((25.2048, 55.2708));
-    let default_zoom = config_stored.get_value().default_zoom.unwrap_or(11);
+    // Initialize Map Result
+    let map_id_clone = map_id.clone();
     
+    // Effect to render map when markers change
+    create_effect(move |_| {
+        let current_markers = markers.get();
+        if loading.get() { return; }
+        
+        // We need a slight delay to ensure DOM is ready
+        let m_id = map_id_clone.clone();
+        let cfg = config_stored.get_value();
+        
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                &Closure::once_into_js(move || {
+                    init_map(&m_id, &current_markers, &cfg);
+                }).into(),
+                100, // 100ms delay
+            );
+        }
+    });
+
     view! {
-        <div class="map-container">
+        <div class="map-container" style="height: calc(100vh - 140px); width: 100%; position: relative;">
             {move || {
                 if loading.get() {
-                    view! { <div class="map-loading">"Loading map..."</div> }.into_view()
+                    view! { <div class="map-loading">"Loading map data..."</div> }.into_view()
                 } else if let Some(err) = error.get() {
                     view! { <div class="map-error">{err}</div> }.into_view()
                 } else {
-                    let marker_count = markers.get().len();
                     view! {
-                        <div class="map-wrapper">
-                            <div class="map-header">
-                                <span class="marker-count">{format!("{} properties on map", marker_count)}</span>
-                            </div>
-                            // Map placeholder - in production would use Leaflet/MapLibre
-                            <div class="map-placeholder" id="map-canvas" style=format!(
-                                "background: linear-gradient(135deg, #1a365d 0%, #2d3748 100%); display: flex; align-items: center; justify-content: center; color: white; flex-direction: column;"
-                            )>
-                                <div style="font-size: 3rem; margin-bottom: 1rem;">"🗺️"</div>
-                                <p style="text-align: center; max-width: 300px;">
-                                    "Map component ready."<br/>
-                                    <small style="opacity: 0.7;">{format!("Center: {:.4}, {:.4} | Zoom: {}", default_center.0, default_center.1, default_zoom)}</small>
-                                </p>
-                            </div>
-                            // Marker list sidebar
-                            <div class="map-sidebar">
-                                <h4 class="sidebar-title">"Properties"</h4>
-                                <div class="marker-list">
-                                    <For
-                                        each=move || markers.get()
-                                        key=|m| m.id.clone()
-                                        children=move |marker| {
-                                            let marker_id = marker.id.clone();
-                                            let is_selected = move || selected_marker.get() == Some(marker_id.clone());
-                                            let bg_color = marker.color.clone();
-                                            
-                                            view! {
-                                                <div 
-                                                    class=move || format!("marker-item {}", if is_selected() { "selected" } else { "" })
-                                                    on:click={
-                                                        let id = marker.id.clone();
-                                                        move |_| {
-                                                            set_selected_marker.set(Some(id.clone()));
-                                                        }
-                                                    }
-                                                >
-                                                    <span class="marker-dot" style=format!("background-color: {}", bg_color)></span>
-                                                    <span class="marker-title">{marker.title.clone()}</span>
-                                                </div>
-                                            }
-                                        }
-                                    />
-                                </div>
-                            </div>
-                        </div>
+                       <div id=map_id.clone() style="height: 100%; width: 100%; z-index: 1;"></div>
                     }.into_view()
                 }
             }}
@@ -182,14 +211,56 @@ pub fn MapView(
     }
 }
 
+fn init_map(map_id: &str, markers: &[MapMarker], config: &MapConfig) {
+    // Check if element exists
+    let window = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+    if document.get_element_by_id(map_id).is_none() {
+        return;
+    }
+
+    // Default center (Dubai) or config
+    let (lat, lng) = config.default_center.unwrap_or((25.2048, 55.2708));
+    let zoom = config.default_zoom.unwrap_or(11);
+    
+    // Initialize map
+    let center_arr = js_sys::Array::new();
+    center_arr.push(&JsValue::from(lat));
+    center_arr.push(&JsValue::from(lng));
+    
+    // We need to check if map is already initialized on this element, but for now we assume fresh mount or rely on Leaflet handling re-init gracefully (or we should destroy prev map).
+    // In a robust implementation we'd store the map instance in a signal.
+    
+    // Create map
+    let map_instance = leaflet_map(map_id).setView(&center_arr, zoom);
+    
+    // Add tile layer (OpenStreetMap)
+    let tile_opts = js_sys::Object::new();
+    js_sys::Reflect::set(&tile_opts, &JsValue::from("attribution"), &JsValue::from("&copy; OpenStreetMap contributors")).unwrap();
+    
+    tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", &tile_opts)
+        .addTo(&map_instance);
+        
+    // Add markers
+    for marker_data in markers {
+        let pos = js_sys::Array::new();
+        pos.push(&JsValue::from(marker_data.lat));
+        pos.push(&JsValue::from(marker_data.lng));
+        
+        let m = leaflet_marker(&pos).addTo(&map_instance);
+        m.bindPopup(&marker_data.popup_html);
+        
+        // Optional: Custom icons based on color could go here
+    }
+}
+
 fn get_marker_color(status: &str) -> String {
-    match status {
-        "draft" => "#6b7280".to_string(),
-        "active" => "#22c55e".to_string(),
-        "reserved" | "under_offer" => "#f59e0b".to_string(),
-        "sold" => "#10b981".to_string(),
-        "rented" => "#06b6d4".to_string(),
-        "withdrawn" | "expired" => "#ef4444".to_string(),
-        _ => "#3b82f6".to_string(),
+    match status.to_lowercase().as_str() {
+        "draft" => "gray".to_string(),
+        "active" => "green".to_string(),
+        "reserved" | "under_offer" => "orange".to_string(),
+        "sold" => "red".to_string(),
+        "rented" => "blue".to_string(),
+        _ => "blue".to_string(),
     }
 }

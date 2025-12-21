@@ -120,14 +120,7 @@ pub async fn resolve_tenant(
 
     let slug = match slug {
         Some(s) if !s.is_empty() => s,
-        _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": "Unable to determine tenant. Provide X-Tenant-Slug header, use subdomain, or add ?tenant_slug= or ?tenant_id= query param"
-                }))
-            ).into_response();
-        }
+        _ => "demo".to_string(), // Fallback to demo for local development & unidentified requests
     };
     
     // Query database for tenant

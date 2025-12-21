@@ -321,6 +321,7 @@ pub fn Shell() -> impl IntoView {
                     
                     // Actions
                     <div class="topbar-actions">
+                        <crate::components::sync_indicator::SyncIndicator />
                         <QuickCreateButton />
                         <NotificationsBell />
                         <ThemeToggle />

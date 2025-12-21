@@ -18,14 +18,17 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", get(list_interactions))
         .route("/", post(create_interaction))
+        .route("/summary/:entity_type/:record_id", get(get_interaction_summary))
         .route("/:id", get(get_interaction))
         .route("/:id", delete(delete_interaction))
 }
 
+use crate::middleware::database::RlsConn;
+use crate::middleware::tenant::ResolvedTenant;
+
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct InteractionQuery {
-    pub tenant_id: Uuid,
     pub entity_type: Option<String>,
     pub record_id: Option<Uuid>,
     pub page: Option<i32>,
@@ -47,7 +50,6 @@ pub struct InteractionResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateInteractionRequest {
-    pub tenant_id: Uuid,
     pub entity_type: String,
     pub record_id: Uuid,
     pub interaction_type: String,
@@ -68,8 +70,9 @@ pub struct InteractionListResponse {
 }
 
 async fn list_interactions(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
     Query(query): Query<InteractionQuery>,
+    mut conn: RlsConn,
 ) -> Result<Json<InteractionListResponse>, ApiError> {
     use sqlx::Row;
     
@@ -106,14 +109,14 @@ async fn list_interactions(
 
     let count_row = if has_record_filter {
         sqlx::query(count_sql)
-            .bind(query.tenant_id)
+            .bind(tenant.id)
             .bind(query.record_id.unwrap())
-            .fetch_one(&state.pool)
+            .fetch_one(&mut **conn)
             .await
     } else {
         sqlx::query(count_sql)
-            .bind(query.tenant_id)
-            .fetch_one(&state.pool)
+            .bind(tenant.id)
+            .fetch_one(&mut **conn)
             .await
     }.map_err(|e| ApiError::Internal(e.to_string()))?;
     
@@ -121,18 +124,18 @@ async fn list_interactions(
 
     let rows = if has_record_filter {
         sqlx::query(data_sql)
-            .bind(query.tenant_id)
+            .bind(tenant.id)
             .bind(query.record_id.unwrap())
             .bind(per_page as i64)
             .bind(offset as i64)
-            .fetch_all(&state.pool)
+            .fetch_all(&mut **conn)
             .await
     } else {
         sqlx::query(data_sql)
-            .bind(query.tenant_id)
+            .bind(tenant.id)
             .bind(per_page as i64)
             .bind(offset as i64)
-            .fetch_all(&state.pool)
+            .fetch_all(&mut **conn)
             .await
     }.map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -159,7 +162,8 @@ async fn list_interactions(
 }
 
 async fn create_interaction(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Json(req): Json<CreateInteractionRequest>,
 ) -> Result<Json<InteractionResponse>, ApiError> {
     let now = Utc::now();
@@ -172,7 +176,7 @@ async fn create_interaction(
         "#,
     )
     .bind(id)
-    .bind(req.tenant_id)
+    .bind(tenant.id)
     .bind(&req.entity_type)
     .bind(req.record_id)
     .bind(&req.interaction_type)
@@ -183,7 +187,7 @@ async fn create_interaction(
     .bind(req.duration_minutes)
     .bind(now)
     .bind(now)
-    .execute(&state.pool)
+    .execute(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -201,9 +205,9 @@ async fn create_interaction(
 }
 
 async fn get_interaction(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Path(id): Path<Uuid>,
-    Query(query): Query<InteractionQuery>,
 ) -> Result<Json<InteractionResponse>, ApiError> {
     use sqlx::Row;
 
@@ -211,8 +215,8 @@ async fn get_interaction(
         "SELECT id, entity_type, record_id, interaction_type, title, content, created_by, occurred_at, duration_minutes FROM interactions WHERE id = $1 AND tenant_id = $2"
     )
     .bind(id)
-    .bind(query.tenant_id)
-    .fetch_optional(&state.pool)
+    .bind(tenant.id)
+    .fetch_optional(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -233,16 +237,69 @@ async fn get_interaction(
 }
 
 async fn delete_interaction(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Path(id): Path<Uuid>,
-    Query(query): Query<InteractionQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     sqlx::query("DELETE FROM interactions WHERE id = $1 AND tenant_id = $2")
         .bind(id)
-        .bind(query.tenant_id)
-        .execute(&state.pool)
+        .bind(tenant.id)
+        .execute(&mut **conn)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     Ok(Json(serde_json::json!({ "deleted": true })))
+}
+
+#[derive(Debug, Serialize)]
+pub struct InteractionSummary {
+    pub total_count: i64,
+    pub last_interaction: Option<DateTime<Utc>>,
+    pub counts_by_type: std::collections::HashMap<String, i64>,
+}
+
+async fn get_interaction_summary(
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    Path((entity_type, record_id)): Path<(String, Uuid)>,
+    mut conn: RlsConn,
+) -> Result<Json<InteractionSummary>, ApiError> {
+    use sqlx::Row;
+
+    // Total count and last interaction
+    let row = sqlx::query(
+        "SELECT COUNT(*) as total, MAX(occurred_at) as last FROM interactions WHERE tenant_id = $1 AND entity_type = $2 AND record_id = $3"
+    )
+    .bind(tenant.id)
+    .bind(&entity_type)
+    .bind(record_id)
+    .fetch_one(&mut **conn)
+    .await
+    .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let total_count: i64 = row.try_get("total").unwrap_or(0);
+    let last_interaction: Option<DateTime<Utc>> = row.try_get("last").ok();
+
+    // Counts by type
+    let type_rows = sqlx::query(
+        "SELECT interaction_type, COUNT(*) as count FROM interactions WHERE tenant_id = $1 AND entity_type = $2 AND record_id = $3 GROUP BY interaction_type"
+    )
+    .bind(tenant.id)
+    .bind(&entity_type)
+    .bind(record_id)
+    .fetch_all(&mut **conn)
+    .await
+    .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let mut counts_by_type = std::collections::HashMap::new();
+    for row in type_rows {
+        let itype: String = row.try_get("interaction_type").unwrap_or_default();
+        let count: i64 = row.try_get("count").unwrap_or(0);
+        counts_by_type.insert(itype, count);
+    }
+
+    Ok(Json(InteractionSummary {
+        total_count,
+        last_interaction,
+        counts_by_type,
+    }))
 }

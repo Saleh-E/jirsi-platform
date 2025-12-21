@@ -8,9 +8,11 @@ use leptos::*;
 use leptos_router::*;
 use crate::api::{
     fetch_field_defs, fetch_entity, update_entity, fetch_associations, fetch_interactions,
-    FieldDef, Association, Interaction,
+    fetch_interaction_summary, FieldDef, Association, Interaction, InteractionSummary,
 };
 use crate::components::smart_input::{SmartInput, InputMode};
+use crate::components::log_activity_modal::LogActivityModal;
+use crate::utils::{format_field_display, format_datetime};
 
 /// Tab options for the detail page
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -31,6 +33,7 @@ pub fn EntityDetailPage() -> impl IntoView {
     // Signals
     let (fields, set_fields) = create_signal(Vec::<FieldDef>::new());
     let (record, set_record) = create_signal(serde_json::Value::Null);
+    let (summary, set_summary) = create_signal(Option::<InteractionSummary>::None);
     let (loading, set_loading) = create_signal(true);
     let (error, set_error) = create_signal(Option::<String>::None);
     let (active_tab, set_active_tab) = create_signal(DetailTab::Details);
@@ -41,6 +44,7 @@ pub fn EntityDetailPage() -> impl IntoView {
     let entity_for_load = entity_type.clone();
     let id_for_load = record_id.clone();
     let reload_record = create_rw_signal(0u32); // Trigger for reloading
+    let reload_summary = create_rw_signal(0u32); 
     
     create_effect(move |_| {
         let etype = entity_for_load();
@@ -65,6 +69,22 @@ pub fn EntityDetailPage() -> impl IntoView {
             }
             
             set_loading.set(false);
+        });
+    });
+
+    // Load summary
+    let entity_for_summary = entity_type.clone();
+    let id_for_summary = record_id.clone();
+    create_effect(move |_| {
+        let etype = entity_for_summary();
+        let id = id_for_summary();
+        let _ = reload_summary.get();
+        if etype.is_empty() || id.is_empty() { return; }
+
+        spawn_local(async move {
+            if let Ok(s) = fetch_interaction_summary(&etype, &id).await {
+                set_summary.set(Some(s));
+            }
         });
     });
     
@@ -107,9 +127,28 @@ pub fn EntityDetailPage() -> impl IntoView {
                     <a href=move || format!("/app/crm/entity/{}", entity_type()) class="back-link">
                         "← Back to " {entity_label}
                     </a>
-                    {move || (!loading.get()).then(|| view! {
-                        <h1>{record_title}</h1>
-                    })}
+                    <div class="title-with-stats">
+                        {move || (!loading.get()).then(|| view! {
+                            <h1>{record_title}</h1>
+                        })}
+                        {move || summary.get().map(|s| view! {
+                            <div class="header-stats">
+                                <span class="stat-item">
+                                    <span class="stat-label">"Activities: "</span>
+                                    <span class="stat-value">{s.total_count}</span>
+                                </span>
+                                {s.last_interaction.map(|date| {
+                                    let formatted = format_datetime(&date);
+                                    view! {
+                                        <span class="stat-item">
+                                            <span class="stat-label">"Last Contacted: "</span>
+                                            <span class="stat-value">{formatted}</span>
+                                        </span>
+                                    }
+                                })}
+                            </div>
+                        })}
+                    </div>
                 </div>
                 <div class="header-actions">
                     {move || (!loading.get() && !is_editing.get()).then(|| view! {
@@ -183,7 +222,11 @@ pub fn EntityDetailPage() -> impl IntoView {
                                 <RelatedTab entity_type=entity_type() record_id=record_id() />
                             }.into_view(),
                             DetailTab::Timeline => view! {
-                                <TimelineTab entity_type=entity_type() record_id=record_id() />
+                                <TimelineTab 
+                                    entity_type=entity_type() 
+                                    record_id=record_id() 
+                                    on_activity_added=move |_| reload_summary.set(reload_summary.get() + 1)
+                                />
                             }.into_view(),
                         }}
                     </div>
@@ -201,7 +244,7 @@ fn DetailsTab(fields: Vec<FieldDef>, record: serde_json::Value) -> impl IntoView
             <div class="field-grid">
                 {fields.into_iter().map(|field| {
                     let value = record.get(&field.name)
-                        .map(|v| format_field_display(v, &field.get_field_type()))
+                        .map(|v| crate::utils::format_field_display(v, &field.get_field_type()))
                         .unwrap_or_else(|| "—".to_string());
                     
                     view! {
@@ -488,10 +531,16 @@ fn RelatedTab(entity_type: String, record_id: String) -> impl IntoView {
                     view! {
                         <div class="associations-list">
                             {assocs.into_iter().map(|assoc| {
+                                let label = assoc.target_label.clone().unwrap_or_else(|| assoc.target_id.clone());
+                                // We don't know the target entity type directly from AssociationResponse yet, 
+                                // but we could infer it or just link if we had it.
+                                // For now, display it nicely.
                                 view! {
                                     <div class="association-item">
-                                        <span class="target-id">{assoc.target_id.clone()}</span>
-                                        {assoc.role.map(|r| view! { <span class="role">{r}</span> })}
+                                        <div class="association-info">
+                                            <span class="target-name">{label}</span>
+                                            {assoc.role.map(|r| view! { <span class="role">{r}</span> })}
+                                        </div>
                                         {assoc.is_primary.then(|| view! { <span class="badge">"Primary"</span> })}
                                     </div>
                                 }
@@ -681,7 +730,11 @@ fn get_record_display_name(record: &serde_json::Value) -> String {
 
 /// Timeline tab - displays interactions/activity timeline
 #[component]
-fn TimelineTab(entity_type: String, record_id: String) -> impl IntoView {
+fn TimelineTab(
+    entity_type: String, 
+    record_id: String,
+    #[prop(into)] on_activity_added: Callback<()>
+) -> impl IntoView {
     let (interactions, set_interactions) = create_signal(Vec::<Interaction>::new());
     let (loading, set_loading) = create_signal(true);
     let (show_add_modal, set_show_add_modal) = create_signal(false);
@@ -746,8 +799,8 @@ fn TimelineTab(entity_type: String, record_id: String) -> impl IntoView {
                                                 <div class="timeline-description">{c}</div>
                                             })}
                                             <div class="timeline-meta">
-                                                <span class="timeline-type">{item.interaction_type}</span>
-                                                <span class="timeline-date">{item.occurred_at}</span>
+                                                <span class="timeline-type">{item.interaction_type.to_uppercase()}</span>
+                                                <span class="timeline-date">{format_datetime(&item.occurred_at)}</span>
                                                 {item.duration_minutes.map(|d| view! {
                                                     <span class="timeline-duration">{format!("{} min", d)}</span>
                                                 })}
@@ -761,46 +814,18 @@ fn TimelineTab(entity_type: String, record_id: String) -> impl IntoView {
                 }
             })}
             
-            // Add Activity Modal Placeholder
+            // Log Activity Modal
             {move || show_add_modal.get().then(|| view! {
-                <div class="modal-overlay" on:click=move |_| set_show_add_modal.set(false)>
-                    <div class="modal" on:click=move |ev| ev.stop_propagation()>
-                        <h2>"Log Activity"</h2>
-                        <p class="placeholder">"Activity logging form coming soon."</p>
-                        <p class="placeholder-hint">"Record calls, emails, meetings, and notes."</p>
-                        <div class="form-actions">
-                            <button class="btn" on:click=move |_| set_show_add_modal.set(false)>
-                                "Close"
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <crate::components::log_activity_modal::LogActivityModal
+                    entity_type=entity_type.clone()
+                    record_id=record_id.clone()
+                    set_show_modal=set_show_add_modal
+                    on_success=Callback::new(move |_| {
+                        reload_trigger.update(|n| *n += 1);
+                    })
+                />
             })}
         </div>
     }
 }
 
-/// Format a field value for display based on field type
-fn format_field_display(value: &serde_json::Value, field_type: &str) -> String {
-    match value {
-        serde_json::Value::Null => "—".to_string(),
-        serde_json::Value::String(s) if s.is_empty() => "—".to_string(),
-        serde_json::Value::String(s) => {
-            match field_type {
-                "email" => format!("📧 {}", s),
-                "phone" => format!("📞 {}", s),
-                "url" => format!("🔗 {}", s),
-                _ => s.clone(),
-            }
-        }
-        serde_json::Value::Number(n) => {
-            if field_type == "currency" || field_type == "money" {
-                format!("${}", n)
-            } else {
-                n.to_string()
-            }
-        }
-        serde_json::Value::Bool(b) => if *b { "Yes" } else { "No" }.to_string(),
-        other => other.to_string(),
-    }
-}

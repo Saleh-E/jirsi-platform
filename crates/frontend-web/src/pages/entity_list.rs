@@ -8,16 +8,15 @@
 use leptos::*;
 use leptos_router::*;
 use crate::api::{
-    fetch_field_defs, fetch_entity_list, FieldDef, ViewColumn, ViewType, fetch_default_view
+    fetch_field_defs, fetch_entity_list, FieldDef, ViewColumn, fetch_default_view, ViewDef
 };
-use crate::components::view_switcher::{ViewSwitcher, ViewDefResponse};
+use crate::components::view_switcher::ViewSwitcher;
 use crate::components::kanban::{KanbanView, KanbanConfig};
-use crate::components::calendar::{CalendarView, CalendarConfig};
+use crate::components::calendar::{CalendarView, CalendarConfig, CalendarEvent};
 use crate::components::map::{MapView, MapConfig};
 use crate::components::table::SmartTable;
-use crate::components::create_modal::CreateModal;
-use crate::context::mobile::use_mobile;
-
+use crate::components::create_modal::{CreateModal, CreatedRecord};
+use crate::context::use_mobile;
 
 /// Main entity list page component
 #[component]
@@ -38,8 +37,6 @@ pub fn EntityListPage() -> impl IntoView {
     // View switching state
     let (current_view_type, set_current_view_type) = create_signal("table".to_string());
     let (current_view_settings, set_current_view_settings) = create_signal(serde_json::Value::Null);
-    
-    // NEW: Columns state driven by ViewDef
     let (current_columns, set_current_columns) = create_signal(Vec::<ViewColumn>::new());
     
     // Sync view type from URL query param (reactive)
@@ -64,13 +61,25 @@ pub fn EntityListPage() -> impl IntoView {
             set_loading.set(true);
             set_error.set(None);
             
-            // Fetch field definitions
+            // Reset state to prevent stale views
+            set_current_view_type.set("table".to_string());
+            set_current_view_settings.set(serde_json::Value::Null);
+            set_current_columns.set(Vec::new());
+
+            // 1. Fetch Default View Metadata
+            if let Ok(view_def) = fetch_default_view(&etype).await {
+                set_current_view_type.set(view_def.view_type.clone());
+                set_current_view_settings.set(view_def.settings.clone());
+                set_current_columns.set(view_def.columns.clone());
+            }
+
+            // 2. Fetch field definitions
             match fetch_field_defs(&etype).await {
                 Ok(f) => set_fields.set(f),
                 Err(e) => logging::log!("Failed to fetch fields: {}", e),
             }
             
-            // Fetch entity data
+            // 3. Fetch entity data
             match fetch_entity_list(&etype).await {
                 Ok(response) => set_data.set(response.data),
                 Err(e) => set_error.set(Some(e)),
@@ -111,7 +120,6 @@ pub fn EntityListPage() -> impl IntoView {
         });
     };
     
-
     
     // Format entity type for display
     let entity_label = move || {
@@ -137,8 +145,9 @@ pub fn EntityListPage() -> impl IntoView {
             
             // View Switcher - dynamically switch between table/kanban/calendar/map
             <ViewSwitcher 
-                entity_type=entity_type()
-                on_view_change=move |view_def: ViewDefResponse| {
+                entity_type=entity_type
+
+                on_view_change=move |view_def: ViewDef| {
                     let new_view = view_def.view_type.clone();
                     set_current_view_type.set(new_view.clone());
                     set_current_view_settings.set(view_def.settings.clone());
@@ -176,13 +185,19 @@ pub fn EntityListPage() -> impl IntoView {
                             .and_then(|v| v.as_str())
                             .unwrap_or("status")
                             .to_string();
-                        let card_title = settings.get("card_title_field")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("title")
-                            .to_string();
+                        
+                        // Extract options for the group_by field reactively
+                        let group_by_for_options = group_by.clone();
+                        let options = move || fields.get().iter()
+                            .find(|f| f.name == group_by_for_options)
+                            .map(|f| f.get_options());
+
                         let kanban_config = KanbanConfig {
                             group_by_field: group_by,
-                            card_title_field: card_title,
+                            card_title_field: settings.get("card_title_field")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("title")
+                                .to_string(),
                             card_subtitle_field: settings.get("card_subtitle_field")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string()),
@@ -194,12 +209,14 @@ pub fn EntityListPage() -> impl IntoView {
                                 .and_then(|v| v.as_array())
                                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()),
                         };
-                        view! {
+                        let kanban_view: View = view! {
                             <KanbanView 
                                 entity_type=etype.clone()
                                 config=kanban_config
+                                field_options=options().unwrap_or_default()
                             />
-                        }.into_view()
+                        }.into_view();
+                        kanban_view
                     },
                     "calendar" => {
                         let calendar_config = CalendarConfig {
@@ -219,12 +236,13 @@ pub fn EntityListPage() -> impl IntoView {
                                 .map(|s| s.to_string()),
                             color_map: None,
                         };
-                        view! {
+                        let calendar_view: View = view! {
                             <CalendarView 
                                 entity_type=etype.clone()
                                 config=calendar_config
                             />
-                        }.into_view()
+                        }.into_view();
+                        calendar_view
                     },
                     "map" => {
                         let map_config = MapConfig {
@@ -250,12 +268,13 @@ pub fn EntityListPage() -> impl IntoView {
                             default_center: None,
                             default_zoom: None,
                         };
-                        view! {
+                        let map_view: View = view! {
                             <MapView 
                                 entity_type=etype.clone()
                                 config=map_config
                             />
-                        }.into_view()
+                        }.into_view();
+                        map_view
                     },
                     _ => {
                         // Default: Table view (or Mobile Card view)
@@ -280,13 +299,13 @@ pub fn EntityListPage() -> impl IntoView {
                                             // Get title from first column
                                             let title = cols_ref.first()
                                                 .and_then(|c| row.get(&c.field))
-                                                .map(|v| format_field_value(v, "text"))
+                                                .map(|v| crate::utils::format_field_display(v, "text"))
                                                 .unwrap_or_else(|| "Untitled".to_string());
                                             
                                             // Get subtitle from second column
                                             let subtitle = cols_ref.get(1)
                                                 .and_then(|c| row.get(&c.field))
-                                                .map(|v| format_field_value(v, "text"))
+                                                .map(|v| crate::utils::format_field_display(v, "text"))
                                                 .unwrap_or_default();
                                             
                                             // Get phone/email for quick action
@@ -347,7 +366,8 @@ pub fn EntityListPage() -> impl IntoView {
                             let api_fields = fields.get();
                             let navigate = use_navigate();
                             
-                            view! {
+                            let etype_cloned = etype.clone();
+                            let list_content: View = view! {
                                 <SmartTable
                                     columns=view_cols
                                     fields=api_fields
@@ -358,7 +378,7 @@ pub fn EntityListPage() -> impl IntoView {
                                             .and_then(|v| v.as_str())
                                             .unwrap_or_default()
                                             .to_string();
-                                        let path = format!("/app/crm/entity/{}/{}", etype.clone(), record_id);
+                                        let path = format!("/app/crm/entity/{}/{}", etype_cloned.clone(), record_id);
                                         navigate(&path, Default::default());
                                     })
                                     editable=true
@@ -367,7 +387,8 @@ pub fn EntityListPage() -> impl IntoView {
                                 {move || data.get().is_empty().then(|| view! {
                                     <div class="empty-state">"No records found. Click + New to create one."</div>
                                 })}
-                            }.into_view()
+                            }.into_view();
+                            list_content
                         }
                     }
                 }
@@ -387,14 +408,15 @@ pub fn EntityListPage() -> impl IntoView {
                     "offer" => "Offer".to_string(),
                     _ => etype[0..1].to_uppercase() + &etype[1..],
                 };
-                view! {
+                let modal: View = view! {
                     <CreateModal
                         entity_type=etype
                         entity_label=elabel
                         on_close=Callback::new(move |_| set_show_create_modal.set(false))
                         on_created=Callback::new(on_record_created.clone())
                     />
-                }
+                }.into_view();
+                modal
             })}
         </div>
     }

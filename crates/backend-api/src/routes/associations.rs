@@ -36,6 +36,9 @@ pub struct AssociationQuery {
     pub target_id: Option<Uuid>,
 }
 
+use crate::middleware::database::RlsConn;
+use crate::middleware::tenant::ResolvedTenant;
+
 #[derive(Debug, Serialize)]
 pub struct AssociationResponse {
     pub id: Uuid,
@@ -44,18 +47,7 @@ pub struct AssociationResponse {
     pub target_id: Uuid,
     pub role: Option<String>,
     pub is_primary: bool,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateAssociationRequest {
-    pub tenant_id: Uuid,
-    pub association_def_id: Uuid,
-    pub source_id: Uuid,
-    pub target_id: Uuid,
-    #[serde(default)]
-    pub role: Option<String>,
-    #[serde(default)]
-    pub is_primary: bool,
+    pub target_label: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -69,9 +61,21 @@ pub struct AssociationDefResponse {
     pub cardinality: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreateAssociationRequest {
+    pub association_def_id: Uuid,
+    pub source_id: Uuid,
+    pub target_id: Uuid,
+    pub role: Option<String>,
+    #[serde(default)]
+    pub is_primary: bool,
+}
+
+// ...
+
 async fn list_association_defs(
-    State(state): State<Arc<AppState>>,
-    Query(query): Query<AssociationQuery>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
 ) -> Result<Json<Vec<AssociationDefResponse>>, ApiError> {
     use sqlx::Row;
     
@@ -83,8 +87,8 @@ async fn list_association_defs(
         ORDER BY name
         "#,
     )
-    .bind(query.tenant_id)
-    .fetch_all(&state.pool)
+    .bind(tenant.id)
+    .fetch_all(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -104,35 +108,46 @@ async fn list_association_defs(
 }
 
 async fn list_associations(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
     Query(query): Query<AssociationQuery>,
+    mut conn: RlsConn,
 ) -> Result<Json<Vec<AssociationResponse>>, ApiError> {
     use sqlx::Row;
     
     let mut sql = String::from(
-        "SELECT id, association_def_id, source_id, target_id, role, is_primary FROM associations WHERE tenant_id = $1"
+        r#"
+        SELECT 
+            a.id, a.association_def_id, a.source_id, a.target_id, a.role, a.is_primary,
+            r.data->>'name' as target_name,
+            r.data->>'title' as target_title,
+            r.data->>'first_name' as target_fn,
+            r.data->>'last_name' as target_ln
+        FROM associations a
+        LEFT JOIN entity_records r ON a.target_id = r.id
+        WHERE a.tenant_id = $1
+        "#
     );
     
-    if query.source_id.is_some() {
-        sql.push_str(" AND source_id = $2");
-    }
-    if query.target_id.is_some() {
-        sql.push_str(" AND target_id = $3");
-    }
-
-    let mut q = sqlx::query(&sql).bind(query.tenant_id);
-    
-    if let Some(source_id) = query.source_id {
-        q = q.bind(source_id);
-    }
-    if let Some(target_id) = query.target_id {
-        q = q.bind(target_id);
-    }
-
-    let rows = q.fetch_all(&state.pool).await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    let mut param_idx = 2;
+    let mut rows = if let Some(source_id) = query.source_id {
+        sql.push_str(&format!(" AND a.source_id = ${}", param_idx));
+        sqlx::query(&sql).bind(tenant.id).bind(source_id).fetch_all(&mut **conn).await
+    } else {
+        sqlx::query(&sql).bind(tenant.id).fetch_all(&mut **conn).await
+    }.map_err(|e| ApiError::Internal(e.to_string()))?;
 
     let associations = rows.iter().map(|row| {
+        let fn_str: Option<String> = row.try_get("target_fn").ok();
+        let ln_str: Option<String> = row.try_get("target_ln").ok();
+        let name_str: Option<String> = row.try_get("target_name").ok();
+        let title_str: Option<String> = row.try_get("target_title").ok();
+        
+        let label = if let (Some(f), Some(l)) = (fn_str, ln_str) {
+            Some(format!("{} {}", f, l))
+        } else {
+            name_str.or(title_str)
+        };
+
         AssociationResponse {
             id: row.try_get("id").unwrap_or_default(),
             association_def_id: row.try_get("association_def_id").unwrap_or_default(),
@@ -140,6 +155,7 @@ async fn list_associations(
             target_id: row.try_get("target_id").unwrap_or_default(),
             role: row.try_get("role").ok(),
             is_primary: row.try_get("is_primary").unwrap_or(false),
+            target_label: label,
         }
     }).collect();
 
@@ -147,7 +163,8 @@ async fn list_associations(
 }
 
 async fn create_association(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Json(req): Json<CreateAssociationRequest>,
 ) -> Result<Json<AssociationResponse>, ApiError> {
     let now = Utc::now();
@@ -160,7 +177,7 @@ async fn create_association(
         "#,
     )
     .bind(id)
-    .bind(req.tenant_id)
+    .bind(tenant.id)
     .bind(req.association_def_id)
     .bind(req.source_id)
     .bind(req.target_id)
@@ -168,7 +185,7 @@ async fn create_association(
     .bind(req.is_primary)
     .bind(now)
     .bind(now)
-    .execute(&state.pool)
+    .execute(&mut **conn)
     .await
     .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -179,16 +196,19 @@ async fn create_association(
         target_id: req.target_id,
         role: req.role,
         is_primary: req.is_primary,
+        target_label: None,
     }))
 }
 
 async fn delete_association(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(tenant): axum::Extension<ResolvedTenant>,
+    mut conn: RlsConn,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    sqlx::query("DELETE FROM associations WHERE id = $1")
+    sqlx::query("DELETE FROM associations WHERE id = $1 AND tenant_id = $2")
         .bind(id)
-        .execute(&state.pool)
+        .bind(tenant.id)
+        .execute(&mut **conn)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 

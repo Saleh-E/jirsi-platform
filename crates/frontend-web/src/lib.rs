@@ -10,6 +10,7 @@ pub mod layouts;
 pub mod models;
 pub mod offline;
 pub mod pages;
+pub mod utils;
 
 pub use app::App;
 
