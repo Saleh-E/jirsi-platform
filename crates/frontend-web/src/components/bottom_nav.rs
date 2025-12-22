@@ -32,7 +32,7 @@ pub fn BottomNav() -> impl IntoView {
                 let nav4 = nav.clone();
                 let nav5 = nav.clone();
                 let nav6 = nav.clone();
-                let nav7 = nav.clone();
+                let _nav7 = nav.clone();
                 view! {
                     <div class="more-menu-overlay" on:click=move |_| set_show_more_menu.set(false)>
                         <div class="more-menu-drawer" on:click=move |ev| ev.stop_propagation()>

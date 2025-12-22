@@ -45,15 +45,15 @@ pub fn CanvasView(
     entity_id: String,
     entity_label: String,
 ) -> impl IntoView {
-    let entity_type_stored = store_value(entity_type.clone());
-    let entity_id_stored = store_value(entity_id.clone());
+    let _entity_type_stored = store_value(entity_type.clone());
+    let _entity_id_stored = store_value(entity_id.clone());
     let entity_label_stored = store_value(entity_label.clone());
     
     // State
     let (nodes, set_nodes) = create_signal::<Vec<RelationshipNode>>(Vec::new());
     let (edges, set_edges) = create_signal::<Vec<RelationshipEdge>>(Vec::new());
     let (loading, set_loading) = create_signal(true);
-    let (error, set_error) = create_signal::<Option<String>>(None);
+    let (_error, set_error) = create_signal::<Option<String>>(None);
     let (selected_node, set_selected_node) = create_signal::<Option<String>>(None);
     
     // Fetch associations for this entity

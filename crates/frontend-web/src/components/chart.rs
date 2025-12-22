@@ -64,7 +64,7 @@ pub fn FunnelChart(
         <div class="chart-container">
             <h3 class="chart-title">{title}</h3>
             <div class="funnel-chart">
-                {items.into_iter().enumerate().map(|(idx, item)| {
+                {items.into_iter().enumerate().map(|(_idx, item)| {
                     let width_percentage = if max_value > 0.0 { 
                         ((item.value as f64 / max_value) * 80.0) + 20.0 // Min 20%, max 100%
                     } else { 50.0 };

@@ -359,7 +359,7 @@ pub fn SmartSelect(
                     // Add New button (sticky footer)
                     {allow_create.then(|| {
                         let label = create_label_stored.get_value();
-                        let on_create_clone = on_create_stored.get_value();
+                        let _on_create_clone = on_create_stored.get_value();
                         let on_create_value_clone = on_create_value.clone();
                         
                         view! {

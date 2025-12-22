@@ -59,7 +59,7 @@ pub fn ActionBar(
     let (show_sort, set_show_sort) = create_signal(false);
     
     // Filter operators based on field type
-    let get_operators = |field_type: &str| -> Vec<(&'static str, &'static str)> {
+    let _get_operators = |field_type: &str| -> Vec<(&'static str, &'static str)> {
         match field_type {
             "text" | "string" | "email" => vec![
                 ("contains", "Contains"),

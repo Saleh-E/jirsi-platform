@@ -128,7 +128,7 @@ pub fn PublicDetailPage() -> impl IntoView {
     let (message, set_message) = create_signal(String::new());
     let (submitted, set_submitted) = create_signal(false);
     let (submitting, set_submitting) = create_signal(false);
-    let (error, set_error) = create_signal::<Option<String>>(None);
+    let (error, _set_error) = create_signal::<Option<String>>(None);
     
     // Selected photo for gallery
     let (selected_photo, set_selected_photo) = create_signal::<usize>(0);

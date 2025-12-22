@@ -5,7 +5,6 @@
 use leptos::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use wasm_bindgen::JsCast;
 use web_sys::{MouseEvent, WheelEvent};
 
 /// Node UI state
@@ -197,7 +196,7 @@ pub fn WorkflowCanvas(
     };
 
     // Start dragging a node
-    let start_node_drag = move |node_id: Uuid, ev: MouseEvent| {
+    let _start_node_drag = move |node_id: Uuid, ev: MouseEvent| {
         ev.stop_propagation();
         let z = zoom.get();
         

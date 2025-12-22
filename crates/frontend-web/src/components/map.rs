@@ -4,7 +4,7 @@
 use leptos::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use crate::api::{fetch_entity_list, API_BASE, TENANT_ID};
+use crate::api::fetch_entity_list;
 
 // Binding to global L (Leaflet)
 // Binding to global L (Leaflet)
@@ -97,8 +97,8 @@ pub fn MapView(
         let cfg = config_stored.get_value();
         
         spawn_local(async move {
-            set_loading.set(true);
-            set_error.set(None);
+            let _ = set_loading.try_set(true);
+            let _ = set_error.try_set(None);
             
             match fetch_entity_list(&et).await {
                 Ok(response) => {
@@ -161,12 +161,12 @@ pub fn MapView(
                         })
                         .collect();
                     
-                    set_markers.set(map_markers);
-                    set_loading.set(false);
+                    let _ = set_markers.try_set(map_markers);
+                    let _ = set_loading.try_set(false);
                 }
                 Err(e) => {
-                    set_error.set(Some(e));
-                    set_loading.set(false);
+                    let _ = set_error.try_set(Some(e));
+                    let _ = set_loading.try_set(false);
                 }
             }
         });
@@ -177,8 +177,10 @@ pub fn MapView(
     
     // Effect to render map when markers change
     create_effect(move |_| {
-        let current_markers = markers.get();
-        if loading.get() { return; }
+        // Use try_get to avoid panic if owner is disposed
+        let Some(current_markers) = markers.try_get() else { return };
+        let Some(is_loading) = loading.try_get() else { return };
+        if is_loading { return; }
         
         // We need a slight delay to ensure DOM is ready
         let m_id = map_id_clone.clone();

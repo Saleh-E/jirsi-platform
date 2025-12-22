@@ -5,7 +5,7 @@ use leptos_router::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use serde::{Deserialize, Serialize};
-use crate::api::{fetch_json, post_json, patch_json, API_BASE, TENANT_ID};
+use crate::api::{fetch_json, patch_json, API_BASE, TENANT_ID};
 
 /// Mock user data for the users table
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -515,7 +515,7 @@ fn UsersSettings() -> impl IntoView {
 #[component]
 fn InviteUserModal(on_close: impl Fn() + 'static + Clone) -> impl IntoView {
     let (email, set_email) = create_signal(String::new());
-    let (role, set_role) = create_signal("agent".to_string());
+    let (_role, set_role) = create_signal("agent".to_string());
     let (sending, set_sending) = create_signal(false);
     let (sent, set_sent) = create_signal(false);
 
@@ -959,7 +959,7 @@ fn IntegrationsSettings() -> impl IntoView {
         set_saved_msg.set(None);
         
         let provider = selected_provider.get().unwrap_or_default();
-        let tenant_id = TENANT_ID.to_string();
+        let _tenant_id = TENANT_ID.to_string();
         
         spawn_local(async move {
             // TODO: Call API to save integration
@@ -984,7 +984,7 @@ fn IntegrationsSettings() -> impl IntoView {
             // Provider cards grid
             <div class="integrations-grid">
                 {providers.into_iter().map(|(id, name, icon, desc)| {
-                    let id_clone = id.to_string();
+                    let _id_clone = id.to_string();
                     let id_for_click = id.to_string();
                     
                     view! {

@@ -729,7 +729,10 @@ pub async fn seed_database(pool: &PgPool) -> Result<SeedResult, sqlx::Error> {
     // Seed Real Estate metadata (Property, Listing)
     seed_real_estate_metadata(pool, tenant_id).await?;
 
-    // Create sample contacts
+    // Create "Tenant B" (Acme Corp) for isolation testing
+    seed_acme_tenant(pool).await?;
+
+    // Create sample contacts for Demo Tenant
     seed_sample_contacts(pool, tenant_id).await?;
 
     // Seed Test Graph Workflow (Node Engine)
@@ -1976,3 +1979,49 @@ async fn seed_viewing_entity_tx(
 
     Ok(())
 }
+
+/// Seed a second tenant "Acme Corp" for isolation testing
+async fn seed_acme_tenant(pool: &PgPool) -> Result<Uuid, sqlx::Error> {
+    use sqlx::Row;
+    let now = Utc::now();
+
+    // Check if acme tenant already exists
+    let existing_tenant: Option<Uuid> = sqlx::query(
+        "SELECT id FROM tenants WHERE subdomain = 'acme'"
+    )
+    .fetch_optional(pool)
+    .await?
+    .map(|row| row.try_get("id").unwrap_or_default());
+
+    let tenant_id = if let Some(id) = existing_tenant {
+        id
+    } else {
+        // Create acme tenant
+        let id = Uuid::new_v4();
+        sqlx::query(
+            r#"
+            INSERT INTO tenants (id, name, subdomain, custom_domain, plan, status, settings, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            "#,
+        )
+        .bind(id)
+        .bind("Acme Corp")
+        .bind("acme")
+        .bind(None::<String>)
+        .bind("free")
+        .bind("active")
+        .bind(serde_json::json!({}))
+        .bind(now)
+        .bind(now)
+        .execute(pool)
+        .await?;
+        
+        // Seed metadata for Acme so it works
+        seed_entity_metadata(pool, id).await?;
+        
+        id
+    };
+
+    Ok(tenant_id)
+}
+

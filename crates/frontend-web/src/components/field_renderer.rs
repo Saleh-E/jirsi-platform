@@ -4,7 +4,7 @@
 //! This component handles all field type rendering automatically.
 
 use leptos::*;
-use crate::api::{FieldDef, fetch_entity_lookup};
+use crate::api::FieldDef;
 use crate::components::smart_select::{SmartSelect, SelectOption};
 use crate::components::async_entity_select::{AsyncEntitySelect, AsyncEntityLabel};
 
@@ -38,7 +38,7 @@ pub fn FieldValueRenderer(
     value: serde_json::Value,
     #[prop(optional)] editable: bool,
 ) -> impl IntoView {
-    let field_type = field.get_field_type();
+    let _field_type = field.get_field_type();
     
     view! {
         {move || {
@@ -266,7 +266,7 @@ pub fn EditableFieldValue(
             on:dblclick=move |_| set_editing.set(true)
         >
             {move || {
-                let ft = field_type_for_edit.clone();
+                let _ft = field_type_for_edit.clone();
                 if editing.get() {
                     render_edit_input(&field, current_value.get(), set_editing, set_current_value, on_change.clone()).into_view()
                 } else {
@@ -809,7 +809,7 @@ pub fn AsyncLinkInput(
     let (selected_value, set_selected_value) = create_signal(value.clone());
     let (loading, set_loading) = create_signal(false);
     let (show_modal, set_show_modal) = create_signal(false);
-    let (search_query, set_search_query) = create_signal(String::new());
+    let (_search_query, set_search_query) = create_signal(String::new());
     let (debounce_handle, set_debounce_handle) = create_signal::<Option<i32>>(None);
     
     // Initial fetch
@@ -842,7 +842,7 @@ pub fn AsyncLinkInput(
     });
     
     // Debounced search function
-    let debounce_search = move |query: String| {
+    let _debounce_search = move |query: String| {
         // Cancel previous timeout
         if let Some(handle) = debounce_handle.get() {
             if let Some(window) = web_sys::window() {

@@ -1,8 +1,8 @@
 //! Generic Create Modal - Metadata-driven form in a modal for creating new records
 
 use leptos::*;
-use crate::api::{fetch_field_defs, fetch_entity_list, post_json, add_field_option, delete_field_option, FieldDef, API_BASE, TENANT_ID};
-use crate::components::field_renderer::{LinkInput, DynamicSelect};
+use crate::api::{fetch_field_defs, post_json, add_field_option, delete_field_option, FieldDef, API_BASE, TENANT_ID};
+use crate::components::field_renderer::LinkInput;
 use crate::components::smart_select::{SmartSelect, MultiSelect, SelectOption};
 
 /// Record info returned from CreateModal when a new record is created
@@ -155,7 +155,7 @@ pub fn CreateModal(
                                         each=move || fields.get().into_iter().filter(|f| !f.is_readonly)
                                         key=|f| f.name.clone()
                                         children=move |field| {
-                                            let field_name = field.name.clone();
+                                            let _field_name = field.name.clone();
                                             let field_name_change = field.name.clone();
                                             let field_label = field.label.clone();
                                             let field_type = field.get_field_type();

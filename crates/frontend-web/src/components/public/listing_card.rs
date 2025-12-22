@@ -28,7 +28,7 @@ pub fn ListingCard(
     #[prop(into)] listing: PublicListing,
     #[prop(optional)] on_click: Option<Callback<String>>,
 ) -> impl IntoView {
-    let listing_id = listing.id.clone();
+    let _listing_id = listing.id.clone();
     let listing_for_click = listing.clone();
 
     let handle_click = move |_| {

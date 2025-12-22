@@ -3,8 +3,8 @@
 
 use leptos::*;
 use serde::{Deserialize, Serialize};
-use chrono::{Datelike, Duration, NaiveDate, Weekday};
-use crate::api::{fetch_entity_list, API_BASE, TENANT_ID};
+use chrono::{Datelike, Duration, NaiveDate};
+use crate::api::fetch_entity_list;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CalendarConfig {
@@ -30,7 +30,7 @@ pub fn CalendarView(
     entity_type: String,
     config: CalendarConfig,
 ) -> impl IntoView {
-    let entity_type_stored = store_value(entity_type.clone());
+    let _entity_type_stored = store_value(entity_type.clone());
     let config_stored = store_value(config);
     
     // State

@@ -12,10 +12,10 @@ use crate::api::{
 };
 use crate::components::view_switcher::ViewSwitcher;
 use crate::components::kanban::{KanbanView, KanbanConfig};
-use crate::components::calendar::{CalendarView, CalendarConfig, CalendarEvent};
+use crate::components::calendar::{CalendarView, CalendarConfig};
 use crate::components::map::{MapView, MapConfig};
 use crate::components::table::SmartTable;
-use crate::components::create_modal::{CreateModal, CreatedRecord};
+use crate::components::create_modal::CreateModal;
 use crate::context::use_mobile;
 
 /// Main entity list page component
@@ -134,14 +134,67 @@ pub fn EntityListPage() -> impl IntoView {
         }
     };
     
+    // Workspace signals
+    let (active_workspace_tab, set_active_workspace_tab) = create_signal("all".to_string());
+    let (density, set_density) = create_signal("comfy".to_string()); // "comfy" or "compact"
+    let (selected_count, set_selected_count) = create_signal(0usize);
+    
     view! {
         <div class="entity-list-page">
-            <header class="page-header">
-                <h1>{entity_label}</h1>
-                <button class="btn btn-primary" on:click=move |_| set_show_create_modal.set(true)>
-                    "+ New"
-                </button>
+            // Page Header
+            <header class="list-header">
+                <h1 class="list-title">{entity_label}</h1>
+                <div class="header-actions">
+                    <button class="btn btn-primary" on:click=move |_| set_show_create_modal.set(true)>
+                        "+ New"
+                    </button>
+                </div>
             </header>
+            
+            // Workspace Tabs (All / My / New This Week)
+            <div class="workspace-tabs">
+                <button 
+                    class=move || if active_workspace_tab.get() == "all" { "workspace-tab active" } else { "workspace-tab" }
+                    on:click=move |_| set_active_workspace_tab.set("all".to_string())
+                >
+                    "All " {entity_label}
+                </button>
+                <button 
+                    class=move || if active_workspace_tab.get() == "my" { "workspace-tab active" } else { "workspace-tab" }
+                    on:click=move |_| set_active_workspace_tab.set("my".to_string())
+                >
+                    "My " {entity_label}
+                </button>
+                <button 
+                    class=move || if active_workspace_tab.get() == "new" { "workspace-tab active" } else { "workspace-tab" }
+                    on:click=move |_| set_active_workspace_tab.set("new".to_string())
+                >
+                    "New This Week"
+                </button>
+            </div>
+            
+            // Filter Bar 
+            <div class="filter-bar">
+                <button class="add-filter-btn">
+                    "+ Add Filter"
+                </button>
+                
+                // Density Toggle
+                <div class="density-toggle">
+                    <button 
+                        class=move || if density.get() == "comfy" { "density-btn active" } else { "density-btn" }
+                        on:click=move |_| set_density.set("comfy".to_string())
+                    >
+                        "Comfy"
+                    </button>
+                    <button 
+                        class=move || if density.get() == "compact" { "density-btn active" } else { "density-btn" }
+                        on:click=move |_| set_density.set("compact".to_string())
+                    >
+                        "Compact"
+                    </button>
+                </div>
+            </div>
             
             // View Switcher - dynamically switch between table/kanban/calendar/map
             <ViewSwitcher 
@@ -168,9 +221,18 @@ pub fn EntityListPage() -> impl IntoView {
                 <div class="error-banner">{e}</div>
             })}
             
-            // Loading state
+            // Loading state with skeleton
             {move || loading.get().then(|| view! {
-                <div class="loading">"Loading..."</div>
+                <div class="data-table skeleton-table">
+                    {(0..5).map(|_| view! {
+                        <div class="skeleton-row">
+                            <div class="skeleton skeleton-cell"></div>
+                            <div class="skeleton skeleton-cell"></div>
+                            <div class="skeleton skeleton-cell"></div>
+                            <div class="skeleton skeleton-cell"></div>
+                        </div>
+                    }).collect_view()}
+                </div>
             })}
             
             // Dynamic view content based on current view type
@@ -382,6 +444,10 @@ pub fn EntityListPage() -> impl IntoView {
                                         navigate(&path, Default::default());
                                     })
                                     editable=true
+                                    selectable=true
+                                    on_selection_change=Callback::new(move |count: usize| {
+                                        set_selected_count.set(count);
+                                    })
                                 />
                                 
                                 {move || data.get().is_empty().then(|| view! {
@@ -417,6 +483,19 @@ pub fn EntityListPage() -> impl IntoView {
                     />
                 }.into_view();
                 modal
+            })}
+            
+            // Bulk Actions Bar (shows when items selected)
+            {move || (selected_count.get() > 0).then(|| view! {
+                <div class="bulk-actions">
+                    <span class="bulk-actions-count">{selected_count.get()} " selected"</span>
+                    <button class="bulk-action-btn">"Edit"</button>
+                    <button class="bulk-action-btn">"Assign"</button>
+                    <button class="bulk-action-btn danger">"Delete"</button>
+                    <button class="bulk-action-btn" on:click=move |_| set_selected_count.set(0)>
+                        "✕ Clear"
+                    </button>
+                </div>
             })}
         </div>
     }

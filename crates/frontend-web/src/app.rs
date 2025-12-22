@@ -3,7 +3,7 @@
 use leptos::*;
 use leptos_router::*;
 
-use crate::pages::{HomePage, EntityListPage, EntityDetailPage, LoginPage, RegisterPage, ProfilePage, SettingsPage, ReportsPage, InboxPage, WorkflowEditorPage, WorkflowListPage, AutomationPage};
+use crate::pages::{EntityListPage, EntityDetailPage, LoginPage, RegisterPage, ProfilePage, SettingsPage, ReportsPage, InboxPage, WorkflowEditorPage, WorkflowListPage, AutomationPage};
 use crate::pages::dashboard::DashboardPage;
 use crate::pages::public::{listings::PublicListingsPage, detail::PublicDetailPage};
 use crate::components::shell::Shell;

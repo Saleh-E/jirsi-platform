@@ -12,7 +12,7 @@ use crate::api::FieldDef;
 use crate::context::mobile::use_mobile;
 use crate::components::smart_select::{SmartSelect, MultiSelect, SelectOption};
 use crate::components::create_modal::CreateModal;
-use crate::api::{fetch_entity_list, fetch_entity_lookup, add_field_option, delete_field_option, API_BASE, TENANT_ID};
+use crate::api::{fetch_entity_list, fetch_entity_lookup, add_field_option, delete_field_option};
 use leptos::spawn_local;
 
 /// Input mode for SmartInput
@@ -49,7 +49,7 @@ pub fn SmartInput(
     let mobile_ctx = use_mobile();
     let _is_mobile = move || mobile_ctx.is_mobile.get();
     
-    let field_type = field.get_field_type();
+    let _field_type = field.get_field_type();
     let field_stored = store_value(field.clone());
     let value_stored = store_value(value.clone());
     let _z_index_stored = store_value(z_index);
@@ -110,7 +110,7 @@ pub fn SmartInput(
                             }.into_view()
                         } else {
                             // Editable input - use prop:value to prevent focus loss
-                            let current = local_value.get_untracked().as_str().unwrap_or("").to_string();
+                            let _current = local_value.get_untracked().as_str().unwrap_or("").to_string();
                             let local_value_for_input = local_value;
                             view! {
                                 <input
@@ -306,7 +306,7 @@ pub fn SmartInput(
                         let field_val = field_stored.get_value();
                         let target_entity = get_link_target(&field_val);
                         let target_entity_for_fetch = target_entity.clone();
-                        let target_entity_for_modal = target_entity.clone();
+                        let _target_entity_for_modal = target_entity.clone();
                         
                         // Get current values as array of IDs
                         let current_ids: Vec<String> = local_value.get()

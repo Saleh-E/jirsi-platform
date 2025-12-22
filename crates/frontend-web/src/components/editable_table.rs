@@ -2,8 +2,8 @@
 //!
 //! Click any cell to edit, changes save on blur via PATCH API
 
+
 use leptos::*;
-use wasm_bindgen::JsCast;
 use crate::api::{FieldDef, patch_json, API_BASE, TENANT_ID};
 use crate::components::field_renderer::EditableFieldValue;
 

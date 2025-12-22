@@ -6,7 +6,6 @@ use leptos_router::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use wasm_bindgen_futures::spawn_local;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::api::{fetch_json, API_BASE, TENANT_ID};

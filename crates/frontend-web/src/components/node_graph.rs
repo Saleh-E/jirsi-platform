@@ -1,6 +1,5 @@
 
 use leptos::*;
-use leptos::svg::*;
 // use core_node_engine::nodes::NodeConfig; 
 
 #[component]
@@ -24,7 +23,7 @@ pub fn GraphNode(
 
 #[component]
 pub fn NodeGraph() -> impl IntoView {
-    let (nodes, set_nodes) = create_signal(vec![
+    let (nodes, _set_nodes) = create_signal(vec![
         (100.0, 100.0, "Trigger: Contact Created".to_string(), "#4f46e5".to_string()),
         (350.0, 150.0, "Action: Send Email".to_string(), "#0f172a".to_string()),
         (350.0, 300.0, "Action: Create Task".to_string(), "#0f172a".to_string()),

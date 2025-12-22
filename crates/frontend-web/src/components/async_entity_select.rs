@@ -1,6 +1,6 @@
 use leptos::*;
 use uuid::Uuid;
-use crate::api::{fetch_entity_lookup, fetch_entity, LookupResult};
+use crate::api::{fetch_entity_lookup, fetch_entity};
 use crate::components::smart_select::{SMART_SELECT_STYLES}; // Reuse styles
 
 #[component]
@@ -75,11 +75,11 @@ pub fn AsyncEntitySelect(
         if value.get().is_none() {
             placeholder.clone()
         } else {
-            selected_value_label.read().unwrap_or(String::from("Loading..."))
+            selected_value_label.get().unwrap_or(String::from("Loading..."))
         }
     };
 
-    let handle_select = move |id_str: String, label: String| {
+    let handle_select = move |id_str: String, _label: String| {
         if let Ok(uid) = Uuid::parse_str(&id_str) {
              value.set(Some(uid));
              // Optimization: We could manually mutate selected_value_label resource here to avoid refetch

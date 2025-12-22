@@ -29,6 +29,10 @@ pub fn SmartTable(
     #[prop(optional)] on_row_click: Option<Callback<serde_json::Value>>,
     /// Enable inline editing
     #[prop(optional, default = true)] editable: bool,
+    /// Enable row selection checkboxes
+    #[prop(optional, default = false)] selectable: bool,
+    /// Callback when selection changes - returns count of selected items
+    #[prop(optional)] on_selection_change: Option<Callback<usize>>,
 ) -> impl IntoView {
     let entity_type_stored = store_value(entity_type);
     
@@ -38,6 +42,9 @@ pub fn SmartTable(
         .map(|f| (f.name.clone(), f))
         .collect();
     let field_map_stored = store_value(field_map);
+    
+    // Track selected rows
+    let (selected_ids, set_selected_ids) = create_signal::<std::collections::HashSet<String>>(std::collections::HashSet::new());
     
     // Create SHARED options signals for each select/status field
     // This way all cells in the same column share the same options
@@ -70,16 +77,60 @@ pub fn SmartTable(
     let columns_stored = store_value(visible_columns);
     
     // Store data reactively so edits update the UI
-    let (table_data, set_table_data) = create_signal(data);
+    let (table_data, set_table_data) = create_signal(data.clone());
+    let all_ids: Vec<String> = data.iter()
+        .filter_map(|r| r.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .collect();
+    let all_ids_stored = store_value(all_ids);
     
     // Global editing cell: (row_id, field_name) - only one cell can edit at a time
     let (editing_cell, set_editing_cell) = create_signal::<Option<(String, String)>>(None);
+    
+    // Notify parent of selection changes
+    let on_selection_change_stored = store_value(on_selection_change);
+    create_effect(move |_| {
+        let count = selected_ids.get().len();
+        if let Some(cb) = on_selection_change_stored.get_value() {
+            cb.call(count);
+        }
+    });
+    
+    // Toggle all checkbox
+    let toggle_all = move |_| {
+        let current = selected_ids.get();
+        let all = all_ids_stored.get_value();
+        if current.len() == all.len() {
+            set_selected_ids.set(std::collections::HashSet::new());
+        } else {
+            set_selected_ids.set(all.into_iter().collect());
+        }
+    };
+    
+    // Toggle single row
+    let toggle_row = move |row_id: String| {
+        set_selected_ids.update(|ids| {
+            if ids.contains(&row_id) {
+                ids.remove(&row_id);
+            } else {
+                ids.insert(row_id);
+            }
+        });
+    };
     
     view! {
         <div class="smart-table-wrapper">
             <table class="smart-table">
                 <thead>
                     <tr>
+                        // Checkbox header for bulk select
+                        {selectable.then(|| {
+                            let all_count = all_ids_stored.get_value().len();
+                            view! {
+                                <th class="smart-table-header bulk-checkbox-header">
+                                    <input type="checkbox" class="bulk-checkbox" checked={move || selected_ids.get().len() == all_count && all_count > 0} on:change=toggle_all />
+                                </th>
+                            }
+                        })}
                         {columns_stored.get_value().iter().map(|col| {
                             let label = field_map_stored.get_value()
                                 .get(&col.field)
@@ -114,6 +165,16 @@ pub fn SmartTable(
                             
                             view! {
                                 <tr class="smart-table-row">
+                                    // Checkbox cell for row selection
+                                    {selectable.then(|| {
+                                        let rid = row_id.clone();
+                                        let rid_check = row_id.clone();
+                                        view! {
+                                            <td class="smart-table-cell bulk-checkbox-cell">
+                                                <input type="checkbox" class="bulk-checkbox" checked=move || selected_ids.get().contains(&rid_check) on:change=move |_| toggle_row(rid.clone()) on:click=|ev: web_sys::MouseEvent| ev.stop_propagation() />
+                                            </td>
+                                        }
+                                    })}
                                     {columns_stored.get_value().iter().map(|col| {
                                         let field_name = col.field.clone();
                                         let value = row.get(&col.field)
@@ -142,7 +203,7 @@ pub fn SmartTable(
                                                 editing_cell=editing_cell
                                                 set_editing_cell=set_editing_cell
                                                 shared_options=field_shared_options
-                                                on_click=Callback::new(move |_: ()| {
+                                                _on_click=Callback::new(move |_: ()| {
                                                     if let Some(ref cb) = on_click {
                                                         cb.call(row_data.clone());
                                                     }
@@ -191,7 +252,7 @@ fn SmartTableCell(
     set_table_data: WriteSignal<Vec<serde_json::Value>>,
     editing_cell: ReadSignal<Option<(String, String)>>,
     set_editing_cell: WriteSignal<Option<(String, String)>>,
-    #[prop(into)] on_click: Callback<()>,
+    #[prop(into)] _on_click: Callback<()>,
     /// Shared options signal for this field (shared across all rows)
     /// Pass None for non-select fields
     shared_options: Option<(ReadSignal<Vec<SelectOption>>, WriteSignal<Vec<SelectOption>>)>,
@@ -543,10 +604,10 @@ fn SmartTableCell(
                         }
                         "link" => {
                             // Link field - use AsyncEntitySelect with lookup endpoint
-                            let current = local_value.get_value().as_str().unwrap_or("").to_string();
+                            let _current = local_value.get_value().as_str().unwrap_or("").to_string();
                             
                             // Get target entity from field_type definition
-                            let current = local_value.get_value().as_str().unwrap_or("").to_string();
+                            let _current = local_value.get_value().as_str().unwrap_or("").to_string();
                             
                             // Get target entity from stored value
                             let target_entity = target_entity_stored.get_value();

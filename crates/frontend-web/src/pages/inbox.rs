@@ -4,7 +4,7 @@ use leptos::*;
 use crate::api::{fetch_inbox_threads, fetch_thread_messages, send_inbox_reply};
 use crate::components::inbox_thread_list::InboxThreadList;
 use crate::components::message_bubble::MessageBubble;
-use crate::components::composer::Composer;
+use crate::components::composer::LegacyComposer;
 
 /// Main Inbox Page with 3-pane layout
 #[component]
@@ -205,7 +205,7 @@ pub fn InboxPage() -> impl IntoView {
                             
                             // Composer
                             <div class="composer-container">
-                                <Composer 
+                                <LegacyComposer 
                                     content=reply_content
                                     set_content=set_reply_content
                                     message_type=reply_type

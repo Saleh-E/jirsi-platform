@@ -4,7 +4,7 @@
 use leptos::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::api::{fetch_entity_list, put_json, API_BASE, TENANT_ID};
+use crate::api::{fetch_entity_list, put_json, API_BASE};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KanbanConfig {

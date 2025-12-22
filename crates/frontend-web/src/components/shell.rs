@@ -149,7 +149,7 @@ fn QuickCreateButton() -> impl IntoView {
 /// Notifications bell connected to WebSocket
 #[component]
 fn NotificationsBell() -> impl IntoView {
-    let (unread_count, set_unread_count) = create_signal(0i32);
+    let (unread_count, _set_unread_count) = create_signal(0i32);
     let (show_panel, set_show_panel) = create_signal(false);
     
     // Listen to WebSocket events for notifications

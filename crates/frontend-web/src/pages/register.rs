@@ -1,7 +1,6 @@
 //! Register Page - New tenant registration
 
 use leptos::*;
-use leptos_router::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
 use crate::api::{API_BASE, post_json};

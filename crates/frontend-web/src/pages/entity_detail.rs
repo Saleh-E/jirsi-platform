@@ -11,8 +11,7 @@ use crate::api::{
     fetch_interaction_summary, FieldDef, Association, Interaction, InteractionSummary,
 };
 use crate::components::smart_input::{SmartInput, InputMode};
-use crate::components::log_activity_modal::LogActivityModal;
-use crate::utils::{format_field_display, format_datetime};
+use crate::utils::format_datetime;
 
 /// Tab options for the detail page
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -36,7 +35,6 @@ pub fn EntityDetailPage() -> impl IntoView {
     let (summary, set_summary) = create_signal(Option::<InteractionSummary>::None);
     let (loading, set_loading) = create_signal(true);
     let (error, set_error) = create_signal(Option::<String>::None);
-    let (active_tab, set_active_tab) = create_signal(DetailTab::Details);
     let (is_editing, set_is_editing) = create_signal(false);
     let (saving, set_saving) = create_signal(false);
     
@@ -120,37 +118,29 @@ pub fn EntityDetailPage() -> impl IntoView {
         }.to_string()
     };
     
+    // Signal for about accordion state
+    let (about_expanded, set_about_expanded) = create_signal(true);
+    
     view! {
         <div class="entity-detail-page">
-            <header class="page-header">
-                <div class="header-left">
+            // Header
+            <header class="detail-header">
+                <div class="detail-header-left">
                     <a href=move || format!("/app/crm/entity/{}", entity_type()) class="back-link">
-                        "← Back to " {entity_label}
+                        "← " {entity_label}
                     </a>
-                    <div class="title-with-stats">
-                        {move || (!loading.get()).then(|| view! {
-                            <h1>{record_title}</h1>
-                        })}
-                        {move || summary.get().map(|s| view! {
-                            <div class="header-stats">
-                                <span class="stat-item">
-                                    <span class="stat-label">"Activities: "</span>
-                                    <span class="stat-value">{s.total_count}</span>
-                                </span>
-                                {s.last_interaction.map(|date| {
-                                    let formatted = format_datetime(&date);
-                                    view! {
-                                        <span class="stat-item">
-                                            <span class="stat-label">"Last Contacted: "</span>
-                                            <span class="stat-value">{formatted}</span>
-                                        </span>
-                                    }
-                                })}
-                            </div>
-                        })}
-                    </div>
+                    <h1 class="detail-title">{record_title}</h1>
+                    {move || summary.get().map(|s| view! {
+                        <div class="detail-stats">
+                            <span class="stat-badge">{s.total_count} " activities"</span>
+                            {s.last_interaction.map(|date| {
+                                let formatted = format_datetime(&date);
+                                view! { <span class="stat-badge">"Last: " {formatted}</span> }
+                            })}
+                        </div>
+                    })}
                 </div>
-                <div class="header-actions">
+                <div class="detail-header-actions">
                     {move || (!loading.get() && !is_editing.get()).then(|| view! {
                         <button class="btn btn-primary" on:click=move |_| set_is_editing.set(true)>
                             "Edit"
@@ -164,73 +154,105 @@ pub fn EntityDetailPage() -> impl IntoView {
                 <div class="error-banner">{e}</div>
             })}
             
-            // Loading state
+            // Loading state with skeleton
             {move || loading.get().then(|| view! {
-                <div class="loading">"Loading..."</div>
-            })}
-            
-            // Main content with tabs
-            {move || (!loading.get()).then(|| view! {
-                <div class="page-content">
-                    // Tab navigation
-                    <div class="detail-tabs">
-                        <button 
-                            class=move || if active_tab.get() == DetailTab::Details { "tab active" } else { "tab" }
-                            on:click=move |_| set_active_tab.set(DetailTab::Details)
-                        >
-                            "Details"
-                        </button>
-                        <button 
-                            class=move || if active_tab.get() == DetailTab::Related { "tab active" } else { "tab" }
-                            on:click=move |_| set_active_tab.set(DetailTab::Related)
-                        >
-                            "Related"
-                        </button>
-                        <button 
-                            class=move || if active_tab.get() == DetailTab::Timeline { "tab active" } else { "tab" }
-                            on:click=move |_| set_active_tab.set(DetailTab::Timeline)
-                        >
-                            "Timeline"
-                        </button>
+                <div class="record-hub">
+                    <div class="record-hub-left">
+                        <div class="about-accordion skeleton" style="height: 200px;"></div>
+                        <div class="quick-actions skeleton" style="height: 60px;"></div>
                     </div>
-                    
-                    // Tab content
-                    <div class="detail-content">
-                        {move || match active_tab.get() {
-                            DetailTab::Details => {
-                                if is_editing.get() {
-                                    view! {
-                                        <EditForm 
-                                            fields=fields.get()
-                                            record=record.get()
-                                            entity_type=entity_type()
-                                            record_id=record_id()
-                                            saving=saving
-                                            set_saving=set_saving
-                                            set_is_editing=set_is_editing
-                                            set_error=set_error
-                                            reload_trigger=reload_record
-                                        />
-                                    }.into_view()
-                                } else {
-                                    view! {
-                                        <DetailsTab fields=fields.get() record=record.get() />
-                                    }.into_view()
-                                }
-                            },
-                            DetailTab::Related => view! {
-                                <RelatedTab entity_type=entity_type() record_id=record_id() />
-                            }.into_view(),
-                            DetailTab::Timeline => view! {
-                                <TimelineTab 
-                                    entity_type=entity_type() 
-                                    record_id=record_id() 
-                                    on_activity_added=move |_| reload_summary.set(reload_summary.get() + 1)
-                                />
-                            }.into_view(),
-                        }}
+                    <div class="record-hub-center">
+                        <div class="skeleton" style="height: 100%;"></div>
+                    </div>
+                    <div class="record-hub-right">
+                        <div class="association-card skeleton" style="height: 150px;"></div>
                     </div>
                 </div>
+            })}
+            
+            // 3-Column Record Hub Layout (HubSpot Style)
+            {move || (!loading.get()).then(|| {
+                let etype_center = entity_type();
+                let etype_right = entity_type();
+                let rid_center = record_id();
+                let rid_right = record_id();
+                
+                view! {
+                    <div class="record-hub">
+                        // LEFT COLUMN: The Rolodex
+                        <div class="record-hub-left">
+                            // About This [Entity] Accordion
+                            <div class="about-accordion">
+                                <div 
+                                    class="about-accordion-header"
+                                    on:click=move |_| set_about_expanded.update(|v| *v = !*v)
+                                >
+                                    <span>"About this " {entity_label}</span>
+                                    <span class="accordion-icon">{move || if about_expanded.get() { "▼" } else { "▶" }}</span>
+                                </div>
+                                {move || about_expanded.get().then(|| {
+                                    if is_editing.get() {
+                                        view! {
+                                            <div class="about-accordion-body">
+                                                <EditForm 
+                                                    fields=fields.get()
+                                                    record=record.get()
+                                                    entity_type=entity_type()
+                                                    record_id=record_id()
+                                                    saving=saving
+                                                    set_saving=set_saving
+                                                    set_is_editing=set_is_editing
+                                                    set_error=set_error
+                                                    reload_trigger=reload_record
+                                                />
+                                            </div>
+                                        }.into_view()
+                                    } else {
+                                        view! {
+                                            <div class="about-accordion-body">
+                                                <DetailsTab fields=fields.get() record=record.get() />
+                                            </div>
+                                        }.into_view()
+                                    }
+                                })}
+                            </div>
+                            
+                            // Quick Actions
+                            <div class="quick-actions">
+                                <button class="quick-action-btn" title="Log a call">
+                                    <span class="quick-action-icon">"📞"</span>
+                                    <span>"Call"</span>
+                                </button>
+                                <button class="quick-action-btn" title="Send email">
+                                    <span class="quick-action-icon">"📧"</span>
+                                    <span>"Email"</span>
+                                </button>
+                                <button class="quick-action-btn" title="Schedule meeting">
+                                    <span class="quick-action-icon">"📅"</span>
+                                    <span>"Meeting"</span>
+                                </button>
+                                <button class="quick-action-btn" title="Create task">
+                                    <span class="quick-action-icon">"✓"</span>
+                                    <span>"Task"</span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        // CENTER COLUMN: The Brain (Timeline)
+                        <div class="record-hub-center">
+                            <TimelineTab 
+                                entity_type=etype_center
+                                record_id=rid_center
+                                _on_activity_added=move |_| reload_summary.set(reload_summary.get() + 1)
+                            />
+                        </div>
+                        
+                        // RIGHT COLUMN: The Context (Associations)
+                        <div class="record-hub-right">
+                            <RelatedTab entity_type=etype_right record_id=rid_right />
+                        </div>
+                    </div>
+                }
             })}
         </div>
     }
@@ -733,7 +755,7 @@ fn get_record_display_name(record: &serde_json::Value) -> String {
 fn TimelineTab(
     entity_type: String, 
     record_id: String,
-    #[prop(into)] on_activity_added: Callback<()>
+    #[prop(into)] _on_activity_added: Callback<()>
 ) -> impl IntoView {
     let (interactions, set_interactions) = create_signal(Vec::<Interaction>::new());
     let (loading, set_loading) = create_signal(true);

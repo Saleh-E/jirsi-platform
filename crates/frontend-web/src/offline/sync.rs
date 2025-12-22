@@ -1,6 +1,5 @@
 
 use super::db::LocalDatabase;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use gloo_console;
 
@@ -34,7 +33,7 @@ impl SyncManager {
         if let Some(rows) = json.get("data").and_then(|d: &serde_json::Value| d.as_array()) {
             for row in rows {
                 let id = row.get("id").and_then(|v: &serde_json::Value| v.as_str()).unwrap_or_default();
-                let data_str = serde_json::to_string(row).unwrap_or_default();
+                let _data_str = serde_json::to_string(row).unwrap_or_default();
                 let now = chrono::Utc::now().to_rfc3339();
                 
                 // Upsert into local DB

@@ -3,7 +3,6 @@
 use leptos::*;
 use std::rc::Rc;
 use serde::{Deserialize, Serialize};
-use crate::api::{fetch_json, API_BASE, TENANT_ID};
 
 /// User profile data
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]

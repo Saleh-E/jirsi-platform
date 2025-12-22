@@ -3,9 +3,7 @@
 //! Persists selected view to localStorage per entity type
 
 use leptos::*;
-use serde::{Deserialize, Serialize};
-use wasm_bindgen::JsValue;
-use crate::api::{fetch_views, ViewColumn, ViewDef};
+use crate::api::{fetch_views, ViewDef};
 
 #[component]
 pub fn ViewSwitcher(
@@ -32,18 +30,25 @@ pub fn ViewSwitcher(
             
             match fetch_views(&et).await {
                 Ok(view_list) => {
+                    // If empty, create default fallback views
+                    let final_views = if view_list.is_empty() {
+                        create_default_views()
+                    } else {
+                        view_list
+                    };
+                    
                     // Try to restore saved view from localStorage
                     let saved_view_id = get_saved_view(&et_storage);
                     let selected_view = if let Some(ref saved_id) = saved_view_id {
-                        view_list.iter().find(|v| &v.id == saved_id)
+                        final_views.iter().find(|v| &v.id == saved_id)
                     } else {
                         None
                     };
                     
                     // Use saved view, or default view, or first view
                     let view_to_use = selected_view
-                        .or_else(|| view_list.iter().find(|v| v.is_default))
-                        .or_else(|| view_list.first());
+                        .or_else(|| final_views.iter().find(|v| v.is_default))
+                        .or_else(|| final_views.first());
                     
                     if let Some(view) = view_to_use {
                         set_active_view.set(Some(view.id.clone()));
@@ -53,13 +58,17 @@ pub fn ViewSwitcher(
                          set_active_view.set(None);
                     }
                     
-                    set_views.set(view_list);
+                    set_views.set(final_views);
                     set_loading.set(false);
                 }
                 Err(_) => {
-                    // On error, clear views to prevent stale data
-                    set_views.set(Vec::new());
-                    set_active_view.set(None);
+                    // On error, use default fallback views
+                    let default_views = create_default_views();
+                    if let Some(view) = default_views.first() {
+                        set_active_view.set(Some(view.id.clone()));
+                        callback.call(view.clone());
+                    }
+                    set_views.set(default_views);
                     set_loading.set(false);
                 }
             }
@@ -144,3 +153,66 @@ fn save_view(entity_type: &str, view_id: &str) {
         }
     }
 }
+
+/// Create default fallback views when API returns empty
+fn create_default_views() -> Vec<ViewDef> {
+    vec![
+        ViewDef {
+            id: "default_table".to_string(),
+            entity_type_id: "".to_string(),
+            name: "table".to_string(),
+            label: "Table".to_string(),
+            view_type: "table".to_string(),
+            is_default: true,
+            is_system: true,
+            created_by: None,
+            columns: vec![],
+            filters: serde_json::json!({}),
+            sort: serde_json::json!({}),
+            settings: serde_json::json!({}),
+        },
+        ViewDef {
+            id: "default_kanban".to_string(),
+            entity_type_id: "".to_string(),
+            name: "kanban".to_string(),
+            label: "Kanban".to_string(),
+            view_type: "kanban".to_string(),
+            is_default: false,
+            is_system: true,
+            created_by: None,
+            columns: vec![],
+            filters: serde_json::json!({}),
+            sort: serde_json::json!({}),
+            settings: serde_json::json!({"group_by_field": "status"}),
+        },
+        ViewDef {
+            id: "default_calendar".to_string(),
+            entity_type_id: "".to_string(),
+            name: "calendar".to_string(),
+            label: "Calendar".to_string(),
+            view_type: "calendar".to_string(),
+            is_default: false,
+            is_system: true,
+            created_by: None,
+            columns: vec![],
+            filters: serde_json::json!({}),
+            sort: serde_json::json!({}),
+            settings: serde_json::json!({"date_field": "created_at"}),
+        },
+        ViewDef {
+            id: "default_map".to_string(),
+            entity_type_id: "".to_string(),
+            name: "map".to_string(),
+            label: "Map".to_string(),
+            view_type: "map".to_string(),
+            is_default: false,
+            is_system: true,
+            created_by: None,
+            columns: vec![],
+            filters: serde_json::json!({}),
+            sort: serde_json::json!({}),
+            settings: serde_json::json!({}),
+        },
+    ]
+}
+

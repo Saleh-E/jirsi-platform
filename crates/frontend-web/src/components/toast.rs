@@ -3,7 +3,7 @@
 //! Shows real-time toast notifications for WebSocket events.
 
 use leptos::*;
-use crate::context::socket::{use_socket, WsEvent, SocketState};
+use crate::context::socket::{WsEvent, SocketState};
 
 /// Toast notification item
 #[derive(Clone)]
