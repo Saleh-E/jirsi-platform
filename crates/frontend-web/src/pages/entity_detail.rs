@@ -11,6 +11,7 @@ use crate::api::{
     fetch_interaction_summary, FieldDef, Association, Interaction, InteractionSummary,
 };
 use crate::components::smart_input::{SmartInput, InputMode};
+use crate::components::timeline::{UnifiedComposer, UnifiedTimeline};
 use crate::utils::format_datetime;
 
 /// Tab options for the detail page
@@ -238,12 +239,19 @@ pub fn EntityDetailPage() -> impl IntoView {
                             </div>
                         </div>
                         
-                        // CENTER COLUMN: The Brain (Timeline)
+                        // CENTER COLUMN: The Brain (Composer + Timeline)
                         <div class="record-hub-center">
-                            <TimelineTab 
+                            // Unified Composer - Tabbed activity input
+                            <UnifiedComposer
+                                entity_type=etype_center.clone()
+                                record_id=rid_center.clone()
+                                on_activity_created=move |_| reload_summary.set(reload_summary.get() + 1)
+                            />
+                            // Unified Timeline - Color-coded activity stream
+                            <UnifiedTimeline
                                 entity_type=etype_center
                                 record_id=rid_center
-                                _on_activity_added=move |_| reload_summary.set(reload_summary.get() + 1)
+                                reload_trigger=reload_summary
                             />
                         </div>
                         

@@ -16,6 +16,8 @@ use crate::components::calendar::{CalendarView, CalendarConfig};
 use crate::components::map::{MapView, MapConfig};
 use crate::components::table::SmartTable;
 use crate::components::create_modal::CreateModal;
+use crate::components::filter_builder::{FilterBuilder, FilterChipBar, FilterCondition};
+use crate::components::column_selector::{ColumnSelector, ColumnConfig};
 use crate::context::use_mobile;
 
 /// Main entity list page component
@@ -139,6 +141,35 @@ pub fn EntityListPage() -> impl IntoView {
     let (density, set_density) = create_signal("comfy".to_string()); // "comfy" or "compact"
     let (selected_count, set_selected_count) = create_signal(0usize);
     
+    // Filter state signals
+    let active_filters = create_rw_signal(Vec::<FilterCondition>::new());
+    let show_filter_popover = create_rw_signal(false);
+    
+    // Column selector state
+    let show_column_selector = create_rw_signal(false);
+    
+    // Column visibility - derived from fields with visibility toggle
+    let column_configs = create_rw_signal(Vec::<ColumnConfig>::new());
+    
+    // Initialize column configs when fields load
+    create_effect(move |_| {
+        let current_fields = fields.get();
+        if !current_fields.is_empty() && column_configs.get().is_empty() {
+            let configs: Vec<ColumnConfig> = current_fields.iter()
+                .filter(|f| f.show_in_list)
+                .map(|f| ColumnConfig {
+                    field: f.name.clone(),
+                    label: f.label.clone(),
+                    visible: true,
+                })
+                .collect();
+            column_configs.set(configs);
+        }
+    });
+    
+    // Convert fields to Signal for FilterBuilder
+    let fields_signal = Signal::derive(move || fields.get());
+    
     view! {
         <div class="entity-list-page">
             // Page Header
@@ -175,9 +206,21 @@ pub fn EntityListPage() -> impl IntoView {
             
             // Filter Bar 
             <div class="filter-bar">
-                <button class="add-filter-btn">
+                <button 
+                    class="add-filter-btn"
+                    on:click=move |_| show_filter_popover.set(true)
+                >
                     "+ Add Filter"
                 </button>
+                
+                // Filter Builder Popover
+                <FilterBuilder 
+                    fields=fields_signal
+                    on_add_filter=Callback::new(move |filter: FilterCondition| {
+                        active_filters.update(|filters| filters.push(filter));
+                    })
+                    show_popover=show_filter_popover
+                />
                 
                 // Density Toggle
                 <div class="density-toggle">
@@ -194,7 +237,33 @@ pub fn EntityListPage() -> impl IntoView {
                         "Compact"
                     </button>
                 </div>
+                
+                // Column Selector
+                <ColumnSelector
+                    columns=Signal::derive(move || column_configs.get())
+                    on_toggle=Callback::new(move |field: String| {
+                        column_configs.update(|configs| {
+                            if let Some(config) = configs.iter_mut().find(|c| c.field == field) {
+                                config.visible = !config.visible;
+                            }
+                        });
+                    })
+                    show_dropdown=show_column_selector
+                />
             </div>
+            
+            // Filter Chip Bar (shows active filters)
+            <FilterChipBar 
+                filters=Signal::derive(move || active_filters.get())
+                on_remove=Callback::new(move |id: u32| {
+                    active_filters.update(|filters| {
+                        filters.retain(|f| f.id != id);
+                    });
+                })
+                on_clear_all=Callback::new(move |_| {
+                    active_filters.set(Vec::new());
+                })
+            />
             
             // View Switcher - dynamically switch between table/kanban/calendar/map
             <ViewSwitcher 
