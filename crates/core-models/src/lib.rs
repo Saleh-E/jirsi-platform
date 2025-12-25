@@ -10,8 +10,10 @@ pub mod entity;
 pub mod field;
 pub mod association;
 pub mod view;
-pub mod event;
 pub mod node;
+pub mod crdt;
+pub mod sync;
+pub mod event;
 
 // Re-export common types
 pub use tenant::*;
@@ -22,4 +24,3 @@ pub use association::*;
 pub use view::*;
 pub use event::*;
 pub use node::*;
-

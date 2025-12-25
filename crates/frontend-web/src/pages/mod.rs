@@ -14,6 +14,7 @@ pub mod inbox;
 pub mod workflow_editor;
 pub mod workflow_list;
 pub mod automation;
+pub mod component_playground;
 
 pub use home::HomePage;
 pub use entity_list::EntityListPage;

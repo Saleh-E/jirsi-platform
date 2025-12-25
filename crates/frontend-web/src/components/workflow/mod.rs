@@ -1,13 +1,9 @@
-//! Workflow Editor Components
-//! 
-//! Houdini-style visual node editor for workflow automation
+//! Workflow module - Visual node graph editor
 
-pub mod workflow_canvas;
-pub mod workflow_node;
-pub mod node_inspector;
-pub mod node_palette;
+pub mod canvas;
+pub mod pipe;
+pub mod execution_panel;
 
-pub use workflow_canvas::WorkflowCanvas;
-pub use workflow_node::WorkflowNode;
-pub use node_inspector::NodeInspector;
-pub use node_palette::NodePalette;
+pub use canvas::{NodeGraphCanvas, NodeInstance, Edge, Position, Port};
+pub use pipe::WorkflowPipe;
+pub use execution_panel::ExecutionPanel;

@@ -46,5 +46,11 @@ dashmap = "5.5"
 reqwest = { version = "0.12.26", features = ["json"] }
 async-trait = "0.1.89"
 
+# Event Sourcing
+esrs = "0.2"
+
+# Caching
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

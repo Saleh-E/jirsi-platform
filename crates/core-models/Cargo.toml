@@ -10,3 +10,5 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+rust_decimal = "1.33"
+yrs = { workspace = true }

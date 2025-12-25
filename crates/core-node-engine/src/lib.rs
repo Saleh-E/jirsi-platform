@@ -7,6 +7,8 @@ pub mod error;
 pub mod events;
 pub mod nodes;
 pub mod strategies;
+pub mod wasm_executor;
+pub mod script_node;
 
 #[cfg(feature = "backend")]
 pub mod executor;
@@ -28,4 +30,7 @@ pub use executor::GraphExecutor;
 pub use strategies::{AssignmentStrategy, AgentStats};
 #[cfg(feature = "backend")]
 pub use strategies::AssignmentService;
+
+pub use wasm_executor::{WasmExecutor, PluginSource, WasmPluginConfig, HostFunctions};
+pub use script_node::ScriptNodeHandler;
 

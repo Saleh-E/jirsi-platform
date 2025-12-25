@@ -61,7 +61,41 @@ impl NodeRegistry {
 
 impl Default for NodeRegistry {
     fn default() -> Self {
-        Self::new()
+        let mut registry = Self::new();
+        
+        // Register built-in handlers
+        registry.register(
+            NodeType::TriggerManual,
+            Arc::new(TriggerHandler),
+        );
+        registry.register(
+            NodeType::DataSetField,
+            Arc::new(SetFieldHandler),
+        );
+        registry.register(
+            NodeType::ActionSendEmail,
+            Arc::new(SendEmailHandler),
+        );
+        registry.register(
+            NodeType::ConditionIf,
+            Arc::new(ConditionIfHandler),
+        );
+        registry.register(
+            NodeType::DataCreateRecord,
+            Arc::new(CreateRecordHandler),
+        );
+        registry.register(
+            NodeType::DataUpdateRecord,
+            Arc::new(UpdateRecordHandler),
+        );
+        
+        // Register ScriptNode handler for WASM execution
+        registry.register(
+            NodeType::ScriptNode,
+            Arc::new(crate::script_node::ScriptNodeHandler::new()),
+        );
+        
+        registry
     }
 }
 

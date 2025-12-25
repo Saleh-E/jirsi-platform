@@ -306,6 +306,7 @@ fn field_def_from_row(row: &sqlx::postgres::PgRow) -> Result<FieldDef, MetadataE
         validation: validation.and_then(|v| serde_json::from_value(v).ok()),
         options: options, // Pass through raw JSON value
         ui_hints: ui_hints.and_then(|v| serde_json::from_value(v).ok()),
+        context_hints: None, // TODO: Load from DB when schema is updated
         sort_order: row.try_get("sort_order")?,
         group: row.try_get("group")?,
         created_at: row.try_get("created_at")?,

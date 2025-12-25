@@ -1,0 +1,354 @@
+/* ============================================================================
+   NODE GRAPH CANVAS STYLES
+   
+   World-class visual workflow editor with:
+   - Infinite pan/zoom
+   - SVG Bezier edges
+   - HTML interactive nodes
+   - 60fps smooth animations
+   ============================================================================ */
+
+.node-graph-canvas {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background: linear-gradient(90deg,
+            rgba(99, 102, 241, 0.03) 1px,
+            transparent 1px),
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px,
+            transparent 1px);
+    background-size: 20px 20px;
+    background-color: #0f172a;
+    cursor: grab;
+}
+
+.node-graph-canvas:active {
+    cursor: grabbing;
+}
+
+/* Canvas Background (clickable for panning) */
+.canvas-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* ============================================================================
+   SVG EDGES LAYER
+   ============================================================================ */
+
+.edges-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+.edge {
+    pointer-events: auto;
+}
+
+.edge-path {
+    transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
+.edge:hover .edge-path {
+    stroke: #818cf8;
+    stroke-width: 3;
+}
+
+.edge-hit-area {
+    cursor: pointer;
+}
+
+/* ============================================================================
+   HTML NODES LAYER
+   ============================================================================ */
+
+.nodes-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+/* ============================================================================
+   NODE STYLES
+   ============================================================================ */
+
+.node {
+    position: absolute;
+    pointer-events: auto;
+    background: #1e293b;
+    border: 2px solid #334155;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    min-width: 200px;
+    cursor: move;
+    transition: all 0.15s ease;
+}
+
+.node:hover {
+    border-color: #6366f1;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+}
+
+.node.selected {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2),
+        0 8px 24px rgba(99, 102, 241, 0.4);
+}
+
+.node-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+    border-radius: 10px 10px 0 0;
+    border-bottom: 1px solid #334155;
+}
+
+.node-icon {
+    font-size: 20px;
+}
+
+.node-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: #e2e8f0;
+    flex: 1;
+}
+
+/* ============================================================================
+   PORTS
+   ============================================================================ */
+
+.node-ports {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.port {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.input-port {
+    justify-content: flex-start;
+}
+
+.output-port {
+    justify-content: flex-end;
+}
+
+.port-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #475569;
+    border: 2px solid #64748b;
+    transition: all 0.2s ease;
+    cursor: crosshair;
+}
+
+.port-dot:hover {
+    background: #6366f1;
+    border-color: #818cf8;
+    transform: scale(1.2);
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+}
+
+.port-label {
+    font-weight: 500;
+}
+
+/* ============================================================================
+   TOOLBAR
+   ============================================================================ */
+
+.canvas-toolbar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.9);
+    backdrop-filter: blur(12px);
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+}
+
+.toolbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.toolbar-btn:hover {
+    background: #334155;
+    border-color: #6366f1;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(99, 102, 241, 0.2);
+}
+
+.toolbar-btn:active {
+    transform: translateY(0);
+}
+
+.toolbar-btn .icon {
+    font-size: 16px;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: #334155;
+    margin: 0 4px;
+}
+
+/* ============================================================================
+   ZOOM CONTROLS
+   ============================================================================ */
+
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.zoom-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.zoom-btn:hover {
+    background: #334155;
+    border-color: #6366f1;
+}
+
+.zoom-label {
+    min-width: 48px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
+@keyframes edge-flow {
+    0% {
+        stroke-dashoffset: 0;
+    }
+
+    100% {
+        stroke-dashoffset: 20;
+    }
+}
+
+.edge-path.animated {
+    stroke-dasharray: 5, 5;
+    animation: edge-flow 1s linear infinite;
+}
+
+/* ============================================================================
+   RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .node {
+        min-width: 160px;
+    }
+
+    .node-header {
+        padding: 10px 12px;
+    }
+
+    .node-title {
+        font-size: 13px;
+    }
+
+    .toolbar-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+}
+
+/* ============================================================================
+   DARK MODE ENHANCEMENTS
+   ============================================================================ */
+
+.dark .node-graph-canvas {
+    background-color: #020617;
+}
+
+.dark .node {
+    background: #0f172a;
+    border-color: #1e293b;
+}
+
+.dark .node-header {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+/* ============================================================================
+   PERFORMANCE OPTIMIZATIONS
+   ============================================================================ */
+
+.nodes-layer,
+.edges-layer {
+    /* Enable GPU acceleration */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+.node {
+    /* Optimize repaints */
+    contain: layout style paint;
+}

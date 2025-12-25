@@ -13,6 +13,7 @@ leptos_router = { workspace = true }
 leptos_meta = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+core-models = { path = "../core-models" }
 core-node-engine = { path = "../core-node-engine", default-features = false }
 uuid = { version = "1", features = ["v4", "js", "serde"] }
 chrono = { workspace = true }
@@ -26,6 +27,10 @@ gloo-console = "0.2"
 urlencoding = "2.1"
 js-sys = "0.3"
 
+# Browser APIs and utilities
+leptos-use = "0.13"
+base64 = "0.21"
+
 [dependencies.web-sys]
 version = "0.3"
 features = [
@@ -35,6 +40,12 @@ features = [
     "Node",
     "HtmlElement",
     "HtmlInputElement",
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "MouseEvent",
+    "TouchEvent",
+    "TouchList",
+    "Touch",
     "Event",
     "EventTarget",
     "Request",

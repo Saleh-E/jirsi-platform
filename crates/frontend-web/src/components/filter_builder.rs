@@ -281,7 +281,7 @@ pub fn FilterChip(
     on_remove: Callback<u32>,
 ) -> impl IntoView {
     let filter_id = filter.id;
-    let display_label = format!("{}: {}", filter.field_label, filter.value);
+    let _display_label = format!("{}: {}", filter.field_label, filter.value);
     
     let operator_label = match filter.operator.as_str() {
         "contains" => "contains",

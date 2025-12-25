@@ -4,6 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// All supported field types in the system
@@ -84,11 +85,79 @@ pub enum FieldType {
         target_field: String, 
         operation: String,  // sum, count, avg, min, max
     },
+    
+    // ==================
+    // Jirsi Enhanced Types
+    // ==================
+    
+    /// Dropdown with search and inline creation (enhanced Select)
+    Dropdown { 
+        options: Vec<SelectChoice>,
+        allow_create: bool,
+    },
+    /// Smart association link with inline entity creation
+    Association {
+        target_entity: String,
+        display_field: String,
+        allow_inline_create: bool,
+    },
+    /// Color picker field
+    ColorPicker,
+    /// JsonLogic formula for calculated fields
+    JsonLogic { formula: String },
+    /// Location/address with optional map display
+    Location { show_map: bool },
+    /// Progress indicator (0-100)
+    Progress { max_value: i32 },
+    /// Star rating (1-5 stars)
+    Rating { max_stars: u8 },
+    /// Digital signature capture
+    Signature,
 }
 
 impl Default for FieldType {
     fn default() -> Self {
         Self::Text
+    }
+}
+
+/// Context in which a field is being rendered
+/// Determines the visual representation of the field
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FieldContext {
+    /// Creating a new record in a form
+    CreateForm,
+    /// Editing an existing record in a form
+    EditForm,
+    /// Displaying in a list/table view (cell)
+    ListView,
+    /// Displaying in a detail/show view
+    DetailView,
+    /// Displaying on a Kanban card
+    KanbanCard,
+    /// Building a filter query
+    FilterBuilder,
+    /// Inline editing (click to edit)
+    InlineEdit,
+}
+
+/// Context-specific rendering hints
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextRenderHints {
+    pub component: Option<String>,
+    pub compact: bool,
+    pub read_only: bool,
+    pub show_label: bool,
+}
+
+impl Default for ContextRenderHints {
+    fn default() -> Self {
+        Self {
+            component: None,
+            compact: false,
+            read_only: false,
+            show_label: true,
+        }
     }
 }
 
@@ -137,6 +206,8 @@ pub struct FieldDef {
     pub sort_order: i32,
     /// Group/section for form layout
     pub group: Option<String>,
+    /// Context-specific rendering hints
+    pub context_hints: Option<HashMap<FieldContext, ContextRenderHints>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -176,7 +247,7 @@ pub struct FieldOptions {
 }
 
 /// A choice for Select/MultiSelect fields
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SelectChoice {
     pub value: String,
     pub label: String,
@@ -237,6 +308,7 @@ impl FieldDef {
             ui_hints: None,
             sort_order: 0,
             group: None,
+            context_hints: None,
             created_at: now,
             updated_at: now,
         }

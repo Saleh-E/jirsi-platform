@@ -14,11 +14,19 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 async-trait = "0.1"
 
+# WASM Runtime for ScriptNodes
+extism = "1.0"
+wasmtime = "16.0"
+base64 = "0.21"
+
+# HTTP for fetching remote plugins
+reqwest = { version = "0.11", features = ["json"], optional = true }
+
 # Backend-only dependencies
 sqlx = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 
 [features]
 default = ["backend"]
-backend = ["dep:sqlx", "dep:tokio"]
+backend = ["dep:sqlx", "dep:tokio", "dep:reqwest"]
 

@@ -23,7 +23,7 @@ pub fn hydrate() {
     console_error_panic_hook::set_once();
     leptos::mount_to_body(|| {
         // Provide contexts at app root
-        context::provide_theme_context();
+        context::provide_jirsi_theme();
         context::provide_mobile_context();
         view! { <App/> }
     });

@@ -101,6 +101,9 @@ pub enum NodeType {
     AiClassify,
     AiExtract,
     AiGenerate,
+    
+    // User-defined logic (WASM)
+    ScriptNode,
 
     // Flow control
     FlowMerge,

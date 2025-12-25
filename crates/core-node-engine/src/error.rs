@@ -31,6 +31,9 @@ pub enum NodeEngineError {
 
     #[error("Max retries exceeded")]
     MaxRetriesExceeded,
+    
+    #[error("WASM execution error: {0}")]
+    WasmError(String),
 
     #[cfg(feature = "backend")]
     #[error("Database error: {0}")]
