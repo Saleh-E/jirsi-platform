@@ -28,7 +28,6 @@ pub mod chart;
 pub mod inbox_thread_list;
 pub mod message_bubble;
 pub mod composer;
-pub mod workflow;
 pub mod toast;
 pub mod action_bar;
 pub mod editable_table;
@@ -43,3 +42,5 @@ pub mod timeline;
 pub mod filter_builder;
 pub mod column_selector;
 pub mod command_palette;
+pub mod rich_text_editor;
+

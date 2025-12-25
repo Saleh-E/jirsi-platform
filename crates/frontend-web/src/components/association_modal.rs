@@ -7,6 +7,7 @@ use leptos::*;
 use gloo_net::http::Request;
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
+use crate::api::{get_api_base, TENANT_ID};
 
 #[component]
 pub fn AssociationModal(
@@ -136,9 +137,11 @@ pub fn AssociationModal(
 
 /// Create entity via API
 async fn create_entity(entity_type: &str, data: HashMap<String, JsonValue>) -> Result<String, String> {
-    let url = format!("/api/v1/entities/{}", entity_type);
+    let url = format!("{}/entities/{}", get_api_base(), entity_type);
     
     let response = Request::post(&url)
+        .header("X-Tenant-Id", TENANT_ID)
+        .header("X-Tenant-Slug", "demo")
         .json(&json!({"fields": data}))
         .map_err(|e| format!("Request error: {:?}", e))?
         .send()

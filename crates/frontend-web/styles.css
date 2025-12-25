@@ -11071,3 +11071,111 @@ button.columns-toggle:hover {
 .bulk-action-btn.danger:hover {
     background: rgba(239, 68, 68, 0.3);
 }
+
+/* ========================================
+   NETWORK STATUS BADGE
+   Visual indicator for sync/offline state
+   ======================================== */
+.network-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.network-badge .badge-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+/* Online - Green, hidden by default, only dot visible */
+.network-badge.online {
+    background: transparent;
+    padding: 4px;
+}
+
+.network-badge.online .badge-dot {
+    background: #10b981;
+    box-shadow: 0 0 4px rgba(16, 185, 129, 0.5);
+}
+
+/* Syncing - Yellow with pulse animation */
+.network-badge.syncing {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+}
+
+.network-badge.syncing .badge-dot {
+    background: #f59e0b;
+}
+
+.network-badge.syncing .badge-dot.pulse {
+    animation: networkPulse 1s ease-in-out infinite;
+}
+
+@keyframes networkPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+/* Offline - Red */
+.network-badge.offline {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+}
+
+.network-badge.offline .badge-dot {
+    background: #ef4444;
+}
+
+.badge-text {
+    white-space: nowrap;
+}
+
+/* ========================================
+   GLASSMORPHISM COMMAND PALETTE
+   Modern, premium UI overlay
+   ======================================== */
+.command-palette-backdrop {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.command-palette {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 
+        0 25px 50px -12px rgba(0, 0, 0, 0.25),
+        0 0 0 1px rgba(0, 0, 0, 0.05);
+    animation: commandPaletteIn 0.2s ease-out;
+}
+
+@keyframes commandPaletteIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Dark mode glassmorphism */
+body.dark .command-palette {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark .command-palette-backdrop {
+    background: rgba(0, 0, 0, 0.8);
+}

@@ -7,23 +7,24 @@ use uuid::Uuid;
 
 #[component]
 pub fn SyncIndicator() -> impl IntoView {
-    let (status, set_status) = create_signal("Offline".to_string());
+    let (status, set_status) = create_signal("Online".to_string());
     let (is_syncing, set_is_syncing) = create_signal(false);
     let (db_ready, set_db_ready) = create_signal(false);
     
-    // Initialize DB
+    // Initialize DB (optional - don't show error if OPFS unavailable)
     create_effect(move |_| {
         spawn_local(async move {
             let db = LocalDatabase::new().await;
             match db {
                 Ok(_) => {
                     set_db_ready.set(true);
-                    set_status.set("Online".to_string()); // Assume online initially
+                    set_status.set("Online".to_string());
                     gloo_console::log!("Offline DB Initialized");
                 },
                 Err(e) => {
-                    gloo_console::error!("Failed to init offline DB:", e);
-                    set_status.set("Error".to_string());
+                    // OPFS not available is OK - we're just online-only mode
+                    gloo_console::warn!("Offline DB not available (online-only mode):", e);
+                    set_status.set("Online".to_string()); // Still online, just no offline support
                 }
             }
         });

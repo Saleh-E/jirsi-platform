@@ -11,6 +11,7 @@ use leptos_use::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::collections::HashMap;
+use wasm_bindgen::JsCast;
 
 /// Position on the canvas
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -283,12 +284,6 @@ pub fn NodeGraphCanvas(
     // RENDER
     // ============================================================================
     
-    let state = canvas_state.get();
-    let transform = format!(
-        "translate({}px, {}px) scale({})",
-        state.pan_x, state.pan_y, state.zoom
-    );
-    
     view! {
         <div
             class="node-graph-canvas"
@@ -304,7 +299,10 @@ pub fn NodeGraphCanvas(
             // SVG layer for edges
             <svg
                 class="edges-layer"
-                style=move || format!("transform: {}", transform)
+                style=move || {
+                    let state = canvas_state.get();
+                    format!("transform: translate({}px, {}px) scale({})", state.pan_x, state.pan_y, state.zoom)
+                }
             >
                 <For
                     each=move || edges.get()
@@ -318,7 +316,10 @@ pub fn NodeGraphCanvas(
             // HTML layer for nodes
             <div
                 class="nodes-layer"
-                style=move || format!("transform: {}", transform)
+                style=move || {
+                    let state = canvas_state.get();
+                    format!("transform: translate({}px, {}px) scale({})", state.pan_x, state.pan_y, state.zoom)
+                }
             >
                 <For
                     each=move || nodes.get()

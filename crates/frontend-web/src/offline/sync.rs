@@ -2,6 +2,7 @@
 use super::db::LocalDatabase;
 use uuid::Uuid;
 use gloo_console;
+use crate::api::get_api_base;
 
 #[derive(Clone, Debug)]
 pub struct SyncManager {
@@ -18,8 +19,10 @@ impl SyncManager {
         // In real impl: fetch /api/v1/sync/pull?entity_type=...&since=...
         // For MVP: We just fetch the list via regular API and upsert all
         
-        let url = format!("/api/v1/records/{}?tenant_id={}&limit=1000", entity_type, tenant_id);
+        let url = format!("{}/records/{}?tenant_id={}&limit=1000", get_api_base(), entity_type, tenant_id);
         let resp = gloo_net::http::Request::get(&url)
+            .header("X-Tenant-Id", &tenant_id.to_string())
+            .header("X-Tenant-Slug", "demo")
             .send()
             .await
             .map_err(|e| e.to_string())?;

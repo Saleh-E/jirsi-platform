@@ -25,6 +25,8 @@ pub fn hydrate() {
         // Provide contexts at app root
         context::provide_jirsi_theme();
         context::provide_mobile_context();
+        context::provide_network_status();
         view! { <App/> }
     });
 }
+

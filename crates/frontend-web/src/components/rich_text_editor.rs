@@ -5,6 +5,7 @@
 use leptos::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use uuid::Uuid;
 
 #[wasm_bindgen(module = "/public/js/yjs-editor.js")]
@@ -53,28 +54,36 @@ pub fn RichTextEditor(
     collaborative: bool,
 ) -> impl IntoView {
     let editor_id = id.clone();
+    let editor_id_view = id.clone(); // For view
     let (is_syncing, set_is_syncing) = create_signal(false);
     let (last_update, set_last_update) = create_signal::<Option<Vec<u8>>>(None);
+    
+    // Clone for closures
+    let initial_text_effect = initial_text.clone();
+    let field_effect = field.clone();
     
     // Initialize editor on mount
     create_effect(move |_| {
         if collaborative {
             // Initialize Yjs editor
-            init_editor(&editor_id, &initial_text);
+            init_editor(&editor_id, &initial_text_effect);
             
             // Start sync loop
             start_sync_loop(
                 editor_id.clone(),
                 entity_id,
-                field.clone(),
+                field_effect.clone(),
                 set_is_syncing,
                 set_last_update,
             );
         }
     });
     
+    // Clone for footer closure
+    let initial_text_len = initial_text.len();
+    
     view! {
-        <div class="rich-text-editor" data-editor-id=editor_id>
+        <div class="rich-text-editor" data-editor-id=editor_id_view>
             <div class="editor-toolbar">
                 <button class="toolbar-btn" data-action="bold" title="Bold (Ctrl+B)">
                     <strong>"B"</strong>
@@ -132,7 +141,7 @@ pub fn RichTextEditor(
             
             <div class="editor-footer">
                 <span class="char-count">
-                    {move || format!("{} characters", initial_text.len())}
+                    {move || format!("{} characters", initial_text_len)}
                 </span>
             </div>
         </div>

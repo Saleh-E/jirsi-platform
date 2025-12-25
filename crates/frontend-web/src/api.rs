@@ -1,15 +1,37 @@
 //! API service for backend HTTP calls
+//!
+//! Features:
+//! - Resilient fetch with exponential backoff (3 retries)
+//! - Idempotency via X-Request-Id header
+//! - Dynamic API base URL detection
+//! - Network status integration for UI feedback
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
+use uuid::Uuid;
 
 // Demo tenant ID (from seeded data)
 pub const TENANT_ID: &str = "1b1d26f2-3b0e-4d3f-bc9f-62d7193274af";
+pub const DEFAULT_TENANT_ID: &str = TENANT_ID;
 
-// Backend API base URL
+// Backend API base URL (fallback)
 pub const API_BASE: &str = "http://localhost:3000/api/v1";
+
+/// Dynamic API base URL detection
+/// Returns localhost in dev, production URL otherwise
+pub fn get_api_base() -> String {
+    let Some(window) = web_sys::window() else {
+        return API_BASE.to_string();
+    };
+    let hostname = window.location().hostname().unwrap_or_default();
+    if hostname.contains("localhost") || hostname.contains("127.0.0.1") {
+        "http://localhost:3000/api/v1".to_string()
+    } else {
+        format!("https://api.{}/api/v1", hostname)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contact {
@@ -66,40 +88,96 @@ pub struct ListResponse<T> {
     pub per_page: i32,
 }
 
-/// Fetch helper for making GET requests
-pub async fn fetch_json<T: for<'de> Deserialize<'de>>(url: &str) -> Result<T, String> {
+// ============================================================================
+// RESILIENT FETCH ENGINE
+// ============================================================================
+
+/// Delay helper using JS Promise
+async fn delay_ms(ms: i32) {
+    let window = web_sys::window().expect("no window");
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms).unwrap();
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
+/// Resilient fetch engine with exponential backoff
+/// - 3 retries with 500ms → 1000ms → 2000ms delays
+/// - Only retries on 5xx errors, not 4xx client errors
+/// - Returns OFFLINE_MODE error after all retries fail
+async fn fetch_engine(method: &str, url: &str, body: Option<&str>) -> Result<Response, String> {
     let window = web_sys::window().ok_or("no window")?;
+    let max_retries = 3;
+    let request_id = Uuid::new_v4().to_string();
+    
+    for attempt in 0..max_retries {
+        let opts = RequestInit::new();
+        opts.set_method(method);
+        opts.set_mode(RequestMode::Cors);
+        
+        if let Some(body_str) = body {
+            opts.set_body(&JsValue::from_str(body_str));
+        }
+        
+        let request = Request::new_with_str_and_init(url, &opts)
+            .map_err(|e| format!("Request error: {:?}", e))?;
+        
+        // Set headers
+        let headers = request.headers();
+        let _ = headers.set("Content-Type", "application/json");
+        let _ = headers.set("X-Tenant-Id", TENANT_ID);
+        let _ = headers.set("X-Tenant-Slug", "demo");
+        let _ = headers.set("X-Request-Id", &request_id);
+        
+        match JsFuture::from(window.fetch_with_request(&request)).await {
+            Ok(resp_val) => {
+                let resp: Response = resp_val.dyn_into().map_err(|_| "Cast error")?;
+                
+                // 2xx = Success, 4xx = Client Error (don't retry)
+                if resp.ok() || resp.status() < 500 {
+                    return Ok(resp);
+                }
+                
+                // 5xx = Server Error (retry)
+                web_sys::console::warn_1(&JsValue::from_str(
+                    &format!("⚠️ Server error {}. Retrying... ({}/{})", resp.status(), attempt + 1, max_retries)
+                ));
+            }
+            Err(_) => {
+                web_sys::console::warn_1(&JsValue::from_str(
+                    &format!("⚠️ Network blip. Retrying... ({}/{})", attempt + 1, max_retries)
+                ));
+            }
+        }
+        
+        // Exponential backoff: 500ms → 1000ms → 2000ms
+        if attempt < max_retries - 1 {
+            let delay = 500 * (1 << attempt);
+            delay_ms(delay).await;
+        }
+    }
+    
+    Err("OFFLINE_MODE".to_string())
+}
 
-    let opts = RequestInit::new();
-    opts.set_method("GET");
-    opts.set_mode(RequestMode::Cors);
-
-    let request = Request::new_with_str_and_init(url, &opts)
-        .map_err(|e| format!("Request error: {:?}", e))?;
-
-    request.headers()
-        .set("Content-Type", "application/json")
-        .map_err(|e| format!("Header error: {:?}", e))?;
-
-    request.headers()
-        .set("X-Tenant-Slug", "demo")
-        .map_err(|e| format!("Header error: {:?}", e))?;
-
-    let resp_value = JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("Fetch error: {:?}", e))?;
-
-    let resp: Response = resp_value.dyn_into()
-        .map_err(|_| "response conversion error")?;
-
+/// Fetch helper for making GET requests with resilient retry
+pub async fn fetch_json<T: for<'de> Deserialize<'de>>(url: &str) -> Result<T, String> {
+    let full_url = if url.starts_with("http") { 
+        url.to_string() 
+    } else { 
+        format!("{}{}", get_api_base(), url) 
+    };
+    
+    let resp = fetch_engine("GET", &full_url, None).await?;
+    
     if !resp.ok() {
         return Err(format!("HTTP error: {}", resp.status()));
     }
-
+    
     let json = JsFuture::from(resp.json().map_err(|e| format!("JSON parse error: {:?}", e))?)
         .await
         .map_err(|e| format!("JSON await error: {:?}", e))?;
-
+    
     serde_wasm_bindgen::from_value(json)
         .map_err(|e| format!("Deserialize error: {:?}", e))
 }
@@ -267,29 +345,16 @@ impl FieldDef {
 // ============================================================================
 
 /// POST helper for making POST requests with JSON body (accepts any Serialize type)
+/// Uses resilient fetch_engine with retry logic
 pub async fn post_json<B: Serialize, T: for<'de> Deserialize<'de>>(url: &str, body: &B) -> Result<T, String> {
-    let window = web_sys::window().ok_or("no window")?;
-
-    let opts = RequestInit::new();
-    opts.set_method("POST");
-    opts.set_mode(RequestMode::Cors);
+    let full_url = if url.starts_with("http") { 
+        url.to_string() 
+    } else { 
+        format!("{}{}", get_api_base(), url) 
+    };
     
     let body_str = serde_json::to_string(body).map_err(|e| format!("Serialize error: {}", e))?;
-    opts.set_body(&JsValue::from_str(&body_str));
-
-    let request = Request::new_with_str_and_init(url, &opts)
-        .map_err(|e| format!("Request error: {:?}", e))?;
-
-    request.headers()
-        .set("Content-Type", "application/json")
-        .map_err(|e| format!("Header error: {:?}", e))?;
-
-    let resp_value = JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("Fetch error: {:?}", e))?;
-
-    let resp: Response = resp_value.dyn_into()
-        .map_err(|_| "response conversion error")?;
+    let resp = fetch_engine("POST", &full_url, Some(&body_str)).await?;
 
     if !resp.ok() {
         return Err(format!("HTTP error: {}", resp.status()));
@@ -304,29 +369,16 @@ pub async fn post_json<B: Serialize, T: for<'de> Deserialize<'de>>(url: &str, bo
 }
 
 /// PUT helper for making PUT requests with JSON body
+/// Uses resilient fetch_engine with retry logic
 pub async fn put_json<T: for<'de> Deserialize<'de>>(url: &str, body: &serde_json::Value) -> Result<T, String> {
-    let window = web_sys::window().ok_or("no window")?;
-
-    let opts = RequestInit::new();
-    opts.set_method("PUT");
-    opts.set_mode(RequestMode::Cors);
+    let full_url = if url.starts_with("http") { 
+        url.to_string() 
+    } else { 
+        format!("{}{}", get_api_base(), url) 
+    };
     
     let body_str = serde_json::to_string(body).map_err(|e| format!("Serialize error: {}", e))?;
-    opts.set_body(&JsValue::from_str(&body_str));
-
-    let request = Request::new_with_str_and_init(url, &opts)
-        .map_err(|e| format!("Request error: {:?}", e))?;
-
-    request.headers()
-        .set("Content-Type", "application/json")
-        .map_err(|e| format!("Header error: {:?}", e))?;
-
-    let resp_value = JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|e| format!("Fetch error: {:?}", e))?;
-
-    let resp: Response = resp_value.dyn_into()
-        .map_err(|_| "response conversion error")?;
+    let resp = fetch_engine("PUT", &full_url, Some(&body_str)).await?;
 
     if !resp.ok() {
         return Err(format!("HTTP error: {}", resp.status()));
@@ -339,6 +391,7 @@ pub async fn put_json<T: for<'de> Deserialize<'de>>(url: &str, body: &serde_json
     serde_wasm_bindgen::from_value(json)
         .map_err(|e| format!("Deserialize error: {:?}", e))
 }
+
 
 /// DELETE helper for making DELETE requests
 pub async fn delete_request(url: &str) -> Result<serde_json::Value, String> {

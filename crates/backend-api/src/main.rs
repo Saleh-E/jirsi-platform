@@ -7,6 +7,7 @@ use axum::{
     Json,
     response::IntoResponse,
     middleware as axum_middleware,
+    http::{Method, HeaderValue},
 };
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
@@ -37,15 +38,15 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let config = config::Config::from_env();
 
-    // Create database pool
-    // Create database pool
+    // Production-grade database pool for high concurrency
     let pool = PgPoolOptions::new()
-        .max_connections(2)
+        .max_connections(50)  // Increased for high concurrency
+        .min_connections(5)   // Keep warm connections ready
         .acquire_timeout(std::time::Duration::from_secs(30))
         .connect(&config.database_url)
         .await?;
 
-    tracing::info!("Connected to database: {}", config.database_url);
+    tracing::info!("🚀 Connected to database: {}", config.database_url);
 
     // Run migrations (skip if already done)
     match sqlx::migrate!("../../migrations").run(&pool).await {
@@ -88,7 +89,10 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::new()
             .allow_origin(Any)
-            .allow_methods(Any)
+            .allow_methods([
+                Method::GET, Method::POST, Method::PUT,
+                Method::DELETE, Method::PATCH, Method::OPTIONS
+            ])
             .allow_headers(Any));
 
     // Start server
@@ -101,17 +105,13 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// OPFS headers for SQLite WASM SharedArrayBuffer support
 async fn set_opfs_headers(response: axum::response::Response) -> axum::response::Response {
     let mut response = response;
     let headers = response.headers_mut();
-    headers.insert(
-        "Cross-Origin-Opener-Policy",
-        "same-origin".parse().unwrap(),
-    );
-    headers.insert(
-        "Cross-Origin-Embedder-Policy",
-        "require-corp".parse().unwrap(),
-    );
+    // These headers unlock SharedArrayBuffer for high-performance threading
+    headers.insert("Cross-Origin-Opener-Policy", HeaderValue::from_static("same-origin"));
+    headers.insert("Cross-Origin-Embedder-Policy", HeaderValue::from_static("require-corp"));
     response
 }
 

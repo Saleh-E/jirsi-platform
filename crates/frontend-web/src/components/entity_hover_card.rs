@@ -6,6 +6,7 @@ use leptos::*;
 use gloo_net::http::Request;
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
+use crate::api::{get_api_base, TENANT_ID};
 
 #[derive(Debug, Clone, Deserialize)]
 struct EntitySummary {
@@ -89,9 +90,12 @@ pub fn EntityHoverCard(
 
 /// Load entity summary from API
 async fn load_entity_summary(entity_type: &str, entity_id: &str) -> Result<EntitySummary, String> {
-    let url = format!("/api/v1/entities/{}/{}/summary", entity_type, entity_id);
+    // Use existing entity detail route (no /summary route exists)
+    let url = format!("{}/entities/{}/{}", get_api_base(), entity_type, entity_id);
     
     let response = Request::get(&url)
+        .header("X-Tenant-Id", TENANT_ID)
+        .header("X-Tenant-Slug", "demo")
         .send()
         .await
         .map_err(|e| format!("Network error: {:?}", e))?;
