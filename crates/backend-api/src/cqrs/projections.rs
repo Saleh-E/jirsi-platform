@@ -44,18 +44,18 @@ impl DealProjection {
                     "status": "active",
                 });
                 
-                sqlx::query!(
+                sqlx::query(
                     r#"
                     INSERT INTO entity_records 
                         (id, tenant_id, entity_type, field_values, created_by, created_at, updated_at)
                     VALUES ($1, $2, 'deal', $3, $4, $5, $5)
-                    "#,
-                    deal_id,
-                    tenant_id,
-                    field_values,
-                    created_by,
-                    created_at,
+                    "#
                 )
+                .bind(deal_id)
+                .bind(tenant_id)
+                .bind(field_values)
+                .bind(created_by)
+                .bind(created_at)
                 .execute(&self.pool)
                 .await
                 .map_err(|e| ProjectionError::DatabaseError(e.to_string()))?;
@@ -68,17 +68,17 @@ impl DealProjection {
                 ..
             } => {
                 // Update stage in read model
-                sqlx::query!(
+                sqlx::query(
                     r#"
                     UPDATE entity_records
                     SET field_values = jsonb_set(field_values, '{stage}', $1),
                         updated_at = $2
                     WHERE id = $3
-                    "#,
-                    json!(new_stage),
-                    updated_at,
-                    deal_id,
+                    "#
                 )
+                .bind(json!(new_stage))
+                .bind(updated_at)
+                .bind(deal_id)
                 .execute(&self.pool)
                 .await
                 .map_err(|e| ProjectionError::DatabaseError(e.to_string()))?;
@@ -91,17 +91,17 @@ impl DealProjection {
                 ..
             } => {
                 // Update value in read model
-                sqlx::query!(
+                sqlx::query(
                     r#"
                     UPDATE entity_records
                     SET field_values = jsonb_set(field_values, '{value}', $1),
                         updated_at = $2
                     WHERE id = $3
-                    "#,
-                    json!(new_value),
-                    updated_at,
-                    deal_id,
+                    "#
                 )
+                .bind(json!(new_value))
+                .bind(updated_at)
+                .bind(deal_id)
                 .execute(&self.pool)
                 .await
                 .map_err(|e| ProjectionError::DatabaseError(e.to_string()))?;
@@ -113,17 +113,17 @@ impl DealProjection {
                 updated_at,
                 ..
             } => {
-                sqlx::query!(
+                sqlx::query(
                     r#"
                     UPDATE entity_records
                     SET field_values = jsonb_set(field_values, '{contact_id}', $1),
                         updated_at = $2
                     WHERE id = $3
-                    "#,
-                    json!(contact_id),
-                    updated_at,
-                    deal_id,
+                    "#
                 )
+                .bind(json!(contact_id))
+                .bind(updated_at)
+                .bind(deal_id)
                 .execute(&self.pool)
                 .await
                 .map_err(|e| ProjectionError::DatabaseError(e.to_string()))?;
@@ -135,17 +135,17 @@ impl DealProjection {
                 updated_at,
                 ..
             } => {
-                sqlx::query!(
+                sqlx::query(
                     r#"
                     UPDATE entity_records
                     SET field_values = jsonb_set(field_values, '{property_id}', $1),
                         updated_at = $2
                     WHERE id = $3
-                    "#,
-                    json!(property_id),
-                    updated_at,
-                    deal_id,
+                    "#
                 )
+                .bind(json!(property_id))
+                .bind(updated_at)
+                .bind(deal_id)
                 .execute(&self.pool)
                 .await
                 .map_err(|e| ProjectionError::DatabaseError(e.to_string()))?;
@@ -170,17 +170,17 @@ impl DealProjection {
                     updates["value"] = json!(value);
                 }
                 
-                sqlx::query!(
+                sqlx::query(
                     r#"
                     UPDATE entity_records
                     SET field_values = field_values || $1,
                         updated_at = $2
                     WHERE id = $3
-                    "#,
-                    updates,
-                    closed_at,
-                    deal_id,
+                    "#
                 )
+                .bind(updates)
+                .bind(closed_at)
+                .bind(deal_id)
                 .execute(&self.pool)
                 .await
                 .map_err(|e| ProjectionError::DatabaseError(e.to_string()))?;

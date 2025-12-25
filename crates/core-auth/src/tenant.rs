@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::AuthError;
 
 /// Tenant service for multi-tenant management
+#[derive(Clone)]
 pub struct TenantService {
     pool: PgPool,
 }

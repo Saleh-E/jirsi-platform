@@ -57,7 +57,7 @@ impl RedisCache {
         let json = serde_json::to_string(value)?;
         let ttl_secs = ttl.as_secs() as usize;
         
-        conn.set_ex(key, json, ttl_secs).await?;
+        conn.set_ex::<_, _, ()>(key, json, ttl_secs as u64).await?;
         
         Ok(())
     }
@@ -65,7 +65,7 @@ impl RedisCache {
     /// Delete cached value
     pub async fn delete(&self, key: &str) -> Result<(), CacheError> {
         let mut conn = self.client.get_async_connection().await?;
-        conn.del(key).await?;
+        conn.del::<_, ()>(key).await?;
         Ok(())
     }
     

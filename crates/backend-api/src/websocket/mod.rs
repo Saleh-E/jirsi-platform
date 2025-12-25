@@ -255,7 +255,7 @@ async fn handle_message(
             ).await;
         }
         
-        WsMessage::Cursor { entity_id, field, position } => {
+        WsMessage::Cursor { entity_id, field, position, user_id: _ } => {
             // Broadcast cursor position to others
             ws_manager.broadcast_to_tenant(
                 tenant_id,

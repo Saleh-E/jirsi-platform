@@ -162,6 +162,7 @@ impl EntityEvent {
 
 /// Event publisher - stores events and triggers workflows
 #[cfg(feature = "backend")]
+#[derive(Clone)]
 pub struct EventPublisher {
     pool: sqlx::PgPool,
 }

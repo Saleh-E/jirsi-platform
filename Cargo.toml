@@ -55,6 +55,7 @@ yrs = "0.18"
 # Error handling
 thiserror = "1.0"
 anyhow = "1.0"
+rust_decimal = "1.35"
 
 # Frontend (Leptos)
 leptos = { version = "0.6", features = ["csr"] }

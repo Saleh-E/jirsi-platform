@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::NodeEngineError;
 
 /// Repository for node graph CRUD operations
+#[derive(Clone)]
 pub struct NodeGraphRepository {
     pool: PgPool,
 }

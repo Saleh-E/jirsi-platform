@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::AuthError;
 
 /// Session service for managing user sessions
+#[derive(Clone)]
 pub struct SessionService {
     pool: PgPool,
     /// Session duration (default: 7 days)

@@ -2,7 +2,7 @@
 //! 
 //! PostgreSQL-based event store using the esrs pattern.
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 use chrono::Utc;
 use serde_json::Value as JsonValue;
@@ -20,15 +20,15 @@ impl EventStore {
     /// Load all events for an aggregate and replay them
     pub async fn load_aggregate(&self, aggregate_id: Uuid) -> Result<Deal, EventStoreError> {
         // Fetch all events for this aggregate
-        let rows = sqlx::query!(
+        let rows = sqlx::query(
             r#"
             SELECT event_data, aggregate_version
             FROM events
             WHERE aggregate_id = $1
             ORDER BY aggregate_version ASC
-            "#,
-            aggregate_id
+            "#
         )
+        .bind(aggregate_id)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| EventStoreError::DatabaseError(e.to_string()))?;
@@ -37,7 +37,9 @@ impl EventStore {
         let mut deal = Deal::default();
         
         for row in rows {
-            let event: DealEvent = serde_json::from_value(row.event_data)
+            let event_data: JsonValue = row.try_get("event_data")
+                .map_err(|e| EventStoreError::DatabaseError(e.to_string()))?;
+            let event: DealEvent = serde_json::from_value(event_data)
                 .map_err(|e| EventStoreError::DeserializationError(e.to_string()))?;
             
             deal.apply(&event);
@@ -72,19 +74,19 @@ impl EventStore {
         };
         
         // Insert event with optimistic concurrency check
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             INSERT INTO events 
                 (aggregate_id, aggregate_type, aggregate_version, event_type, event_data, created_by)
             VALUES ($1, $2, $3, $4, $5, $6)
-            "#,
-            aggregate_id,
-            aggregate_type,
-            expected_version as i64,
-            event_type,
-            event_data,
-            created_by,
+            "#
         )
+        .bind(aggregate_id)
+        .bind(aggregate_type)
+        .bind(expected_version as i64)
+        .bind(event_type)
+        .bind(event_data)
+        .bind(created_by)
         .execute(&self.pool)
         .await;
         
@@ -105,15 +107,15 @@ impl EventStore {
         &self,
         aggregate_id: Uuid,
     ) -> Result<Vec<(DealEvent, i64)>, EventStoreError> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query(
             r#"
             SELECT event_data, aggregate_version, created_at
             FROM events
             WHERE aggregate_id = $1
             ORDER BY aggregate_version ASC
-            "#,
-            aggregate_id
+            "#
         )
+        .bind(aggregate_id)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| EventStoreError::DatabaseError(e.to_string()))?;
@@ -121,10 +123,15 @@ impl EventStore {
         let mut events = Vec::new();
         
         for row in rows {
-            let event: DealEvent = serde_json::from_value(row.event_data)
+            let event_data: JsonValue = row.try_get("event_data")
+                .map_err(|e| EventStoreError::DatabaseError(e.to_string()))?;
+            let event: DealEvent = serde_json::from_value(event_data)
                 .map_err(|e| EventStoreError::DeserializationError(e.to_string()))?;
             
-            events.push((event, row.aggregate_version));
+            let version: i64 = row.try_get("aggregate_version")
+                .map_err(|e| EventStoreError::DatabaseError(e.to_string()))?;
+            
+            events.push((event, version));
         }
         
         Ok(events)

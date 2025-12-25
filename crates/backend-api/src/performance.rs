@@ -28,31 +28,39 @@ pub async fn warm_cache(pool: &sqlx::PgPool, cache: &crate::cache::RedisCache) -
     tracing::info!("Warming cache...");
     
     // 1. Preload metadata definitions
-    let metadata = sqlx::query!(
+    let metadata = sqlx::query(
         "SELECT entity_code, definition FROM entity_definitions"
     )
     .fetch_all(pool)
     .await?;
     
-    for record in metadata {
+    for record in &metadata {
+        use sqlx::Row;
+        let entity_code: String = record.try_get("entity_code")?;
+        let definition: serde_json::Value = record.try_get("definition")?;
+        
         cache.set_with_ttl(
-            &format!("metadata:{}", record.entity_code),
-            &record.definition,
+            &format!("metadata:{}", entity_code),
+            &definition,
             Duration::from_secs(3600), // 1 hour
         ).await?;
     }
     
     // 2. Preload frequently accessed lookups
-    let lookups = sqlx::query!(
+    let lookups = sqlx::query(
         "SELECT entity_code, lookup_data FROM lookup_tables"
     )
     .fetch_all(pool)
     .await?;
     
-    for record in lookups {
+    for record in &lookups {
+        use sqlx::Row;
+        let entity_code: String = record.try_get("entity_code")?;
+        let lookup_data: serde_json::Value = record.try_get("lookup_data")?;
+        
         cache.set_with_ttl(
-            &format!("lookup:{}", record.entity_code),
-            &record.lookup_data,
+            &format!("lookup:{}", entity_code),
+            &lookup_data,
             Duration::from_secs(1800), // 30 minutes
         ).await?;
     }

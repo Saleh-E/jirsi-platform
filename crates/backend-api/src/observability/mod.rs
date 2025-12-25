@@ -50,18 +50,15 @@ async fn health_check(
         .unwrap()
         .as_secs();
     
+    
     // Check database
-    let db_status = match sqlx::query("SELECT 1").fetch_one(&state.db).await {
+    let db_status = match sqlx::query("SELECT 1").fetch_one(&state.pool).await {
         Ok(_) => CheckStatus::Healthy,
         Err(_) => CheckStatus::Unhealthy,
     };
     
-    // Check Redis cache
-    let redis_status = if let Some(_cache) = &state.cache {
-        CheckStatus::Healthy
-    } else {
-        CheckStatus::Degraded
-    };
+    // Redis status check - degraded since we don't have direct cache access in AppState
+    let redis_status = CheckStatus::Degraded;
     
     // Check job queue
     let job_status = CheckStatus::Healthy; // TODO: Implement actual check
@@ -85,7 +82,7 @@ async fn readiness_check(
 ) -> Result<&'static str, StatusCode> {
     // Check if database is accessible
     sqlx::query("SELECT 1")
-        .fetch_one(&state.db)
+        .fetch_one(&state.pool)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     

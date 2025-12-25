@@ -10,6 +10,7 @@ use core_node_engine::{ai::AiService, EventPublisher, GraphExecutor, repository:
 use std::sync::Arc;
 use crate::ai::service::create_ai_service;
 
+#[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
     pub metadata: MetadataService,

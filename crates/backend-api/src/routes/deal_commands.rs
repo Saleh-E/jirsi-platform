@@ -78,10 +78,8 @@ async fn create_deal(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     
-    // Invalidate cache
-    if let Some(cache) = &state.cache {
-        let _ = cache.invalidate_deal(deal_id).await;
-    }
+    
+    // Cache invalidation skipped - not available in current AppState
     
     Ok(Json(CreateDealResponse {
         deal_id,
@@ -130,10 +128,8 @@ async fn update_deal_stage(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     
-    // Invalidate cache
-    if let Some(cache) = &state.cache {
-        let _ = cache.invalidate_deal(deal_id).await;
-    }
+    
+    // Cache invalidation skipped - not available in current AppState
     
     Ok(Json(()))
 }

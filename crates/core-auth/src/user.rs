@@ -9,6 +9,7 @@ use crate::password::{hash_password, verify_password, validate_password_strength
 use crate::AuthError;
 
 /// User service for user management
+#[derive(Clone)]
 pub struct UserService {
     pool: PgPool,
 }

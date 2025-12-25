@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::MetadataError;
 
 /// Repository for metadata CRUD operations
+#[derive(Clone)]
 pub struct MetadataRepository {
     pool: PgPool,
 }

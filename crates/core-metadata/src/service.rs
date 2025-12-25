@@ -10,6 +10,7 @@ use crate::repository::MetadataRepository;
 use crate::MetadataError;
 
 /// High-level service for accessing metadata with caching
+#[derive(Clone)]
 pub struct MetadataService {
     repo: MetadataRepository,
     cache: Arc<MetadataCache>,

@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use rust_decimal::Decimal;
 
+// Import DealOutcome from events module to avoid duplication
+use super::events::DealOutcome;
+
 /// Create a new deal
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateDealCommand {
@@ -129,10 +132,4 @@ pub struct CloseDealCommand {
     pub final_value: Option<Decimal>,
     pub closed_by: Uuid,
     pub notes: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DealOutcome {
-    Won,
-    Lost,
 }
