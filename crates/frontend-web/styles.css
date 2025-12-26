@@ -11179,3 +11179,294 @@ body.dark .command-palette {
 body.dark .command-palette-backdrop {
     background: rgba(0, 0, 0, 0.8);
 }
+
+/* ========================================
+   EXPERIENCE-FIRST HOME PAGE
+   HubSpot + Frappe inspired hero and cards
+   ======================================== */
+.home-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xl);
+    padding: var(--spacing-xl);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.home-hero {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: var(--spacing-xl);
+    background: linear-gradient(135deg, rgba(46, 91, 255, 0.06), rgba(14, 165, 233, 0.08));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: calc(var(--spacing-xl) + 4px);
+    box-shadow: var(--shadow-lg);
+}
+
+.hero-copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.hero-eyebrow {
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.hero-title {
+    font-size: 36px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.hero-subtitle {
+    font-size: var(--font-size-lg);
+    color: var(--text-secondary);
+    max-width: 620px;
+}
+
+.hero-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+}
+
+.hero-actions .btn-primary,
+.hero-actions .btn-secondary {
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.hero-actions .btn-secondary {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.hero-highlights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+}
+
+.pill {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.hero-scorecard {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    box-shadow: var(--shadow-card);
+}
+
+.scorecard-metric,
+.scorecard-health {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.metric-label {
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.metric-value {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.metric-hint {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.health-indicator {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+}
+
+.health-score {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    background: radial-gradient(circle at 30% 30%, rgba(34, 197, 94, 0.25), rgba(46, 91, 255, 0.2));
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.health-meta .health-title {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.health-meta .health-subtitle {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.health-legend {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.home-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.home-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.card-icon {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--primary-50);
+    font-size: 18px;
+}
+
+.card-eyebrow {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.card-subtitle {
+    color: var(--text-secondary);
+}
+
+.card-subtitle + .metric-value {
+    margin-top: 4px;
+}
+
+.metric-caption {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.chip {
+    border-radius: 999px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    margin-left: auto;
+}
+
+.chip.success {
+    color: var(--success);
+    border-color: var(--success);
+    background: var(--success-bg);
+}
+
+.chip.warning {
+    color: var(--warning);
+    border-color: var(--warning);
+    background: var(--warning-bg);
+}
+
+.chip.info {
+    color: var(--info);
+    border-color: var(--info);
+    background: rgba(14, 165, 233, 0.12);
+}
+
+.chip.purple {
+    color: #7c3aed;
+    border-color: #7c3aed;
+    background: rgba(124, 58, 237, 0.1);
+}
+
+.experience-lanes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.lane-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.lane-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.lane-subtitle {
+    color: var(--text-secondary);
+}
+
+.lane-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding-left: 16px;
+    color: var(--text-primary);
+}
+
+@media (max-width: 960px) {
+    .home-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-actions {
+        flex-wrap: wrap;
+    }
+}
