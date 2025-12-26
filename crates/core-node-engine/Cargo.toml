@@ -14,9 +14,9 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 async-trait = "0.1"
 
-# WASM Runtime for ScriptNodes
-extism = "1.0"
-wasmtime = "16.0"
+# WASM Runtime for ScriptNodes (backend only - not for wasm32 target)
+extism = { version = "1.0", optional = true }
+wasmtime = { version = "16.0", optional = true }
 base64 = "0.21"
 
 # HTTP for fetching remote plugins
@@ -28,5 +28,6 @@ tokio = { workspace = true, optional = true }
 
 [features]
 default = ["backend"]
-backend = ["dep:sqlx", "dep:tokio", "dep:reqwest"]
+backend = ["dep:sqlx", "dep:tokio", "dep:reqwest", "dep:extism", "dep:wasmtime"]
+wasm = []  # For WASM frontend builds - excludes native-only deps
 

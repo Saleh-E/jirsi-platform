@@ -89,7 +89,8 @@ impl Default for NodeRegistry {
             Arc::new(UpdateRecordHandler),
         );
         
-        // Register ScriptNode handler for WASM execution
+        // Register ScriptNode handler for WASM execution (backend only - requires extism/wasmtime)
+        #[cfg(feature = "backend")]
         registry.register(
             NodeType::ScriptNode,
             Arc::new(crate::script_node::ScriptNodeHandler::new()),

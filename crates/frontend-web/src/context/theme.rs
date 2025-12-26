@@ -70,23 +70,48 @@ pub fn provide_theme_context() {
     provide_context(ctx);
 }
 
-/// Use theme context from any component
-pub fn use_theme() -> ThemeContext {
-    expect_context::<ThemeContext>()
+/// Use theme context from any component (with fallback if not provided)
+pub fn use_theme() -> Option<ThemeContext> {
+    use_context::<ThemeContext>()
 }
 
 /// Theme toggle button component
 #[component]
 pub fn ThemeToggle() -> impl IntoView {
-    let theme = use_theme();
+    // Try to get the simple theme context, if not available use the jirsi theme context
+    let simple_theme = use_theme();
+    
+    // Create a fallback local state if no context is available
+    let (is_dark, set_is_dark) = create_signal(ThemeContext::load_from_storage());
+    
+    // Determine dark mode state
+    let get_is_dark = move || {
+        if let Some(theme) = simple_theme {
+            theme.is_dark.get()
+        } else {
+            is_dark.get()
+        }
+    };
+    
+    // Toggle handler
+    let toggle = move |_| {
+        if let Some(theme) = simple_theme {
+            theme.toggle();
+        } else {
+            let new_value = !is_dark.get();
+            set_is_dark.set(new_value);
+            ThemeContext::apply_theme(new_value);
+            ThemeContext::save_to_storage(new_value);
+        }
+    };
     
     view! {
         <button
             class="theme-toggle"
-            on:click=move |_| theme.toggle()
-            title=move || if theme.is_dark.get() { "Switch to Light Mode" } else { "Switch to Dark Mode" }
+            on:click=toggle
+            title=move || if get_is_dark() { "Switch to Light Mode" } else { "Switch to Dark Mode" }
         >
-            {move || if theme.is_dark.get() {
+            {move || if get_is_dark() {
                 view! { <span class="theme-icon">"☀️"</span> }.into_view()
             } else {
                 view! { <span class="theme-icon">"🌙"</span> }.into_view()
