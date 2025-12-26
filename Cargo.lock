@@ -1788,6 +1788,7 @@ dependencies = [
  "leptos-use",
  "leptos_meta",
  "leptos_router",
+ "regex",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -1796,6 +1797,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "yrs",
 ]
 
 [[package]]

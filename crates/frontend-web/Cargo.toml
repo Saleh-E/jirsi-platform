@@ -30,6 +30,8 @@ js-sys = "0.3"
 # Browser APIs and utilities
 leptos-use = "0.13"
 base64 = "0.21"
+regex = "1"
+
 
 # CRDT for real-time collaboration (Yjs protocol)
 yrs = "0.18"

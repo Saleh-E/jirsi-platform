@@ -882,10 +882,15 @@ impl NodeHandler for DelayHandler {
         tracing::info!(delay_seconds = total_seconds, "Delaying workflow execution");
         
         // In production, this would schedule a delayed continuation
-        // For now, we use tokio sleep for short delays
+        // For short delays on backend, use tokio sleep
+        #[cfg(feature = "backend")]
         if total_seconds > 0 && total_seconds <= 60 {
             tokio::time::sleep(std::time::Duration::from_secs(total_seconds)).await;
         }
+        
+        // On WASM/frontend, we just record the delay intent
+        #[cfg(not(feature = "backend"))]
+        let _ = total_seconds; // Acknowledge the variable for WASM builds
         
         Ok(serde_json::json!({
             "action": "delay",
@@ -894,4 +899,5 @@ impl NodeHandler for DelayHandler {
         }))
     }
 }
+
 

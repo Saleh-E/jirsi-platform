@@ -1340,17 +1340,20 @@ pub fn ValidatedSmartField(
 }
 
 /// Form-level validation helper
+/// Takes field definitions and a map of field_name -> value
 pub fn validate_form(fields: &[FieldDef], values: &std::collections::HashMap<String, JsonValue>) -> Vec<(String, ValidationResult)> {
     fields.iter()
         .filter_map(|field| {
-            let value = values.get(&field.id).cloned().unwrap_or(JsonValue::Null);
+            // Use field.name for lookup since it's a String
+            let value = values.get(&field.name).cloned().unwrap_or(JsonValue::Null);
             let result = validate_field(field, &value);
             if !result.is_valid {
-                Some((field.id.clone(), result))
+                Some((field.name.clone(), result))
             } else {
                 None
             }
         })
         .collect()
 }
+
 

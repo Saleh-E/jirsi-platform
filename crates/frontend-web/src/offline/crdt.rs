@@ -11,10 +11,11 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use yrs::{Doc, Text, TextRef, Transact, ReadTxn, StateVector, Update};
+use yrs::{Doc, Text, TextRef, Transact, ReadTxn, StateVector, Update, GetString};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use uuid::Uuid;
+
 
 /// A collaborative document that can be synced across multiple clients
 #[derive(Clone)]

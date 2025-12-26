@@ -62,9 +62,10 @@ impl SyncManager {
     /// Check if we're online
     pub fn is_online() -> bool {
         web_sys::window()
-            .and_then(|w| w.navigator().on_line().ok())
+            .map(|w| w.navigator().on_line())
             .unwrap_or(false)
     }
+
 
     /// Pull entities from server and store locally
     pub async fn pull_entities(&self, entity_type: &str, tenant_id: &Uuid) -> Result<usize, String> {
