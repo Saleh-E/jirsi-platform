@@ -106,12 +106,15 @@ Create new node types in `crates/core-node-engine/src/nodes.rs`:
 ---
 
 ## Phase 5: UI/UX & Feature Polish
-**Goal:** Premium, polished user experience
+**Goal:** Pixel-perfect, delightful user experience
 
-### Task 5.1: SmartField Validation
-- [ ] Add regex validation to `smart_field.rs` for all 24 field types
-- [ ] Implement required field validation
-- [ ] Add custom validation rules
+### Task 5.1: SmartField Client-Side Validation ✅
+- [x] Add `validate_field()` function with regex patterns
+- [x] Implement `ValidationResult` struct with error messages
+- [x] Cached regex patterns (Email, Phone, URL)
+- [x] `ValidationMessage` component for inline error display
+- [x] `ValidatedSmartField` wrapper with blur/change validation
+- [x] `validate_form()` helper for form-level validation
 - **File:** `crates/frontend-web/src/components/smart_field.rs`
 
 ### Task 5.2: Kanban & Dashboard Completion

@@ -1129,3 +1129,228 @@ fn format_display_value(field: &FieldDef, value: &JsonValue) -> String {
         }
     }
 }
+
+// ==================
+// Field Validation Module
+// ==================
+
+use regex::Regex;
+use std::sync::OnceLock;
+
+/// Validation result with optional error message
+#[derive(Clone, Debug, PartialEq)]
+pub struct ValidationResult {
+    pub is_valid: bool,
+    pub error_message: Option<String>,
+}
+
+impl ValidationResult {
+    pub fn valid() -> Self {
+        Self { is_valid: true, error_message: None }
+    }
+    
+    pub fn invalid(message: impl Into<String>) -> Self {
+        Self { is_valid: false, error_message: Some(message.into()) }
+    }
+}
+
+// Compiled regex patterns (cached for performance)
+static EMAIL_REGEX: OnceLock<Regex> = OnceLock::new();
+static PHONE_REGEX: OnceLock<Regex> = OnceLock::new();
+static URL_REGEX: OnceLock<Regex> = OnceLock::new();
+
+fn email_regex() -> &'static Regex {
+    EMAIL_REGEX.get_or_init(|| {
+        Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap()
+    })
+}
+
+fn phone_regex() -> &'static Regex {
+    PHONE_REGEX.get_or_init(|| {
+        // Matches: +1234567890, (123) 456-7890, 123-456-7890, 123.456.7890, 1234567890
+        Regex::new(r"^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$").unwrap()
+    })
+}
+
+fn url_regex() -> &'static Regex {
+    URL_REGEX.get_or_init(|| {
+        Regex::new(r"^https?://[^\s/$.?#].[^\s]*$").unwrap()
+    })
+}
+
+/// Validate a field value based on its type and requirements
+pub fn validate_field(field: &FieldDef, value: &JsonValue) -> ValidationResult {
+    // Required check
+    if field.is_required && is_empty_value(value) {
+        return ValidationResult::invalid(format!("{} is required", field.label));
+    }
+    
+    // Skip type validation if empty and not required
+    if is_empty_value(value) {
+        return ValidationResult::valid();
+    }
+    
+    // Type-specific validation
+    match &field.field_type {
+        FieldType::Email => {
+            let email = value.as_str().unwrap_or("");
+            if !email_regex().is_match(email) {
+                return ValidationResult::invalid("Please enter a valid email address");
+            }
+        }
+        FieldType::Phone => {
+            let phone = value.as_str().unwrap_or("");
+            // Remove common formatting
+            let cleaned: String = phone.chars().filter(|c| c.is_numeric() || *c == '+').collect();
+            if cleaned.len() < 7 || cleaned.len() > 15 {
+                return ValidationResult::invalid("Phone number should be 7-15 digits");
+            }
+            if !phone_regex().is_match(phone) {
+                return ValidationResult::invalid("Please enter a valid phone number");
+            }
+        }
+        FieldType::Url => {
+            let url = value.as_str().unwrap_or("");
+            if !url_regex().is_match(url) {
+                return ValidationResult::invalid("Please enter a valid URL (starting with http:// or https://)");
+            }
+        }
+        FieldType::Number { decimals } => {
+            if let Some(num_str) = value.as_str() {
+                if num_str.parse::<f64>().is_err() {
+                    return ValidationResult::invalid("Please enter a valid number");
+                }
+            } else if value.as_f64().is_none() && value.as_i64().is_none() {
+                return ValidationResult::invalid("Please enter a valid number");
+            }
+        }
+        FieldType::Money { .. } => {
+            if let Some(num_str) = value.as_str() {
+                if num_str.parse::<f64>().is_err() {
+                    return ValidationResult::invalid("Please enter a valid amount");
+                }
+            } else if value.as_f64().is_none() && value.as_i64().is_none() {
+                return ValidationResult::invalid("Please enter a valid amount");
+            }
+        }
+        FieldType::Date => {
+            let date_str = value.as_str().unwrap_or("");
+            // Basic date validation (YYYY-MM-DD)
+            if !date_str.is_empty() {
+                let parts: Vec<&str> = date_str.split('-').collect();
+                if parts.len() != 3 {
+                    return ValidationResult::invalid("Date should be in YYYY-MM-DD format");
+                }
+            }
+        }
+        FieldType::DateTime => {
+            let datetime_str = value.as_str().unwrap_or("");
+            if !datetime_str.is_empty() && datetime_str.len() < 10 {
+                return ValidationResult::invalid("Invalid date/time format");
+            }
+        }
+        _ => {}
+    }
+    
+    ValidationResult::valid()
+}
+
+/// Check if a JSON value is considered empty
+fn is_empty_value(value: &JsonValue) -> bool {
+    match value {
+        JsonValue::Null => true,
+        JsonValue::String(s) => s.trim().is_empty(),
+        JsonValue::Array(arr) => arr.is_empty(),
+        JsonValue::Object(obj) => obj.is_empty(),
+        _ => false,
+    }
+}
+
+/// Validation state component - displays inline error messages
+#[component]
+pub fn ValidationMessage(
+    #[prop(into)] result: Signal<ValidationResult>,
+) -> impl IntoView {
+    view! {
+        <Show when=move || !result.get().is_valid>
+            <div class="validation-error flex items-center gap-1 mt-1 text-sm text-danger-500 animate-fade-in">
+                <i class="fa-solid fa-exclamation-circle"></i>
+                <span>{move || result.get().error_message.unwrap_or_default()}</span>
+            </div>
+        </Show>
+    }
+}
+
+/// Validated SmartField - SmartField with integrated validation
+#[component]
+pub fn ValidatedSmartField(
+    field: FieldDef,
+    #[prop(into)] value: Signal<JsonValue>,
+    context: FieldContext,
+    #[prop(optional)] on_change: Option<Callback<JsonValue>>,
+    #[prop(optional)] on_validate: Option<Callback<ValidationResult>>,
+    #[prop(optional)] disabled: bool,
+    /// Whether to show validation on blur (true) or on every change (false)
+    #[prop(default = true)] validate_on_blur: bool,
+) -> impl IntoView {
+    let field_clone = field.clone();
+    let validation_result = create_rw_signal(ValidationResult::valid());
+    let (touched, set_touched) = create_signal(false);
+    
+    // Validate on value change
+    let validate = move |val: &JsonValue| {
+        let result = validate_field(&field_clone, val);
+        validation_result.set(result.clone());
+        if let Some(cb) = on_validate {
+            cb.call(result);
+        }
+    };
+    
+    // Wrapped on_change that includes validation
+    let wrapped_on_change = Callback::new(move |new_val: JsonValue| {
+        if let Some(cb) = on_change {
+            cb.call(new_val.clone());
+        }
+        if !validate_on_blur {
+            validate(&new_val);
+        }
+    });
+    
+    view! {
+        <div 
+            class="validated-field"
+            class:has-error=move || !validation_result.get().is_valid && touched.get()
+            on:blur=move |_| {
+                set_touched.set(true);
+                validate(&value.get());
+            }
+        >
+            <SmartField
+                field=field.clone()
+                value=value
+                context=context
+                on_change=Some(wrapped_on_change)
+                disabled=disabled
+            />
+            <Show when=move || touched.get()>
+                <ValidationMessage result=Signal::from(validation_result) />
+            </Show>
+        </div>
+    }
+}
+
+/// Form-level validation helper
+pub fn validate_form(fields: &[FieldDef], values: &std::collections::HashMap<String, JsonValue>) -> Vec<(String, ValidationResult)> {
+    fields.iter()
+        .filter_map(|field| {
+            let value = values.get(&field.id).cloned().unwrap_or(JsonValue::Null);
+            let result = validate_field(field, &value);
+            if !result.is_valid {
+                Some((field.id.clone(), result))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
