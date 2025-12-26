@@ -43,4 +43,5 @@ pub mod filter_builder;
 pub mod column_selector;
 pub mod command_palette;
 pub mod rich_text_editor;
+pub mod conflict_resolver;
 

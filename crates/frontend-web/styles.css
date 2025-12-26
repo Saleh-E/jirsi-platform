@@ -11179,3 +11179,294 @@ body.dark .command-palette {
 body.dark .command-palette-backdrop {
     background: rgba(0, 0, 0, 0.8);
 }
+/* ========================================
+   CONFLICT RESOLVER - Sync Conflict UI
+   ======================================== */
+.conflict-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: conflictFadeIn 0.2s ease;
+}
+
+@keyframes conflictFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.conflict-modal {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 95%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: conflictSlideIn 0.25s ease;
+}
+
+@keyframes conflictSlideIn {
+    from { 
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.conflict-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(245, 158, 11, 0.05));
+}
+
+.conflict-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.conflict-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.conflict-body {
+    padding: 24px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.conflict-description {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+.conflict-info {
+    background: var(--bg-hover);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.info-row .label {
+    color: var(--text-muted);
+}
+
+.info-row .value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.toggle-details {
+    background: transparent;
+    border: none;
+    color: var(--primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 8px 0;
+    margin-bottom: 12px;
+}
+
+.toggle-details:hover {
+    text-decoration: underline;
+}
+
+.conflict-diff {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.diff-column {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.diff-column h4 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 12px;
+    margin: 0;
+}
+
+.diff-column.local {
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.diff-column.local h4 {
+    background: rgba(34, 197, 94, 0.2);
+    color: #15803d;
+}
+
+.diff-column.server {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.diff-column.server h4 {
+    background: rgba(59, 130, 246, 0.2);
+    color: #1d4ed8;
+}
+
+.diff-column pre {
+    font-size: 11px;
+    padding: 12px;
+    margin: 0;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 150px;
+    background: transparent;
+    color: var(--text-primary);
+}
+
+.conflict-actions {
+    display: flex;
+    gap: 12px;
+    padding: 20px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-hover);
+}
+
+.conflict-actions .btn {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.conflict-actions .btn-primary {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: white;
+}
+
+.conflict-actions .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.conflict-actions .btn-secondary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.conflict-actions .btn-secondary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.conflict-actions .btn-success {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+}
+
+.conflict-actions .btn-success:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.conflict-actions .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.conflict-actions .btn-ghost:hover {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+/* Conflict Queue Banner */
+.conflict-queue-banner {
+    background: linear-gradient(90deg, #fef3c7, #fef9c3);
+    border-bottom: 1px solid #fbbf24;
+    padding: 10px 20px;
+}
+
+body.dark .conflict-queue-banner {
+    background: linear-gradient(90deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1));
+}
+
+.banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: #92400e;
+}
+
+body.dark .banner-content {
+    color: #fbbf24;
+}
+
+.banner-content svg {
+    color: #f59e0b;
+}
+
+.resolve-btn {
+    margin-left: auto;
+    padding: 6px 12px;
+    background: #f59e0b;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.resolve-btn:hover {
+    background: #d97706;
+}
+
+/* Dark mode conflict resolver */
+body.dark .conflict-modal {
+    background: #1e293b;
+}
+
+body.dark .conflict-header {
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.05));
+}
+
+body.dark .diff-column pre {
+    color: #e2e8f0;
+}
