@@ -117,10 +117,12 @@ Create new node types in `crates/core-node-engine/src/nodes.rs`:
 - [x] `validate_form()` helper for form-level validation
 - **File:** `crates/frontend-web/src/components/smart_field.rs`
 
-### Task 5.2: Kanban & Dashboard Completion
-- [ ] Connect `kanban.rs` to `DealEvent::StageUpdated` event
-- [ ] Drag-and-drop triggers CQRS command
-- [ ] Optimistic UI updates
+### Task 5.2: Kanban & Dashboard Completion ✅
+- [x] Optimistic UI updates with rollback on error
+- [x] Drag-and-drop triggers CQRS command
+- [x] Visual drop target highlighting
+- [x] Per-card loading indicators
+- [x] Error toast with auto-dismiss
 - **File:** `crates/frontend-web/src/components/kanban.rs`
 
 ---
