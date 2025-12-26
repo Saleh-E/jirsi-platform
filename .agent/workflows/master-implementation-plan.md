@@ -67,10 +67,11 @@ Create new node types in `crates/core-node-engine/src/nodes.rs`:
 - [x] Add `AiExtractHandler` for structured data extraction
 - **File:** `crates/core-node-engine/src/nodes.rs`
 
-### Task 3.3: Visual Feedback in UI
-- [ ] Update `execution_panel.rs` for real-time graph progress
-- [ ] Show node-by-node execution status
-- [ ] Display errors inline with failed nodes
+### Task 3.3: Visual Feedback in UI ✅
+- [x] Update `execution_panel.rs` for real-time graph progress
+- [x] Show node-by-node execution status with progress bar
+- [x] Display errors inline with failed nodes
+- [x] Auto-scroll and node highlighting
 - **File:** `crates/frontend-web/src/components/workflow/execution_panel.rs`
 
 ---
