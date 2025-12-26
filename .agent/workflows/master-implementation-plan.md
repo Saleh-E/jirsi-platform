@@ -79,27 +79,28 @@ Create new node types in `crates/core-node-engine/src/nodes.rs`:
 ## Phase 4: Production Hardening & Event Sourcing
 **Goal:** Reliable, observable, enterprise-grade backend
 
-### Task 4.1: Event Projection Performance
-- [ ] Implement "Snapshots" in `event_store.rs`
-- [ ] Save state snapshot every 100 events
-- [ ] Speed up `load_aggregate` from 1000+ events
+### Task 4.1: Event Projection Performance ✅
+- [x] Implement "Snapshots" in `event_store.rs`
+- [x] Save state snapshot every 100 events
+- [x] Speed up `load_aggregate` from 1000+ events
+- [x] Add `cleanup_old_snapshots` for housekeeping
 - **File:** `crates/backend-api/src/cqrs/event_store.rs`
 
-### Task 4.2: Structured Logging & Monitoring
-- [ ] Expand `observability/metrics.rs` to track:
+### Task 4.2: Structured Logging & Monitoring ✅
+- [x] Expand `observability/metrics.rs` to track:
   - Workflow Execution Success Rate
   - Sync Latency
-  - API Response Times
-- [ ] Log critical failures with `execution_id` for tracing
+  - API Response Times (per endpoint)
+  - WebSocket connections
+- [x] Log critical failures with `execution_id` for tracing
+- [x] Add `log_critical!`, `log_workflow_failure!`, `log_sync_conflict!` macros
 - **File:** `crates/backend-api/src/observability/metrics.rs`
 
-### Task 4.3: End-to-End (E2E) Testing
-- [ ] Complete `critical-flows.spec.js` using Playwright
-- [ ] Test full cycle:
-  1. User Login
-  2. Create Record Offline
-  3. Reconnect
-  4. Verify Sync on Backend
+### Task 4.3: End-to-End (E2E) Testing ✅
+- [x] Complete `critical-flows.spec.js` using Playwright
+- [x] Test full offline cycle: Create Offline → Reconnect → Verify on Backend
+- [x] API response time benchmarks
+- [x] Error handling tests
 - **File:** `tests/e2e/critical-flows.spec.js`
 
 ---
