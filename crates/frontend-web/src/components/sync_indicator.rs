@@ -137,7 +137,7 @@ pub fn SyncIndicator() -> impl IntoView {
                     let _ = manager.pull_entities("property", &tenant_id).await;
                     
                     // Push changes
-                    let _ = manager.push_changes().await;
+                    let _ = manager.push_changes(&tenant_id).await;
                     
                     status.set(SyncStatus::Synced);
                 } else {

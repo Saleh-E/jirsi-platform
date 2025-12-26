@@ -248,24 +248,39 @@ impl SyncManager {
             None
         };
 
-        let request = match method {
+        let url_with_id = match method {
+            "PUT" | "DELETE" => format!("{}/{}", url, record.id),
+            _ => url.clone(),
+        };
+        
+        let request_builder = match method {
             "POST" => Request::post(&url),
-            "PUT" => Request::put(&format!("{}/{}", url, record.id)),
-            "DELETE" => Request::delete(&url),
+            "PUT" => Request::put(&url_with_id),
+            "DELETE" => Request::delete(&url_with_id),
             _ => Request::post(&url),
         };
 
-        let mut request = request
+        let request_builder = request_builder
             .header("Content-Type", "application/json")
             .header("X-Tenant-Id", &tenant_id.to_string())
             .header("X-Tenant-Slug", "demo")
             .header("X-Request-Id", &Uuid::new_v4().to_string());
 
-        if let Some(body) = body {
-            request = request.body(body).map_err(|e| PushError::Network(format!("{:?}", e)))?;
-        }
+        // Build the final request - with or without body
+        let resp = if let Some(body) = body {
+            request_builder
+                .body(body)
+                .map_err(|e| PushError::Network(format!("{:?}", e)))?
+                .send()
+                .await
+                .map_err(|e| PushError::Network(e.to_string()))?
+        } else {
+            request_builder
+                .send()
+                .await
+                .map_err(|e| PushError::Network(e.to_string()))?
+        };
 
-        let resp = request.send().await.map_err(|e| PushError::Network(e.to_string()))?;
 
         match resp.status() {
             200 | 201 => {

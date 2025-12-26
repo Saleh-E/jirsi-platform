@@ -1294,17 +1294,9 @@ pub fn ValidatedSmartField(
     #[prop(default = true)] validate_on_blur: bool,
 ) -> impl IntoView {
     let field_clone = field.clone();
+    let field_for_blur = field.clone();
     let validation_result = create_rw_signal(ValidationResult::valid());
     let (touched, set_touched) = create_signal(false);
-    
-    // Validate on value change
-    let validate = move |val: &JsonValue| {
-        let result = validate_field(&field_clone, val);
-        validation_result.set(result.clone());
-        if let Some(cb) = on_validate {
-            cb.call(result);
-        }
-    };
     
     // Wrapped on_change that includes validation
     let wrapped_on_change = Callback::new(move |new_val: JsonValue| {
@@ -1312,7 +1304,11 @@ pub fn ValidatedSmartField(
             cb.call(new_val.clone());
         }
         if !validate_on_blur {
-            validate(&new_val);
+            let result = validate_field(&field_clone, &new_val);
+            validation_result.set(result.clone());
+            if let Some(cb) = on_validate {
+                cb.call(result);
+            }
         }
     });
     
@@ -1322,14 +1318,18 @@ pub fn ValidatedSmartField(
             class:has-error=move || !validation_result.get().is_valid && touched.get()
             on:blur=move |_| {
                 set_touched.set(true);
-                validate(&value.get());
+                let result = validate_field(&field_for_blur, &value.get());
+                validation_result.set(result.clone());
+                if let Some(cb) = on_validate {
+                    cb.call(result);
+                }
             }
         >
             <SmartField
                 field=field.clone()
                 value=value
                 context=context
-                on_change=Some(wrapped_on_change)
+                on_change=wrapped_on_change
                 disabled=disabled
             />
             <Show when=move || touched.get()>
