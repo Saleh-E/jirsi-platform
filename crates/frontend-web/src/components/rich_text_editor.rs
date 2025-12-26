@@ -1,33 +1,33 @@
 //! Rich Text Editor - Collaborative editor with CRDT support
 //! 
-//! Uses Yjs for real-time collaborative editing
+//! Uses Yrs (Yjs) for real-time collaborative editing via WebSocket
 
 use leptos::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
 use uuid::Uuid;
+use crate::offline::crdt::{CrdtText, AwarenessState};
+use base64::{Engine as _, engine::general_purpose::STANDARD as Base64};
 
-#[wasm_bindgen(module = "/public/js/yjs-editor.js")]
-extern "C" {
-    #[wasm_bindgen(js_name = initEditor)]
-    fn init_editor(element_id: &str, initial_text: &str) -> JsValue;
-    
-    #[wasm_bindgen(js_name = getEditorUpdate)]
-    fn get_editor_update(editor_id: &str) -> Vec<u8>;
-    
-    #[wasm_bindgen(js_name = applyEditorUpdate)]
-    fn apply_editor_update(editor_id: &str, update: &[u8]);
-}
-
+/// Editor update message for WebSocket sync
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EditorUpdate {
     pub entity_id: Uuid,
     pub field: String,
-    pub update: Vec<u8>,
-    pub state_vector: Vec<u8>,
+    pub update: String, // Base64-encoded Yjs update
+    pub state_vector: String, // Base64-encoded state vector
 }
 
+/// Presence info for other users
+#[derive(Debug, Clone)]
+pub struct UserPresence {
+    pub user_id: Uuid,
+    pub user_name: String,
+    pub color: String,
+    pub cursor_position: Option<u32>,
+}
+
+/// Rich Text Editor Component with CRDT collaboration
 #[component]
 pub fn RichTextEditor(
     /// Unique ID for this editor instance
@@ -54,36 +54,123 @@ pub fn RichTextEditor(
     collaborative: bool,
 ) -> impl IntoView {
     let editor_id = id.clone();
-    let editor_id_view = id.clone(); // For view
+    
+    // CRDT text document
+    let crdt_text = store_value(CrdtText::new(entity_id, &field));
+    
+    // Initialize with content
+    crdt_text.with_value(|t| t.set(&initial_text));
+    
+    // Reactive state
+    let (content, set_content) = create_signal(initial_text.clone());
     let (is_syncing, set_is_syncing) = create_signal(false);
-    let (last_update, set_last_update) = create_signal::<Option<Vec<u8>>>(None);
+    let (is_synced, set_is_synced) = create_signal(true);
+    let (other_users, set_other_users) = create_signal::<Vec<UserPresence>>(vec![]);
+    let (char_count, set_char_count) = create_signal(initial_text.len());
     
-    // Clone for closures
-    let initial_text_effect = initial_text.clone();
-    let field_effect = field.clone();
+    // Input reference for cursor tracking
+    let editor_ref = create_node_ref::<leptos::html::Div>();
     
-    // Initialize editor on mount
+    // Handle text input
+    let on_input = move |ev: web_sys::Event| {
+        if let Some(target) = ev.target() {
+            if let Some(element) = target.dyn_ref::<web_sys::HtmlElement>() {
+                let new_text = element.inner_text();
+                
+                // Update CRDT
+                crdt_text.with_value(|t| t.set(&new_text));
+                
+                // Update local state
+                set_content.set(new_text.clone());
+                set_char_count.set(new_text.len());
+                set_is_synced.set(false);
+                
+                // Trigger callback
+                if let Some(cb) = on_change {
+                    cb.call(new_text);
+                }
+                
+                // Schedule sync
+                if collaborative {
+                    set_is_syncing.set(true);
+                    
+                    let update = crdt_text.with_value(|t| t.get_update());
+                    let update_b64 = Base64.encode(&update);
+                    
+                    // Send via WebSocket (would use leptos-use websocket hook)
+                    send_crdt_update(entity_id, &field, &update_b64);
+                    
+                    // Mark as synced after short delay (optimistic)
+                    spawn_local(async move {
+                        gloo_timers::future::TimeoutFuture::new(300).await;
+                        set_is_syncing.set(false);
+                        set_is_synced.set(true);
+                    });
+                }
+            }
+        }
+    };
+    
+    // Handle cursor position for awareness
+    let on_selection_change = move |_| {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(selection)) = window.get_selection() {
+                if let Some(range) = selection.get_range_at(0).ok() {
+                    let cursor_pos = range.start_offset() as u32;
+                    
+                    // Send awareness update
+                    if collaborative {
+                        send_awareness_update(entity_id, &field, cursor_pos);
+                    }
+                }
+            }
+        }
+    };
+    
+    // Clone field for effect
+    let field_clone = field.clone();
+    
+    // Set up WebSocket listener for incoming updates
     create_effect(move |_| {
         if collaborative {
-            // Initialize Yjs editor
-            init_editor(&editor_id, &initial_text_effect);
+            // Subscribe to document updates via WebSocket
+            subscribe_to_document(entity_id, &field_clone, move |update_b64: String| {
+                if let Ok(update_bytes) = Base64.decode(&update_b64) {
+                    // Apply remote update to CRDT
+                    crdt_text.with_value(|t| {
+                        if let Err(e) = t.apply_update(&update_bytes) {
+                            gloo_console::error!("CRDT apply failed:", &e);
+                        }
+                    });
+                    
+                    // Update content from CRDT
+                    let new_content = crdt_text.with_value(|t| t.get());
+                    set_content.set(new_content.clone());
+                    set_char_count.set(new_content.len());
+                    
+                    // Update editor DOM
+                    if let Some(elem) = editor_ref.get() {
+                        elem.set_inner_text(&new_content);
+                    }
+                }
+            });
             
-            // Start sync loop
-            start_sync_loop(
-                editor_id.clone(),
-                entity_id,
-                field_effect.clone(),
-                set_is_syncing,
-                set_last_update,
-            );
+            // Subscribe to awareness updates
+            subscribe_to_awareness(entity_id, &field_clone, move |presence: UserPresence| {
+                set_other_users.update(|users| {
+                    // Update or add user
+                    if let Some(existing) = users.iter_mut().find(|u| u.user_id == presence.user_id) {
+                        *existing = presence;
+                    } else {
+                        users.push(presence);
+                    }
+                });
+            });
         }
     });
     
-    // Clone for footer closure
-    let initial_text_len = initial_text.len();
-    
     view! {
-        <div class="rich-text-editor" data-editor-id=editor_id_view>
+        <div class="rich-text-editor" data-editor-id=editor_id.clone()>
             <div class="editor-toolbar">
                 <button class="toolbar-btn" data-action="bold" title="Bold (Ctrl+B)">
                     <strong>"B"</strong>
@@ -111,15 +198,33 @@ pub fn RichTextEditor(
                 
                 <Show when=move || collaborative>
                     <div class="toolbar-spacer" />
-                    <div
-                        class="sync-indicator"
-                        class:syncing=move || is_syncing.get()
-                    >
+                    
+                    // Presence indicators - show other users
+                    <div class="presence-indicators">
+                        <For
+                            each=move || other_users.get()
+                            key=|user| user.user_id
+                            children=|user| {
+                                view! {
+                                    <div
+                                        class="presence-avatar"
+                                        style=format!("background-color: {}", user.color)
+                                        title=user.user_name.clone()
+                                    >
+                                        {user.user_name.chars().next().unwrap_or('?')}
+                                    </div>
+                                }
+                            }
+                        />
+                    </div>
+                    
+                    // Sync status
+                    <div class="sync-indicator" class:syncing=move || is_syncing.get()>
                         <Show
                             when=move || is_syncing.get()
-                            fallback=|| view! {
-                                <span class="sync-status">
-                                    "✓ Synced"
+                            fallback=move || view! {
+                                <span class="sync-status synced">
+                                    {move || if is_synced.get() { "✓ Synced" } else { "○ Unsaved" }}
                                 </span>
                             }
                         >
@@ -134,91 +239,117 @@ pub fn RichTextEditor(
             
             <div
                 id=id
+                node_ref=editor_ref
                 class="editor-content"
                 contenteditable="true"
                 placeholder="Start typing..."
-            />
+                on:input=on_input
+                on:mouseup=on_selection_change
+                on:keyup=on_selection_change
+            >
+                {initial_text}
+            </div>
             
             <div class="editor-footer">
                 <span class="char-count">
-                    {move || format!("{} characters", initial_text_len)}
+                    {move || format!("{} characters", char_count.get())}
                 </span>
             </div>
         </div>
     }
 }
 
-/// Start background sync loop for collaborative editing
-fn start_sync_loop(
-    editor_id: String,
-    entity_id: Uuid,
-    field: String,
-    set_is_syncing: WriteSignal<bool>,
-    set_last_update: WriteSignal<Option<Vec<u8>>>,
-) {
-    spawn_local(async move {
-        loop {
-            // Wait 500ms between syncs
-            gloo_timers::future::TimeoutFuture::new(500).await;
-            
-            // Get local updates
-            let update = get_editor_update(&editor_id);
-            
-            if !update.is_empty() {
-                set_is_syncing.set(true);
-                
-                // Send to server
-                match sync_with_server(entity_id, &field, update).await {
-                    Ok(server_update) => {
-                        if !server_update.is_empty() {
-                            // Apply server updates
-                            apply_editor_update(&editor_id, &server_update);
-                        }
-                        set_last_update.set(Some(server_update));
-                    }
-                    Err(e) => {
-                        tracing::error!("Sync error: {}", e);
-                    }
-                }
-                
-                set_is_syncing.set(false);
-            }
-        }
-    });
+// ============ WebSocket Integration Stubs ============
+// These would be implemented using leptos-use's use_websocket hook
+
+/// Send CRDT update via WebSocket
+fn send_crdt_update(_entity_id: Uuid, _field: &str, _update_b64: &str) {
+    // TODO: Use global WebSocket context to send:
+    // WsEvent::DocumentUpdate { document_id, update, user_id }
+    gloo_console::log!("CRDT update ready to send");
 }
 
-/// Sync with server
-async fn sync_with_server(
-    entity_id: Uuid,
-    field: &str,
-    update: Vec<u8>,
-) -> Result<Vec<u8>, String> {
-    // TODO: Actual API call to /api/v1/crdt/:entity_id/:field
-    // For now, return empty (no server updates)
-    Ok(Vec::new())
+/// Send awareness update (cursor position)
+fn send_awareness_update(_entity_id: Uuid, _field: &str, _cursor_pos: u32) {
+    // TODO: Use global WebSocket context to send:
+    // WsEvent::AwarenessUpdate { document_id, cursor_position, ... }
 }
 
-// Placeholder for gloo_timers
+/// Subscribe to document updates
+fn subscribe_to_document<F>(_entity_id: Uuid, _field: &str, _on_update: F)
+where
+    F: Fn(String) + 'static,
+{
+    // TODO: Register callback for incoming DocumentUpdate events
+}
+
+/// Subscribe to awareness updates
+fn subscribe_to_awareness<F>(_entity_id: Uuid, _field: &str, _on_presence: F)
+where
+    F: Fn(UserPresence) + 'static,
+{
+    // TODO: Register callback for incoming AwarenessUpdate events
+}
+
+// ============ Timer for debouncing ============
+
 mod gloo_timers {
     pub mod future {
-        pub struct TimeoutFuture(u32);
-        
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        use std::future::Future;
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        pub struct TimeoutFuture {
+            millis: u32,
+            started: bool,
+            completed: Rc<Cell<bool>>,
+        }
+
         impl TimeoutFuture {
             pub fn new(millis: u32) -> Self {
-                Self(millis)
+                Self {
+                    millis,
+                    started: false,
+                    completed: Rc::new(Cell::new(false)),
+                }
             }
         }
-        
-        impl std::future::Future for TimeoutFuture {
+
+        impl Future for TimeoutFuture {
             type Output = ();
-            
-            fn poll(
-                self: std::pin::Pin<&mut Self>,
-                _cx: &mut std::task::Context<'_>,
-            ) -> std::task::Poll<Self::Output> {
-                // Simplified - in real code use proper timer
-                std::task::Poll::Ready(())
+
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+                if self.completed.get() {
+                    return Poll::Ready(());
+                }
+
+                if !self.started {
+                    self.started = true;
+                    let completed = self.completed.clone();
+                    let waker = cx.waker().clone();
+                    
+                    let closure = Closure::once(Box::new(move || {
+                        completed.set(true);
+                        waker.wake();
+                    }) as Box<dyn FnOnce()>);
+
+                    if let Some(window) = web_sys::window() {
+                        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                            closure.as_ref().unchecked_ref(),
+                            self.millis as i32,
+                        );
+                    }
+                    
+                    closure.forget();
+                }
+
+                Poll::Pending
             }
         }
     }
 }
+

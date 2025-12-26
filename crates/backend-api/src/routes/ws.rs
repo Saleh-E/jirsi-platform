@@ -67,6 +67,52 @@ pub enum WsEvent {
         user_id: Uuid,
         tenant_id: Uuid,
     },
+    
+    // ============ CRDT Sync Events ============
+    
+    /// Subscribe to a document room (for CRDT sync)
+    DocumentSubscribe {
+        document_id: String,  // format: "entity_id:field_name"
+    },
+    /// Unsubscribe from a document room
+    DocumentUnsubscribe {
+        document_id: String,
+    },
+    /// CRDT state vector request (for delta sync)
+    DocumentSyncRequest {
+        document_id: String,
+        /// Base64-encoded state vector
+        state_vector: String,
+    },
+    /// CRDT update (Yjs binary, base64-encoded)
+    DocumentUpdate {
+        document_id: String,
+        /// Base64-encoded Yjs update
+        update: String,
+        /// User who made the change
+        user_id: Uuid,
+    },
+    /// Full document state (for initial sync)
+    DocumentState {
+        document_id: String,
+        /// Base64-encoded full state
+        state: String,
+    },
+    /// Awareness update (cursor position, selection, user info)
+    AwarenessUpdate {
+        document_id: String,
+        user_id: Uuid,
+        user_name: String,
+        user_color: String,
+        cursor_position: Option<u32>,
+        selection_start: Option<u32>,
+        selection_end: Option<u32>,
+    },
+    /// User left document (remove their cursor)
+    AwarenessRemove {
+        document_id: String,
+        user_id: Uuid,
+    },
 }
 
 /// WebSocket channel manager
@@ -162,8 +208,20 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, user_id: Uuid, t
                 break;
             }
             Ok(Message::Text(text)) => {
-                // Handle client messages (if any)
-                info!(tenant_id = %tenant_id, "WebSocket message: {}", text);
+                // Parse and handle client events
+                match serde_json::from_str::<WsEvent>(&text) {
+                    Ok(event) => {
+                        handle_client_event(&state, tenant_id, user_id, event).await;
+                    }
+                    Err(e) => {
+                        warn!(tenant_id = %tenant_id, error = %e, "Failed to parse WebSocket message");
+                    }
+                }
+            }
+            Ok(Message::Binary(data)) => {
+                // Handle binary CRDT updates directly (more efficient)
+                info!(tenant_id = %tenant_id, size = data.len(), "Binary CRDT update received");
+                // TODO: Parse binary format: [doc_id_len(u8)][doc_id][update]
             }
             Err(e) => {
                 error!(tenant_id = %tenant_id, error = %e, "WebSocket error");
@@ -191,3 +249,88 @@ pub fn broadcast_event(channels: &WsChannels, tenant_id: Uuid, event: WsEvent) {
         }
     }
 }
+
+/// Handle events sent by clients (CRDT updates, subscriptions, etc.)
+async fn handle_client_event(state: &Arc<AppState>, tenant_id: Uuid, user_id: Uuid, event: WsEvent) {
+    match event {
+        WsEvent::DocumentSubscribe { document_id } => {
+            info!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                document_id = %document_id,
+                "Client subscribed to document"
+            );
+            // Track subscription in state (for targeted broadcasts)
+            // In production, maintain a map of document_id -> Vec<user_id>
+        }
+        
+        WsEvent::DocumentUnsubscribe { document_id } => {
+            info!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                document_id = %document_id,
+                "Client unsubscribed from document"
+            );
+            // Broadcast awareness remove to other clients
+            let remove_event = WsEvent::AwarenessRemove {
+                document_id,
+                user_id,
+            };
+            broadcast_event(&state.ws_channels, tenant_id, remove_event);
+        }
+        
+        WsEvent::DocumentUpdate { document_id, update, user_id: sender_id } => {
+            info!(
+                tenant_id = %tenant_id,
+                document_id = %document_id,
+                update_size = update.len(),
+                "CRDT update received - broadcasting to peers"
+            );
+            
+            // Broadcast to all clients in the same tenant
+            // In production, filter to only clients subscribed to this document
+            let broadcast_event_data = WsEvent::DocumentUpdate {
+                document_id,
+                update,
+                user_id: sender_id,
+            };
+            broadcast_event(&state.ws_channels, tenant_id, broadcast_event_data);
+        }
+        
+        WsEvent::AwarenessUpdate { 
+            document_id, 
+            user_id: awareness_user_id,
+            user_name,
+            user_color,
+            cursor_position,
+            selection_start,
+            selection_end,
+        } => {
+            // Broadcast awareness to all clients viewing the same document
+            let awareness_event = WsEvent::AwarenessUpdate {
+                document_id,
+                user_id: awareness_user_id,
+                user_name,
+                user_color,
+                cursor_position,
+                selection_start,
+                selection_end,
+            };
+            broadcast_event(&state.ws_channels, tenant_id, awareness_event);
+        }
+        
+        WsEvent::DocumentSyncRequest { document_id, state_vector } => {
+            info!(
+                tenant_id = %tenant_id,
+                document_id = %document_id,
+                "Sync request received - delta sync not yet implemented server-side"
+            );
+            // In production: Load document from DB, compute delta, send DocumentState
+            let _ = state_vector; // Silence unused warning
+        }
+        
+        // Other events don't require server-side handling
+        _ => {}
+    }
+}
+
