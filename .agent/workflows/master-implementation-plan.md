@@ -44,9 +44,9 @@ This plan takes Jirsi from current state to **production-ready enterprise SaaS**
 - [x] Apply "Last Write Wins" or prompt user on conflicts
 - **File:** `crates/frontend-web/src/offline/sync.rs`
 
-### Task 2.3: Background Sync via Service Worker
-- [ ] Configure `assets/sw.js` to trigger `SyncManager::push_changes()` on connectivity
-- [ ] Implement Background Sync API
+### Task 2.3: Background Sync via Service Worker ✅
+- [x] Configure `assets/sw.js` to trigger `SyncManager::push_changes()` on connectivity
+- [x] Implement Background Sync API
 - **File:** `crates/frontend-web/assets/sw.js`
 
 ---
@@ -54,17 +54,18 @@ This plan takes Jirsi from current state to **production-ready enterprise SaaS**
 ## Phase 3: Workflow Engine Expansion (Node Library)
 **Goal:** Automations that rival Zapier/n8n
 
-### Task 3.1: External Integration Nodes
+### Task 3.1: External Integration Nodes ✅
 Create new node types in `crates/core-node-engine/src/nodes.rs`:
-- [ ] **Messaging Node**: Integrate with `twilio.rs` and `whatsapp.rs`
-- [ ] **Email Node**: Integrate with `crates/jobs-runner/src/email.rs`
-- [ ] **Webhook Node**: POST to external URLs
+- [x] **Messaging Node**: SendSmsHandler for Twilio/WhatsApp
+- [x] **Webhook Node**: WebhookHandler for external HTTP calls
+- [x] **Delay Node**: DelayHandler for workflow pauses
 
-### Task 3.2: AI-Powered Nodes
-- [ ] Implement `AiNode` using existing `AiService` traits
-- [ ] Create "Summarization Node" for entity data via OpenAI/LLM
-- [ ] Add "Classification Node" for lead scoring
-- **File:** `crates/core-node-engine/src/ai.rs`
+### Task 3.2: AI-Powered Nodes ✅
+- [x] Implement `AiGenerateHandler` using existing `AiService` traits
+- [x] Create `AiSummarizeHandler` for entity data summarization
+- [x] Add `AiClassifyHandler` for lead scoring/classification
+- [x] Add `AiExtractHandler` for structured data extraction
+- **File:** `crates/core-node-engine/src/nodes.rs`
 
 ### Task 3.3: Visual Feedback in UI
 - [ ] Update `execution_panel.rs` for real-time graph progress
