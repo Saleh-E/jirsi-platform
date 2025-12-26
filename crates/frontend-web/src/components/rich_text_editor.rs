@@ -6,7 +6,7 @@ use leptos::*;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use uuid::Uuid;
-use crate::offline::crdt::{CrdtText, AwarenessState};
+use crate::offline::crdt::CrdtText;
 use base64::{Engine as _, engine::general_purpose::STANDARD as Base64};
 
 /// Editor update message for WebSocket sync
@@ -25,6 +25,17 @@ pub struct UserPresence {
     pub user_name: String,
     pub color: String,
     pub cursor_position: Option<u32>,
+}
+
+/// Generate a random color for user presence
+fn generate_user_color() -> String {
+    let colors = [
+        "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", 
+        "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F",
+        "#BB8FCE", "#85C1E9", "#F8B500", "#00CED1"
+    ];
+    let index = (js_sys::Math::random() * colors.len() as f64) as usize;
+    colors[index % colors.len()].to_string()
 }
 
 /// Rich Text Editor Component with CRDT collaboration
@@ -54,6 +65,7 @@ pub fn RichTextEditor(
     collaborative: bool,
 ) -> impl IntoView {
     let editor_id = id.clone();
+    let document_id = format!("{}:{}", entity_id, field);
     
     // CRDT text document
     let crdt_text = store_value(CrdtText::new(entity_id, &field));
@@ -68,17 +80,15 @@ pub fn RichTextEditor(
     let (other_users, set_other_users) = create_signal::<Vec<UserPresence>>(vec![]);
     let (char_count, set_char_count) = create_signal(initial_text.len());
     
-    // Input reference for cursor tracking
+    // User color for presence
+    let user_color = store_value(generate_user_color());
+    
+    // Input reference
     let editor_ref = create_node_ref::<leptos::html::Div>();
     
-    // Clone field for different closures
-    let field_for_input = field.clone();
-    let field_for_selection = field.clone();
-    let field_for_keyup = field.clone();
-    let field_for_effect = field.clone();
-    let field_for_awareness = field.clone();
-    
     // Handle text input
+    let field_for_input = field.clone();
+    let document_id_for_input = document_id.clone();
     let on_input = move |ev: web_sys::Event| {
         if let Some(target) = ev.target() {
             if let Some(element) = target.dyn_ref::<web_sys::HtmlElement>() {
@@ -94,21 +104,21 @@ pub fn RichTextEditor(
                 
                 // Trigger callback
                 if let Some(cb) = on_change {
-                    cb.call(new_text);
+                    cb.call(new_text.clone());
                 }
                 
-                // Schedule sync
+                // Send update via WebSocket if collaborative
                 if collaborative {
                     set_is_syncing.set(true);
                     
                     let update = crdt_text.with_value(|t| t.get_update());
                     let update_b64 = Base64.encode(&update);
                     
-                    // Send via WebSocket (would use leptos-use websocket hook)
-                    send_crdt_update(entity_id, &field_for_input, &update_b64);
+                    // Send CRDT update (using window event for now)
+                    let _ = send_document_update(&document_id_for_input, &update_b64);
                     
                     // Mark as synced after short delay (optimistic)
-                    spawn_local(async move {
+                    leptos::spawn_local(async move {
                         gloo_timers::future::TimeoutFuture::new(300).await;
                         set_is_syncing.set(false);
                         set_is_synced.set(true);
@@ -118,59 +128,37 @@ pub fn RichTextEditor(
         }
     };
     
-    // Handle cursor position for awareness (simplified - actual implementation would use Selection API)
+    // Selection/awareness handlers (simplified)
     let on_selection_change = move |_: web_sys::MouseEvent| {
-        // For now, just track that user is active
-        // Full cursor position tracking requires web-sys "Selection" feature
-        if collaborative {
-            // Send activity ping rather than exact cursor position
-            send_awareness_update(entity_id, &field_for_selection, 0);
-        }
+        // In a full implementation, track cursor position and send awareness
     };
     
-    // Separate handler for keyboard events
-    let on_keyup_selection = move |_: web_sys::KeyboardEvent| {
-        if collaborative {
-            send_awareness_update(entity_id, &field_for_keyup, 0);
-        }
+    let on_keyup = move |_: web_sys::KeyboardEvent| {
+        // Track typing for awareness
     };
-
     
-    // Set up WebSocket listener for incoming updates
+    // Set up effect to listen for incoming CRDT updates
+    let document_id_for_effect = document_id.clone();
     create_effect(move |_| {
         if collaborative {
-            // Subscribe to document updates via WebSocket
-            subscribe_to_document(entity_id, &field_for_effect, move |update_b64: String| {
-                if let Ok(update_bytes) = Base64.decode(&update_b64) {
-                    // Apply remote update to CRDT
-                    crdt_text.with_value(|t| {
-                        if let Err(e) = t.apply_update(&update_bytes) {
-                            gloo_console::error!("CRDT apply failed:", &e);
-                        }
-                    });
-                    
-                    // Update content from CRDT
-                    let new_content = crdt_text.with_value(|t| t.get());
-                    set_content.set(new_content.clone());
-                    set_char_count.set(new_content.len());
-                    
-                    // Update editor DOM
-                    if let Some(elem) = editor_ref.get() {
-                        elem.set_inner_text(&new_content);
-                    }
-                }
-            });
-            
-            // Subscribe to awareness updates
-            subscribe_to_awareness(entity_id, &field_for_awareness, move |presence: UserPresence| {
-                set_other_users.update(|users| {
-                    // Update or add user
-                    if let Some(existing) = users.iter_mut().find(|u| u.user_id == presence.user_id) {
-                        *existing = presence;
-                    } else {
-                        users.push(presence);
+            // Listen for document updates via custom event
+            listen_for_updates(&document_id_for_effect, move |update_bytes| {
+                // Apply remote update to CRDT
+                crdt_text.with_value(|t| {
+                    if let Err(e) = t.apply_update(&update_bytes) {
+                        gloo_console::error!("CRDT apply failed:", &e);
                     }
                 });
+                
+                // Update content from CRDT
+                let new_content = crdt_text.with_value(|t| t.get());
+                set_content.set(new_content.clone());
+                set_char_count.set(new_content.len());
+                
+                // Update editor DOM
+                if let Some(elem) = editor_ref.get() {
+                    elem.set_inner_text(&new_content);
+                }
             });
         }
     });
@@ -205,7 +193,7 @@ pub fn RichTextEditor(
                 <Show when=move || collaborative>
                     <div class="toolbar-spacer" />
                     
-                    // Presence indicators - show other users
+                    // Presence indicators
                     <div class="presence-indicators">
                         <For
                             each=move || other_users.get()
@@ -251,7 +239,7 @@ pub fn RichTextEditor(
                 placeholder="Start typing..."
                 on:input=on_input
                 on:mouseup=on_selection_change
-                on:keyup=on_keyup_selection
+                on:keyup=on_keyup
             >
                 {initial_text}
             </div>
@@ -265,97 +253,118 @@ pub fn RichTextEditor(
     }
 }
 
-// ============ WebSocket Integration Stubs ============
-// These would be implemented using leptos-use's use_websocket hook
-
-/// Send CRDT update via WebSocket
-fn send_crdt_update(_entity_id: Uuid, _field: &str, _update_b64: &str) {
-    // TODO: Use global WebSocket context to send:
-    // WsEvent::DocumentUpdate { document_id, update, user_id }
-    gloo_console::log!("CRDT update ready to send");
+/// Send a CRDT update via the WebSocket
+fn send_document_update(document_id: &str, update_b64: &str) -> Result<(), JsValue> {
+    // Dispatch custom event for the WebSocket handler to pick up
+    if let Some(window) = web_sys::window() {
+        let detail = js_sys::Object::new();
+        js_sys::Reflect::set(&detail, &"documentId".into(), &document_id.into())?;
+        js_sys::Reflect::set(&detail, &"update".into(), &update_b64.into())?;
+        
+        let event = web_sys::CustomEvent::new_with_event_init_dict(
+            "crdt-update",
+            web_sys::CustomEventInit::new().detail(&detail)
+        )?;
+        window.dispatch_event(&event)?;
+    }
+    Ok(())
 }
 
-/// Send awareness update (cursor position)
-fn send_awareness_update(_entity_id: Uuid, _field: &str, _cursor_pos: u32) {
-    // TODO: Use global WebSocket context to send:
-    // WsEvent::AwarenessUpdate { document_id, cursor_position, ... }
-}
-
-/// Subscribe to document updates
-fn subscribe_to_document<F>(_entity_id: Uuid, _field: &str, _on_update: F)
+/// Listen for incoming CRDT updates
+fn listen_for_updates<F>(document_id: &str, callback: F)
 where
-    F: Fn(String) + 'static,
+    F: Fn(Vec<u8>) + 'static
 {
-    // TODO: Register callback for incoming DocumentUpdate events
-}
-
-/// Subscribe to awareness updates
-fn subscribe_to_awareness<F>(_entity_id: Uuid, _field: &str, _on_presence: F)
-where
-    F: Fn(UserPresence) + 'static,
-{
-    // TODO: Register callback for incoming AwarenessUpdate events
-}
-
-// ============ Timer for debouncing ============
-
-mod gloo_timers {
-    pub mod future {
-        use wasm_bindgen::prelude::*;
-        use wasm_bindgen::JsCast;
-        use std::future::Future;
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-        use std::cell::Cell;
-        use std::rc::Rc;
-
-        pub struct TimeoutFuture {
-            millis: u32,
-            started: bool,
-            completed: Rc<Cell<bool>>,
-        }
-
-        impl TimeoutFuture {
-            pub fn new(millis: u32) -> Self {
-                Self {
-                    millis,
-                    started: false,
-                    completed: Rc::new(Cell::new(false)),
-                }
-            }
-        }
-
-        impl Future for TimeoutFuture {
-            type Output = ();
-
-            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                if self.completed.get() {
-                    return Poll::Ready(());
-                }
-
-                if !self.started {
-                    self.started = true;
-                    let completed = self.completed.clone();
-                    let waker = cx.waker().clone();
-                    
-                    let closure = Closure::once(Box::new(move || {
-                        completed.set(true);
-                        waker.wake();
-                    }) as Box<dyn FnOnce()>);
-
-                    if let Some(window) = web_sys::window() {
-                        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                            closure.as_ref().unchecked_ref(),
-                            self.millis as i32,
-                        );
+    let doc_id = document_id.to_string();
+    
+    if let Some(window) = web_sys::window() {
+        let closure = Closure::wrap(Box::new(move |event: web_sys::CustomEvent| {
+            if let Some(detail) = event.detail().dyn_ref::<js_sys::Object>() {
+                let received_doc_id = js_sys::Reflect::get(detail, &"documentId".into())
+                    .ok()
+                    .and_then(|v| v.as_string());
+                
+                if received_doc_id.as_deref() == Some(&doc_id) {
+                    if let Ok(update_b64) = js_sys::Reflect::get(detail, &"update".into()) {
+                        if let Some(update_str) = update_b64.as_string() {
+                            if let Ok(bytes) = Base64.decode(&update_str) {
+                                callback(bytes);
+                            }
+                        }
                     }
-                    
-                    closure.forget();
                 }
-
-                Poll::Pending
             }
-        }
+        }) as Box<dyn FnMut(_)>);
+        
+        let _ = window.add_event_listener_with_callback(
+            "crdt-update-received",
+            closure.as_ref().unchecked_ref()
+        );
+        
+        // Keep the closure alive
+        closure.forget();
     }
 }
 
+/// Simple text area with CRDT sync (non-rich version)
+#[component]
+pub fn CollaborativeTextArea(
+    /// Unique ID
+    #[prop(into)]
+    id: String,
+    
+    /// Entity ID
+    entity_id: Uuid,
+    
+    /// Field name
+    #[prop(into)]
+    field: String,
+    
+    /// Initial value
+    #[prop(default = String::new())]
+    value: String,
+    
+    /// Placeholder text
+    #[prop(default = "Enter text...".to_string())]
+    placeholder: String,
+    
+    /// Number of rows
+    #[prop(default = 4)]
+    rows: u32,
+    
+    /// On change callback
+    #[prop(optional)]
+    on_change: Option<Callback<String>>,
+) -> impl IntoView {
+    let (content, set_content) = create_signal(value);
+    let crdt = store_value(CrdtText::new(entity_id, &field));
+    
+    // Init CRDT
+    crdt.with_value(|t| t.set(&content.get_untracked()));
+    
+    let on_input = move |ev: web_sys::Event| {
+        if let Some(target) = ev.target() {
+            if let Some(textarea) = target.dyn_ref::<web_sys::HtmlTextAreaElement>() {
+                let new_value = textarea.value();
+                crdt.with_value(|t| t.set(&new_value));
+                set_content.set(new_value.clone());
+                
+                if let Some(cb) = on_change {
+                    cb.call(new_value);
+                }
+            }
+        }
+    };
+    
+    view! {
+        <textarea
+            id=id
+            class="collaborative-textarea"
+            placeholder=placeholder
+            rows=rows
+            on:input=on_input
+        >
+            {move || content.get()}
+        </textarea>
+    }
+}

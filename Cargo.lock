@@ -1782,6 +1782,7 @@ dependencies = [
  "console_error_panic_hook",
  "core-models",
  "core-node-engine",
+ "futures",
  "gloo-console",
  "gloo-net 0.4.0",
  "gloo-timers",

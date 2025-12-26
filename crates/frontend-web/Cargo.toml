@@ -31,7 +31,7 @@ js-sys = "0.3"
 leptos-use = "0.13"
 base64 = "0.21"
 regex = "1"
-
+futures = "0.3"
 
 # CRDT for real-time collaboration (Yjs protocol)
 yrs = "0.18"
