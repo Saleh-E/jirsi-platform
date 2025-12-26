@@ -1,129 +1,139 @@
 ---
-description: Master Implementation Plan - Jirsi Platform to Production
+description: Master Implementation Plan V2 - Jirsi Platform Production Readiness
 ---
 
-# 🚀 Jirsi Platform - Master Implementation Plan
+# 🚀 Jirsi Platform - Master Implementation Plan V2
 
 ## Overview
-This plan takes Jirsi from current state to **production-ready enterprise SaaS**.
+This plan bridges remaining gaps to achieve production-grade enterprise SaaS status.
 
 ---
 
-## Phase 1: Real-time Collaboration & CRDT (High Priority)
-**Goal:** True Google Docs-style collaboration
+## Phase 1: Real-time Collaboration Engine (Highest Priority)
+**Goal:** Move from placeholder CRDTs to production-grade Yjs/Yrs implementation.
 
-### Task 1.1: Full Yrs Integration ✅
-- [x] Replace placeholder `CrdtText` struct with actual `yrs::Doc` and `yrs::TextRef`
-- [x] Implement yrs update encoding/decoding for `apply_update` and `get_update_since`
-- **File:** `crates/frontend-web/src/offline/crdt.rs`
+### Task 1.1: Backend CRDT Infrastructure
+- [ ] Replace stubs in `crates/core-models/src/crdt.rs` with actual `yrs::Doc` handling
+- [ ] Implement binary update encoding/decoding for Yjs wire protocol
+- [ ] Add state vector management for efficient delta sync
+- **File:** `crates/core-models/src/crdt.rs`
 
-### Task 1.2: WebSocket Synchronization Layer ✅
-- [x] Complete logic in `crates/backend-api/src/routes/ws.rs` to handle Yjs binary updates
-- [x] Implement "Room" or "Document" awareness system  
-- [x] Broadcast updates only to users viewing the same entity
+### Task 1.2: WebSocket Synchronization Protocol
+- [ ] Implement document room system in `crates/backend-api/src/routes/ws.rs`
+- [ ] Handle Yjs binary updates (SyncStep1, SyncStep2, Update messages)
+- [ ] Broadcast updates to clients in same document room
+- [ ] Add presence/awareness protocol for cursor positions
+- **File:** `crates/backend-api/src/routes/ws.rs`
 
-### Task 1.3: Frontend Editor Binding ✅
-- [x] Update `rich_text_editor.rs` to sync with yrs document state via `use_websocket`
-- [x] Implement "Presence Indicators" (Live cursors) using yrs awareness
+### Task 1.3: Frontend Yrs Integration
+- [ ] Integrate `yrs` library into Leptos application
+- [ ] Bind rich text editor to shared Yjs document
+- [ ] Implement multi-user simultaneous editing
+- [ ] Add live cursor indicators showing other users' positions
 - **File:** `crates/frontend-web/src/components/rich_text_editor.rs`
 
 ---
 
-## Phase 2: Robust Offline-First Sync (Frontend)
-**Goal:** Never lose data, seamless offline experience
+## Phase 2: Full-Cycle Synchronization & Offline-First (Frontend Focus)
+**Goal:** Complete the "Push" side of SyncManager with robust conflict resolution.
 
-### Task 2.1: Implement "Dirty" Record Tracking ✅
-- [x] Ensure every local change in `LocalDatabase` sets `is_dirty` flag
-- [x] Add `updated_at` timestamp to dirty records
-- **File:** `crates/frontend-web/src/offline/db.rs`
-
-### Task 2.2: Complete push_changes Logic ✅
-- [x] Develop queue-based system in `sync.rs` for dirty records
-- [x] Send POST/PATCH requests to `/api/v1/sync` endpoint
-- [x] Implement conflict resolution (check `aggregate_version` from CQRS)
-- [x] Apply "Last Write Wins" or prompt user on conflicts
+### Task 2.1: Complete push_changes Implementation
+- [ ] Scan for records where `is_dirty = 1`
+- [ ] Build queue-based sync with retry logic
+- [ ] Send POST/PATCH requests to `/api/v1/sync` endpoint
+- [ ] Handle aggregate version from CQRS responses
 - **File:** `crates/frontend-web/src/offline/sync.rs`
 
-### Task 2.3: Background Sync via Service Worker ✅
-- [x] Configure `assets/sw.js` to trigger `SyncManager::push_changes()` on connectivity
-- [x] Implement Background Sync API
+### Task 2.2: Conflict Resolution UI
+- [ ] Detect version mismatch conflicts (CQRS version conflict)
+- [ ] Implement conflict resolution dialog component
+- [ ] Add "Keep Mine" option (force push local version)
+- [ ] Add "Keep Theirs" option (discard local changes)
+- [ ] Add "Merge" option (three-way merge for supported fields)
+- **File:** `crates/frontend-web/src/components/conflict_resolver.rs`
+
+### Task 2.3: Service Worker Background Sync
+- [ ] Enhance `assets/sw.js` with BackgroundSync API
+- [ ] Trigger sync on `navigator.onLine` event
+- [ ] Queue sync requests when offline
+- [ ] Show sync progress in UI notification
 - **File:** `crates/frontend-web/assets/sw.js`
 
 ---
 
-## Phase 3: Workflow Engine Expansion (Node Library)
-**Goal:** Automations that rival Zapier/n8n
+## Phase 3: Workflow Automation Library Expansion
+**Goal:** Provide "Out-of-the-Box" value with specialized automation nodes.
 
-### Task 3.1: External Integration Nodes ✅
-Create new node types in `crates/core-node-engine/src/nodes.rs`:
-- [x] **Messaging Node**: SendSmsHandler for Twilio/WhatsApp
-- [x] **Webhook Node**: WebhookHandler for external HTTP calls
-- [x] **Delay Node**: DelayHandler for workflow pauses
-
-### Task 3.2: AI-Powered Nodes ✅
-- [x] Implement `AiGenerateHandler` using existing `AiService` traits
-- [x] Create `AiSummarizeHandler` for entity data summarization
-- [x] Add `AiClassifyHandler` for lead scoring/classification
-- [x] Add `AiExtractHandler` for structured data extraction
+### Task 3.1: Notification Node (SMS/Social)
+- [ ] Create `SendNotificationHandler` in nodes.rs
+- [ ] Integrate with existing Twilio provider for SMS
+- [ ] Integrate with Facebook provider for social messages
+- [ ] Add WhatsApp Business API support
+- [ ] Support templated messages with variable substitution
 - **File:** `crates/core-node-engine/src/nodes.rs`
 
-### Task 3.3: Visual Feedback in UI ✅
-- [x] Update `execution_panel.rs` for real-time graph progress
-- [x] Show node-by-node execution status with progress bar
-- [x] Display errors inline with failed nodes
-- [x] Auto-scroll and node highlighting
-- **File:** `crates/frontend-web/src/components/workflow/execution_panel.rs`
+### Task 3.2: AI Logic Node (LLM Decision Making)
+- [ ] Implement `AiDecisionHandler` in ai.rs
+- [ ] Sentiment analysis for leads/messages
+- [ ] Lead scoring based on engagement patterns
+- [ ] Auto-routing based on content classification
+- [ ] Manager alerts for negative sentiment detection
+- **File:** `crates/core-node-engine/src/ai.rs`
+
+### Task 3.3: Data Transformation Node (WASM Scripting)
+- [ ] Create `ScriptTransformHandler` for user-defined logic
+- [ ] Implement safe WASM sandbox executor
+- [ ] Provide SDK for common transformations
+- [ ] Add script editor UI in workflow builder
+- [ ] Support Rust/WASM snippets for data mapping
+- **File:** `crates/core-node-engine/src/transform.rs`
 
 ---
 
-## Phase 4: Production Hardening & Event Sourcing
-**Goal:** Reliable, observable, enterprise-grade backend
+## Phase 4: Event Sourcing Optimization (Hardening)
+**Goal:** Prevent performance degradation as event store grows.
 
-### Task 4.1: Event Projection Performance ✅
-- [x] Implement "Snapshots" in `event_store.rs`
-- [x] Save state snapshot every 100 events
-- [x] Speed up `load_aggregate` from 1000+ events
-- [x] Add `cleanup_old_snapshots` for housekeeping
+### Task 4.1: Snapshotting System
+- [ ] Modify `event_store.rs` to save periodic state snapshots
+- [ ] Configure snapshot frequency (every N events or time-based)
+- [ ] Load from snapshot + replay recent events only
+- [ ] Add snapshot cleanup job for old snapshots
 - **File:** `crates/backend-api/src/cqrs/event_store.rs`
 
-### Task 4.2: Structured Logging & Monitoring ✅
-- [x] Expand `observability/metrics.rs` to track:
-  - Workflow Execution Success Rate
-  - Sync Latency
-  - API Response Times (per endpoint)
-  - WebSocket connections
-- [x] Log critical failures with `execution_id` for tracing
-- [x] Add `log_critical!`, `log_workflow_failure!`, `log_sync_conflict!` macros
-- **File:** `crates/backend-api/src/observability/metrics.rs`
-
-### Task 4.3: End-to-End (E2E) Testing ✅
-- [x] Complete `critical-flows.spec.js` using Playwright
-- [x] Test full offline cycle: Create Offline → Reconnect → Verify on Backend
-- [x] API response time benchmarks
-- [x] Error handling tests
-- **File:** `tests/e2e/critical-flows.spec.js`
+### Task 4.2: Audit Trail "Time Travel" UI
+- [ ] Build timeline visualization component
+- [ ] Show all field changes with timestamps
+- [ ] Display user who made each change
+- [ ] Add "Restore to this version" functionality
+- [ ] Export audit log as PDF/CSV
+- **File:** `crates/frontend-web/src/components/audit_timeline.rs`
 
 ---
 
-## Phase 5: UI/UX & Feature Polish
-**Goal:** Pixel-perfect, delightful user experience
+## Phase 5: Testing & Reliability (80%+ Coverage Target)
+**Goal:** Comprehensive test coverage for production confidence.
 
-### Task 5.1: SmartField Client-Side Validation ✅
-- [x] Add `validate_field()` function with regex patterns
-- [x] Implement `ValidationResult` struct with error messages
-- [x] Cached regex patterns (Email, Phone, URL)
-- [x] `ValidationMessage` component for inline error display
-- [x] `ValidatedSmartField` wrapper with blur/change validation
-- [x] `validate_form()` helper for form-level validation
-- **File:** `crates/frontend-web/src/components/smart_field.rs`
+### Task 5.1: Integration Tests
+- [ ] Complete multi-tenant isolation tests (RLS verification)
+- [ ] CQRS event replay tests
+- [ ] API endpoint contract tests
+- [ ] WebSocket connection stability tests
+- **Directory:** `crates/backend-api/tests/`
 
-### Task 5.2: Kanban & Dashboard Completion ✅
-- [x] Optimistic UI updates with rollback on error
-- [x] Drag-and-drop triggers CQRS command
-- [x] Visual drop target highlighting
-- [x] Per-card loading indicators
-- [x] Error toast with auto-dismiss
-- **File:** `crates/frontend-web/src/components/kanban.rs`
+### Task 5.2: End-to-End Tests (Critical Paths)
+- [ ] Login flow with MFA
+- [ ] Create Lead → Trigger Automation → Verify Email
+- [ ] Offline edit → Reconnect → Sync verification
+- [ ] Multi-user real-time collaboration
+- [ ] Workflow execution with error recovery
+- **File:** `tests/e2e/critical-flows.spec.js`
+
+### Task 5.3: Performance Benchmarks
+- [ ] API response time benchmarks (< 100ms target)
+- [ ] Event store replay performance
+- [ ] WebSocket message throughput
+- [ ] Frontend WASM bundle size optimization
+- **File:** `tests/benchmarks/`
 
 ---
 
@@ -132,34 +142,46 @@ Create new node types in `crates/core-node-engine/src/nodes.rs`:
 ### Sprint Schedule
 | Sprint | Duration | Focus |
 |--------|----------|-------|
-| Sprint 1 | 2 weeks | Phase 1 (CRDT) + Phase 2 (Sync) |
-| Sprint 2 | 2 weeks | Phase 3 (Workflow Nodes) |
-| Sprint 3 | 2 weeks | Phase 4 (Hardening) |
-| Sprint 4 | 1 week | Phase 5 (Polish) |
-
-### Safety Checkpoints
-// turbo
-After each major change, run verification:
-```powershell
-.\verify_phase_1.ps1  # CRDT tests
-.\verify_phase_2.ps1  # Sync tests
-.\verify_phase_3.ps1  # Workflow tests
-```
+| Sprint 1 | 2 weeks | Phase 1 (Real-time CRDT) |
+| Sprint 2 | 1.5 weeks | Phase 2 (Offline Sync) |
+| Sprint 3 | 2 weeks | Phase 3 (Workflow Nodes) |
+| Sprint 4 | 1 week | Phase 4 (Event Sourcing) |
+| Sprint 5 | 1 week | Phase 5 (Testing) |
 
 ### Priority Matrix
 | Task | Impact | Effort | Priority |
 |------|--------|--------|----------|
-| CRDT Yrs Integration | High | High | P0 |
-| Offline Sync Queue | High | Medium | P0 |
-| AI Nodes | Medium | Medium | P1 |
-| E2E Testing | High | Low | P1 |
-| SmartField Validation | Medium | Low | P2 |
+| WS Document Rooms | High | High | P0 |
+| Conflict Resolution UI | High | Medium | P0 |
+| AI Logic Node | High | Medium | P1 |
+| Snapshotting | Medium | Low | P1 |
+| Time Travel UI | Medium | Medium | P2 |
+| E2E Test Suite | High | Medium | P1 |
+
+### Safety Checkpoints
+// turbo-all
+After each phase, run verification:
+```powershell
+# Phase 1 verification
+cargo test --package backend-api -- crdt
+cargo test --package frontend-web -- crdt
+
+# Phase 2 verification
+cargo test --package frontend-web -- sync
+
+# Phase 3 verification
+cargo test --package core-node-engine
+
+# Full test suite
+cargo test --workspace
+npm run test:e2e
+```
 
 ---
 
 ## Quick Start Commands
 
-### Start Development Environment
+### Development Environment
 ```bash
 # Terminal 1: Database
 docker start saas-postgres
@@ -171,10 +193,23 @@ cargo run --bin server
 
 # Terminal 3: Frontend (WSL)
 cd /mnt/e/s_programmer/Saas\ System/crates/frontend-web
-trunk serve --port 8104 --address 0.0.0.0
+trunk serve --port 8088 --address 0.0.0.0
 ```
 
 ### Run Tests
 ```bash
 cargo test --workspace
+npm run test:e2e
 ```
+
+---
+
+## Completion Tracking
+
+| Phase | Status | Completion Date |
+|-------|--------|-----------------|
+| Phase 1 | 🔄 In Progress | - |
+| Phase 2 | ⏳ Pending | - |
+| Phase 3 | ⏳ Pending | - |
+| Phase 4 | ⏳ Pending | - |
+| Phase 5 | ⏳ Pending | - |

@@ -120,7 +120,7 @@ impl EventStore {
             "#
         )
         .bind(aggregate_id)
-        .bind(deal.aggregate_version as i64)
+        .bind(deal.version as i64)
         .bind(state_data)
         .bind(Utc::now())
         .execute(&self.pool)
@@ -130,7 +130,7 @@ impl EventStore {
             Ok(_) => {
                 tracing::info!(
                     aggregate_id = %aggregate_id, 
-                    version = deal.aggregate_version, 
+                    version = deal.version, 
                     "Snapshot saved"
                 );
                 Ok(())

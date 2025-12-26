@@ -394,6 +394,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
+ "base64 0.21.7",
  "chrono",
  "core-analytics",
  "core-auth",
@@ -421,6 +422,7 @@ dependencies = [
  "tracing-subscriber",
  "urlencoding",
  "uuid 1.19.0",
+ "yrs",
 ]
 
 [[package]]

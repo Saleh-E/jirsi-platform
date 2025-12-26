@@ -50,6 +50,11 @@ async-trait = "0.1.89"
 # Event Sourcing
 esrs = "0.2"
 
+# CRDT for real-time collaboration
+yrs = { workspace = true }
+base64 = "0.21"
+
+
 # Caching
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 

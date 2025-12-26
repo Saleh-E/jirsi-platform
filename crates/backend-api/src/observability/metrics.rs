@@ -23,7 +23,7 @@ pub struct AppMetrics {
     pub http_requests_errors: AtomicU64,
     
     // Per-endpoint response times (avg in ms)
-    pub endpoint_response_times: RwLock<HashMap<String, EndpointMetrics>>,
+    pub endpoint_response_times: Arc<RwLock<HashMap<String, EndpointMetrics>>>,
     
     // Database metrics
     pub db_queries_total: AtomicU64,
@@ -96,7 +96,7 @@ impl AppMetrics {
             http_requests_total: AtomicU64::new(0),
             http_requests_duration_ms: AtomicU64::new(0),
             http_requests_errors: AtomicU64::new(0),
-            endpoint_response_times: RwLock::new(HashMap::new()),
+            endpoint_response_times: Arc::new(RwLock::new(HashMap::new())),
             db_queries_total: AtomicU64::new(0),
             db_queries_duration_ms: AtomicU64::new(0),
             db_connections_active: AtomicU64::new(0),

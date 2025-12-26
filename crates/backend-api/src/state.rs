@@ -4,7 +4,7 @@ use core_auth::{session::SessionService, tenant::TenantService, user::UserServic
 use core_metadata::MetadataService;
 use sqlx::PgPool;
 
-use crate::routes::ws::{create_ws_channels, WsChannels};
+use crate::routes::ws::{create_ws_channels, create_document_rooms, WsChannels, DocumentRooms};
 
 use core_node_engine::{ai::AiService, EventPublisher, GraphExecutor, repository::NodeGraphRepository};
 use std::sync::Arc;
@@ -18,6 +18,7 @@ pub struct AppState {
     pub user_service: UserService,
     pub session_service: SessionService,
     pub ws_channels: WsChannels,
+    pub document_rooms: Option<DocumentRooms>,
     pub ai_service: Arc<dyn AiService>,
     pub event_publisher: EventPublisher,
     pub graph_executor: Arc<GraphExecutor>,
@@ -39,6 +40,7 @@ impl AppState {
             user_service: UserService::new(pool.clone()),
             session_service: SessionService::new(pool.clone()),
             ws_channels: create_ws_channels(),
+            document_rooms: Some(create_document_rooms()),
             ai_service,
             event_publisher,
             graph_executor,
@@ -47,3 +49,4 @@ impl AppState {
         }
     }
 }
+
