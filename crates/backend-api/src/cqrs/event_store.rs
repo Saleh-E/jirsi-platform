@@ -9,8 +9,17 @@ use chrono::Utc;
 use serde_json::Value as JsonValue;
 use super::{DealEvent, Deal};
 
-/// How many events before creating a new snapshot
-const SNAPSHOT_EVERY_N_EVENTS: u64 = 100;
+/// Default snapshot interval (events)
+/// Can be overridden via SNAPSHOT_INTERVAL env var
+const DEFAULT_SNAPSHOT_INTERVAL: u64 = 50;
+
+/// Get snapshot interval from environment or use default
+fn get_snapshot_interval() -> u64 {
+    std::env::var("SNAPSHOT_INTERVAL")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_SNAPSHOT_INTERVAL)
+}
 
 pub struct EventStore {
     pool: PgPool,
@@ -58,7 +67,7 @@ impl EventStore {
         }
         
         // Create new snapshot if we've replayed many events
-        if events_since_snapshot >= SNAPSHOT_EVERY_N_EVENTS as usize {
+        if events_since_snapshot as u64 >= get_snapshot_interval() {
             let _ = self.save_snapshot(aggregate_id, &deal).await;
         }
         
@@ -223,7 +232,7 @@ impl EventStore {
         match result {
             Ok(_) => {
                 // Check if we should create a snapshot
-                if expected_version > 0 && expected_version % SNAPSHOT_EVERY_N_EVENTS == 0 {
+                if expected_version > 0 && expected_version % get_snapshot_interval() == 0 {
                     tokio::spawn({
                         let store = EventStore::new(self.pool.clone());
                         async move {
