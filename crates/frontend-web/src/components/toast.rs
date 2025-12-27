@@ -66,6 +66,16 @@ pub fn show_info(ctx: &ToastContext, message: &str) {
     });
 }
 
+/// Helper to show a conflict toast (for sync conflicts)
+pub fn show_conflict(ctx: &ToastContext, entity_type: &str) {
+    ctx.show.call(Toast {
+        id: 0,
+        title: "Sync Conflict".to_string(),
+        message: format!("Conflict detected in {}. Please resolve.", entity_type),
+        level: "warning".to_string(),
+    });
+}
+
 /// Toast Provider - wrap your app with this to enable global toasts
 #[component]
 pub fn ToastProvider(children: Children) -> impl IntoView {
