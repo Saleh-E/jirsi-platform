@@ -16,3 +16,4 @@ pub mod gateway;
 pub mod websocket;
 pub mod performance;
 pub mod observability;
+pub mod workflow_trigger;
