@@ -222,6 +222,185 @@ fn format_json(value: &JsonValue) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| "{}".to_string())
 }
 
+/// Field difference type
+#[derive(Debug, Clone, PartialEq)]
+pub enum DiffType {
+    /// Field unchanged
+    Same,
+    /// Field modified
+    Changed,
+    /// Field added (exists in one, not other)
+    Added,
+    /// Field removed (exists in one, not other)
+    Removed,
+}
+
+/// A single field diff
+#[derive(Debug, Clone)]
+pub struct FieldDiff {
+    pub field: String,
+    pub diff_type: DiffType,
+    pub local_value: Option<String>,
+    pub server_value: Option<String>,
+}
+
+/// Calculate field-level differences between local and server data
+pub fn calculate_field_diffs(local: &JsonValue, server: &JsonValue) -> Vec<FieldDiff> {
+    let mut diffs = Vec::new();
+
+    let local_obj = local.as_object();
+    let server_obj = server.as_object();
+
+    match (local_obj, server_obj) {
+        (Some(local_map), Some(server_map)) => {
+            // Check all fields in local
+            for (key, local_val) in local_map {
+                // Skip internal fields
+                if key == "id" || key == "tenant_id" || key == "created_at" || key == "updated_at" {
+                    continue;
+                }
+
+                let local_str = format_value(local_val);
+                
+                if let Some(server_val) = server_map.get(key) {
+                    let server_str = format_value(server_val);
+                    
+                    let diff_type = if local_str == server_str {
+                        DiffType::Same
+                    } else {
+                        DiffType::Changed
+                    };
+                    
+                    diffs.push(FieldDiff {
+                        field: key.clone(),
+                        diff_type,
+                        local_value: Some(local_str),
+                        server_value: Some(server_str),
+                    });
+                } else {
+                    // Field only in local
+                    diffs.push(FieldDiff {
+                        field: key.clone(),
+                        diff_type: DiffType::Added,
+                        local_value: Some(local_str),
+                        server_value: None,
+                    });
+                }
+            }
+
+            // Check for fields only in server
+            for (key, server_val) in server_map {
+                if key == "id" || key == "tenant_id" || key == "created_at" || key == "updated_at" {
+                    continue;
+                }
+                
+                if !local_map.contains_key(key) {
+                    diffs.push(FieldDiff {
+                        field: key.clone(),
+                        diff_type: DiffType::Removed,
+                        local_value: None,
+                        server_value: Some(format_value(server_val)),
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+
+    // Sort: changed first, then added/removed, then same
+    diffs.sort_by(|a, b| {
+        let ord_a = match a.diff_type {
+            DiffType::Changed => 0,
+            DiffType::Added => 1,
+            DiffType::Removed => 1,
+            DiffType::Same => 2,
+        };
+        let ord_b = match b.diff_type {
+            DiffType::Changed => 0,
+            DiffType::Added => 1,
+            DiffType::Removed => 1,
+            DiffType::Same => 2,
+        };
+        ord_a.cmp(&ord_b).then_with(|| a.field.cmp(&b.field))
+    });
+
+    diffs
+}
+
+/// Format a JSON value as a string for display
+fn format_value(value: &JsonValue) -> String {
+    match value {
+        JsonValue::String(s) => s.clone(),
+        JsonValue::Number(n) => n.to_string(),
+        JsonValue::Bool(b) => b.to_string(),
+        JsonValue::Null => "null".to_string(),
+        JsonValue::Array(arr) => format!("[{} items]", arr.len()),
+        JsonValue::Object(_) => "[object]".to_string(),
+    }
+}
+
+/// Visual diff display component
+#[component]
+pub fn VisualDiff(
+    local: JsonValue,
+    server: JsonValue,
+) -> impl IntoView {
+    let diffs = calculate_field_diffs(&local, &server);
+    let has_changes = diffs.iter().any(|d| d.diff_type != DiffType::Same);
+
+    view! {
+        <div class="visual-diff">
+            {if !has_changes {
+                view! { <p class="no-changes">"No field-level changes detected."</p> }.into_view()
+            } else {
+                view! {
+                    <table class="diff-table">
+                        <thead>
+                            <tr>
+                                <th>"Field"</th>
+                                <th class="local-col">"Your Version"</th>
+                                <th class="server-col">"Server Version"</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {diffs.into_iter().map(|diff| {
+                                let row_class = match diff.diff_type {
+                                    DiffType::Changed => "diff-changed",
+                                    DiffType::Added => "diff-added",
+                                    DiffType::Removed => "diff-removed",
+                                    DiffType::Same => "diff-same",
+                                };
+                                
+                                let indicator = match diff.diff_type {
+                                    DiffType::Changed => "⚠️",
+                                    DiffType::Added => "➕",
+                                    DiffType::Removed => "➖",
+                                    DiffType::Same => "✓",
+                                };
+
+                                view! {
+                                    <tr class=row_class>
+                                        <td class="field-name">
+                                            <span class="indicator">{indicator}</span>
+                                            {diff.field}
+                                        </td>
+                                        <td class="local-value">
+                                            {diff.local_value.unwrap_or_else(|| "—".to_string())}
+                                        </td>
+                                        <td class="server-value">
+                                            {diff.server_value.unwrap_or_else(|| "—".to_string())}
+                                        </td>
+                                    </tr>
+                                }
+                            }).collect_view()}
+                        </tbody>
+                    </table>
+                }.into_view()
+            }}
+        </div>
+    }
+}
+
 /// Merge two JSON objects, preferring local values for conflicting fields
 /// but keeping server values for fields not in local
 fn merge_json_objects(local: &JsonValue, server: &JsonValue) -> JsonValue {

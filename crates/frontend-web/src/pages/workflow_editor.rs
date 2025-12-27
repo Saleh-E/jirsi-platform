@@ -52,6 +52,9 @@ pub fn WorkflowEditorPage() -> impl IntoView {
     let (error, set_error) = create_signal::<Option<String>>(None);
     let (save_message, set_save_message) = create_signal::<Option<String>>(None);
     let (current_workflow_id, set_current_workflow_id) = create_signal::<Option<Uuid>>(None);
+    let (show_test_webhook, set_show_test_webhook) = create_signal(false);
+    let (test_payload, set_test_payload) = create_signal::<String>("{\n  \"entity_type\": \"contact\",\n  \"entity_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"action\": \"created\",\n  \"data\": {\n    \"first_name\": \"Test\",\n    \"email\": \"test@example.com\"\n  }\n}".to_string());
+    let (test_result, set_test_result) = create_signal::<Option<String>>(None);
     
     // Graph state
     let nodes = create_rw_signal::<Vec<NodeUI>>(vec![]);
@@ -251,8 +254,75 @@ pub fn WorkflowEditorPage() -> impl IntoView {
                     >
                         {move || if saving.get() { "Saving..." } else { "💾 Save" }}
                     </button>
+                    <button 
+                        class="test-webhook-btn"
+                        on:click=move |_| set_show_test_webhook.set(true)
+                    >
+                        "🧪 Test Webhook"
+                    </button>
                 </div>
             </div>
+            
+            // Test Webhook Modal
+            <Show when=move || show_test_webhook.get()>
+                <div class="modal-overlay" on:click=move |_| set_show_test_webhook.set(false)>
+                    <div class="test-webhook-modal" on:click=|e| e.stop_propagation()>
+                        <div class="modal-header">
+                            <h3>"🧪 Test Webhook Trigger"</h3>
+                            <button class="close-btn" on:click=move |_| set_show_test_webhook.set(false)>"×"</button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="modal-description">
+                                "Simulate an incoming webhook event to test your workflow. 
+                                The payload below will be sent as if it came from an external system."
+                            </p>
+                            <label>"Webhook Payload (JSON):"</label>
+                            <textarea 
+                                class="payload-editor"
+                                rows="12"
+                                prop:value=test_payload
+                                on:input=move |ev| {
+                                    let value = event_target_value(&ev);
+                                    set_test_payload.set(value);
+                                }
+                            />
+                            {move || test_result.get().map(|result| {
+                                let is_success = result.starts_with("✅");
+                                view! {
+                                    <div class=move || format!("test-result {}", if is_success { "success" } else { "error" })>
+                                        {result}
+                                    </div>
+                                }
+                            })}
+                        </div>
+                        <div class="modal-footer">
+                            <button 
+                                class="btn-secondary" 
+                                on:click=move |_| set_show_test_webhook.set(false)
+                            >
+                                "Cancel"
+                            </button>
+                            <button 
+                                class="btn-primary"
+                                on:click=move |_| {
+                                    let payload = test_payload.get();
+                                    let wf_id = current_workflow_id.get();
+                                    let set_result = set_test_result;
+                                    
+                                    spawn_local(async move {
+                                        match test_webhook_trigger(wf_id, &payload).await {
+                                            Ok(msg) => set_result.set(Some(format!("✅ {}", msg))),
+                                            Err(e) => set_result.set(Some(format!("❌ {}", e))),
+                                        }
+                                    });
+                                }
+                            >
+                                "🚀 Send Test Event"
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Show>
             
             // Main editor area
             {move || {
@@ -338,5 +408,59 @@ async fn save_workflow_graph(url: &str, body: serde_json::Value, method: &str) -
         Ok(None)
     } else {
         Err(format!("HTTP error: {}", resp.status()))
+    }
+}
+
+/// Test webhook trigger by simulating an incoming event
+async fn test_webhook_trigger(workflow_id: Option<Uuid>, payload_str: &str) -> Result<String, String> {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::{Request, RequestInit, Response};
+
+    // Parse the JSON payload
+    let payload: serde_json::Value = serde_json::from_str(payload_str)
+        .map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    // Build the trigger invoke URL
+    let trigger_id = workflow_id
+        .map(|id| id.to_string())
+        .unwrap_or_else(|| "test".to_string());
+    let url = format!("{}/workflows/triggers/{}/invoke?tenant_id={}", API_BASE, trigger_id, TENANT_ID);
+
+    let opts = RequestInit::new();
+    opts.set_method("POST");
+    opts.set_body(&wasm_bindgen::JsValue::from_str(&payload.to_string()));
+    
+    let request = Request::new_with_str_and_init(&url, &opts)
+        .map_err(|e| format!("Failed to create request: {:?}", e))?;
+    
+    request.headers().set("Content-Type", "application/json")
+        .map_err(|e| format!("Failed to set header: {:?}", e))?;
+    
+    // Add a test signature header (in prod this would be HMAC-SHA256)
+    request.headers().set("X-Webhook-Signature", "test-signature")
+        .map_err(|e| format!("Failed to set signature: {:?}", e))?;
+    
+    let window = web_sys::window().ok_or("No window")?;
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch error: {:?}", e))?;
+    
+    let resp: Response = resp_value.dyn_into()
+        .map_err(|_| "Failed to convert response")?;
+    
+    if resp.ok() {
+        Ok("Webhook event sent successfully! Check workflow execution logs.".to_string())
+    } else {
+        let status = resp.status();
+        // Try to get error message from response body
+        if let Ok(text_promise) = resp.text() {
+            if let Ok(text_value) = JsFuture::from(text_promise).await {
+                if let Some(error_text) = text_value.as_string() {
+                    return Err(format!("HTTP {}: {}", status, error_text));
+                }
+            }
+        }
+        Err(format!("HTTP error: {}", status))
     }
 }

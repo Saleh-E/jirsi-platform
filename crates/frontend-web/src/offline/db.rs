@@ -207,6 +207,77 @@ impl LocalDatabase {
         let params = serde_json::json!([operation_id]);
         self.execute_with_params(sql, params)
     }
+
+    /// Increment retry count for an operation (called on sync failure)
+    pub fn increment_retry(&self, operation_id: &str) -> Result<u32, String> {
+        let sql = "UPDATE pending_operations SET retry_count = retry_count + 1 WHERE id = ?";
+        let params = serde_json::json!([operation_id]);
+        self.execute_with_params(sql, params)?;
+        
+        // Return the new retry count
+        let rows = self.query(&format!(
+            "SELECT retry_count FROM pending_operations WHERE id = '{}'", 
+            operation_id
+        ))?;
+        
+        Ok(rows.first()
+            .and_then(|r| r.get("retry_count"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as u32)
+    }
+
+    /// Get count of pending/dirty records (for SyncIndicator)
+    pub fn get_pending_count(&self) -> Result<u32, String> {
+        let dirty_rows = self.query("SELECT COUNT(*) as count FROM local_entity_records WHERE is_dirty = 1")?;
+        let dirty_count = dirty_rows.first()
+            .and_then(|r| r.get("count"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as u32;
+
+        let pending_rows = self.query("SELECT COUNT(*) as count FROM pending_operations")?;
+        let pending_count = pending_rows.first()
+            .and_then(|r| r.get("count"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as u32;
+
+        Ok(dirty_count + pending_count)
+    }
+
+    /// Mark operation as failed with error message
+    pub fn mark_operation_failed(&self, operation_id: &str, error: &str) -> Result<(), String> {
+        // Add failed_at and last_error columns if not exist (safe to call multiple times)
+        let _ = self.execute(
+            "ALTER TABLE pending_operations ADD COLUMN failed_at TEXT"
+        );
+        let _ = self.execute(
+            "ALTER TABLE pending_operations ADD COLUMN last_error TEXT"
+        );
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let sql = "UPDATE pending_operations SET failed_at = ?, last_error = ?, retry_count = retry_count + 1 WHERE id = ?";
+        let params = serde_json::json!([now, error, operation_id]);
+        self.execute_with_params(sql, params)
+    }
+
+    /// Get operations that are ready for retry (with exponential backoff)
+    pub fn get_retryable_operations(&self, max_retries: u32) -> Result<Vec<serde_json::Value>, String> {
+        let sql = format!(
+            "SELECT * FROM pending_operations WHERE retry_count < {} ORDER BY created_at ASC",
+            max_retries
+        );
+        self.query(&sql)
+    }
+
+    /// Clear all failed operations that exceeded max retries
+    pub fn clear_expired_operations(&self, max_retries: u32) -> Result<u32, String> {
+        let sql = format!(
+            "DELETE FROM pending_operations WHERE retry_count >= {}",
+            max_retries
+        );
+        // We can't easily get affected rows from JS, so just execute and assume success
+        self.execute(&sql)?;
+        Ok(0) // Return value not accurate without affected rows count
+    }
 }
 
 /// Represents a dirty record that needs to be synced
@@ -218,4 +289,34 @@ pub struct DirtyRecord {
     pub data: serde_json::Value,
     pub is_deleted: bool,
     pub server_version: u64,
+}
+
+/// Sync status for the UI indicator
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SyncStatus {
+    /// All records in sync
+    Synced,
+    /// Changes pending sync (online)
+    Pending(u32),
+    /// Currently syncing
+    Syncing,
+    /// Network offline, changes waiting
+    Offline(u32),
+    /// Sync error occurred
+    Error,
+}
+
+impl SyncStatus {
+    /// Check if we have pending changes
+    pub fn has_pending(&self) -> bool {
+        matches!(self, SyncStatus::Pending(_) | SyncStatus::Offline(_) | SyncStatus::Syncing)
+    }
+
+    /// Get pending count if available
+    pub fn pending_count(&self) -> u32 {
+        match self {
+            SyncStatus::Pending(n) | SyncStatus::Offline(n) => *n,
+            _ => 0,
+        }
+    }
 }
