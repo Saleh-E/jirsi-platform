@@ -1,0 +1,4 @@
+[build]
+target = "index.html"
+dist = "dist_clean_8081"
+url_base = "/"
