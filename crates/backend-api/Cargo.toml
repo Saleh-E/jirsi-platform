@@ -60,3 +60,8 @@ redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "performance"
+harness = false
