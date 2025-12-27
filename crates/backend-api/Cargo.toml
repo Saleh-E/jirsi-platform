@@ -58,6 +58,11 @@ base64 = "0.21"
 # Caching
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 
+# HMAC signature verification for webhooks
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 criterion = { version = "0.5", features = ["html_reports"] }

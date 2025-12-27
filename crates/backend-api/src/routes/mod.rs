@@ -21,6 +21,7 @@ pub mod inbox;
 pub mod tenant;
 pub mod webhooks;
 pub mod integrations;
+pub mod workflow_triggers;
 
 pub mod ws;
 
@@ -54,6 +55,8 @@ pub fn api_routes() -> Router<Arc<AppState>> {
         // Integration settings routes
         // Integration settings routes
         .merge(integrations::routes())
+        // Workflow trigger routes (webhook invocation)
+        .merge(workflow_triggers::routes())
 
 }
 
