@@ -87,6 +87,10 @@ pub fn WorkflowListPage() -> impl IntoView {
                     <p class="subtitle">"Create and manage automated workflows"</p>
                 </div>
                 <div class="header-right">
+                    <A href="/app/settings/workflows/new" class="btn btn-primary create-workflow-btn">
+                        <span class="btn-icon">"+"</span>
+                        " Create Workflow"
+                    </A>
                     <A href="/app/settings" class="back-link">"← Back to Settings"</A>
                 </div>
             </div>
@@ -111,6 +115,9 @@ pub fn WorkflowListPage() -> impl IntoView {
                             <div class="empty-icon">"🔄"</div>
                             <h3>"No workflows yet"</h3>
                             <p>"Create your first workflow to automate tasks"</p>
+                            <A href="/app/settings/workflows/new" class="btn btn-primary btn-lg">
+                                "✨ Create Your First Workflow"
+                            </A>
                         </div>
                     }.into_view()
                 } else {

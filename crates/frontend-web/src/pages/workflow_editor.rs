@@ -30,19 +30,28 @@ pub struct WorkflowGraphResponse {
 #[component]
 pub fn WorkflowEditorPage() -> impl IntoView {
     let params = use_params_map();
+    let navigate = use_navigate();
+    
+    let is_new = move || {
+        params.with(|p| p.get("id").map(|id| id == "new").unwrap_or(false))
+    };
+    
     let workflow_id = move || {
         params.with(|p| {
-            p.get("id").and_then(|id| Uuid::parse_str(id).ok())
+            p.get("id").and_then(|id| {
+                if id == "new" { None } else { Uuid::parse_str(id).ok() }
+            })
         })
     };
 
     // State
-    let (workflow_name, set_workflow_name) = create_signal("Loading...".to_string());
+    let (workflow_name, set_workflow_name) = create_signal("New Workflow".to_string());
     let (is_active, set_is_active) = create_signal(false);
     let (loading, set_loading) = create_signal(true);
     let (saving, set_saving) = create_signal(false);
     let (error, set_error) = create_signal::<Option<String>>(None);
     let (save_message, set_save_message) = create_signal::<Option<String>>(None);
+    let (current_workflow_id, set_current_workflow_id) = create_signal::<Option<Uuid>>(None);
     
     // Graph state
     let nodes = create_rw_signal::<Vec<NodeUI>>(vec![]);
@@ -57,9 +66,27 @@ pub fn WorkflowEditorPage() -> impl IntoView {
         })
     });
 
-    // Load workflow graph
+    // Load or create workflow
     create_effect(move |_| {
-        if let Some(id) = workflow_id() {
+        if is_new() {
+            // New workflow - set up empty canvas with a trigger node
+            let trigger_node = NodeUI {
+                id: Uuid::new_v4(),
+                node_type: "trigger".to_string(),
+                label: "Record Created".to_string(),
+                x: 200.0,
+                y: 200.0,
+                config: serde_json::json!({
+                    "trigger_type": "record_created",
+                    "entity_type": "contact"
+                }),
+                is_enabled: true,
+            };
+            nodes.set(vec![trigger_node]);
+            edges.set(vec![]);
+            set_loading.set(false);
+        } else if let Some(id) = workflow_id() {
+            set_current_workflow_id.set(Some(id));
             let url = format!("{}/workflows/{}/graph?tenant_id={}", API_BASE, id, TENANT_ID);
             spawn_local(async move {
                 match fetch_json::<WorkflowGraphResponse>(&url).await {
@@ -81,34 +108,52 @@ pub fn WorkflowEditorPage() -> impl IntoView {
 
     // Save workflow graph
     let save_graph = move |_| {
-        if let Some(id) = workflow_id() {
-            set_saving.set(true);
-            set_save_message.set(None);
-            
-            let url = format!("{}/workflows/{}/graph?tenant_id={}", API_BASE, id, TENANT_ID);
-            let current_nodes = nodes.get();
-            let current_edges = edges.get();
-            
-            spawn_local(async move {
+        set_saving.set(true);
+        set_save_message.set(None);
+        
+        let current_nodes = nodes.get();
+        let current_edges = edges.get();
+        let name = workflow_name.get();
+        let existing_id = current_workflow_id.get();
+        
+        spawn_local(async move {
+            let result = if let Some(id) = existing_id {
+                // Update existing workflow
+                let url = format!("{}/workflows/{}/graph?tenant_id={}", API_BASE, id, TENANT_ID);
                 let body = serde_json::json!({
                     "nodes": current_nodes,
                     "edges": current_edges
                 });
-                
-                let result = save_workflow_graph(&url, body).await;
-                
-                match result {
-                    Ok(_) => {
-                        set_save_message.set(Some("Saved successfully!".to_string()));
-                        set_saving.set(false);
-                    }
-                    Err(e) => {
-                        set_error.set(Some(format!("Save failed: {}", e)));
-                        set_saving.set(false);
+                save_workflow_graph(&url, body, "PUT").await
+            } else {
+                // Create new workflow
+                let url = format!("{}/workflows?tenant_id={}", API_BASE, TENANT_ID);
+                let body = serde_json::json!({
+                    "name": name,
+                    "description": "Created via workflow builder",
+                    "is_active": false,
+                    "nodes": current_nodes,
+                    "edges": current_edges
+                });
+                save_workflow_graph(&url, body, "POST").await
+            };
+            
+            match result {
+                Ok(maybe_id) => {
+                    set_save_message.set(Some("Saved successfully!".to_string()));
+                    set_saving.set(false);
+                    if let Some(new_id) = maybe_id {
+                        set_current_workflow_id.set(Some(new_id));
+                        // Update the URL to the new workflow ID
+                        // navigate(&format!("/app/settings/workflows/{}", new_id), Default::default());
                     }
                 }
-            });
-        }
+                Err(e) => {
+                    set_error.set(Some(format!("Save failed: {}", e)));
+                    set_saving.set(false);
+                }
+            }
+        });
     };
 
     // Callbacks
@@ -249,14 +294,15 @@ pub fn WorkflowEditorPage() -> impl IntoView {
     }
 }
 
-/// Save workflow graph via PUT request
-async fn save_workflow_graph(url: &str, body: serde_json::Value) -> Result<(), String> {
+/// Save workflow graph via POST/PUT request
+/// Returns the new workflow ID if created via POST
+async fn save_workflow_graph(url: &str, body: serde_json::Value, method: &str) -> Result<Option<Uuid>, String> {
     use wasm_bindgen::JsCast;
     use wasm_bindgen_futures::JsFuture;
     use web_sys::{Request, RequestInit, Response};
 
     let opts = RequestInit::new();
-    opts.set_method("PUT");
+    opts.set_method(method);
     opts.set_body(&wasm_bindgen::JsValue::from_str(&body.to_string()));
     
     let request = Request::new_with_str_and_init(url, &opts)
@@ -274,7 +320,22 @@ async fn save_workflow_graph(url: &str, body: serde_json::Value) -> Result<(), S
         .map_err(|_| "Failed to convert response")?;
     
     if resp.ok() {
-        Ok(())
+        // Try to get created ID from response
+        if method == "POST" {
+            if let Ok(json_promise) = resp.json() {
+                if let Ok(json_value) = JsFuture::from(json_promise).await {
+                    // Parse the response to get ID
+                    if let Ok(response_data) = serde_wasm_bindgen::from_value::<serde_json::Value>(json_value) {
+                        if let Some(id_str) = response_data.get("id").and_then(|v| v.as_str()) {
+                            if let Ok(id) = Uuid::parse_str(id_str) {
+                                return Ok(Some(id));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
     } else {
         Err(format!("HTTP error: {}", resp.status()))
     }
