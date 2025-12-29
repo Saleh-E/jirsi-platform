@@ -19,6 +19,10 @@ use uuid::Uuid;
 use crate::metadata::{AiMetadata, LayoutConfig, MergeStrategy};
 use crate::validation::ValidationRule;
 
+// ============================================================================
+// FIELD TYPE - PRESERVED FROM LEGACY (The Valuable Logic)
+// ============================================================================
+
 /// All supported field types in the system
 /// Uses tagged serde format for type-specific configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -133,6 +137,10 @@ impl Default for FieldType {
     }
 }
 
+// ============================================================================
+// FIELD CONTEXT - PRESERVED FROM LEGACY
+// ============================================================================
+
 /// Context in which a field is being rendered
 /// Determines the visual representation of the field
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -173,130 +181,110 @@ impl Default for ContextRenderHints {
     }
 }
 
-/// Field definition - describes a single field on an EntityType
+// ============================================================================
+// FIELD DEFINITION - ANTIGRAVITY DIAMOND EDITION
+// ============================================================================
+
+/// FieldDef model - Single source of truth (Antigravity Edition)
 /// 
-/// ## Antigravity Diamond Layers
-/// 
-/// In addition to legacy fields, each FieldDef now supports:
-/// - `layout`: Adaptive UI configuration (visibility, readonly conditions, grid span)
-/// - `physics`: Sync/merge strategy (CRDT or Last-Write-Wins)
-/// - `intelligence`: AI metadata (PII, embeddings, auto-generation)
-/// - `rules`: New validation engine with portable + async rules
+/// The Diamond Architecture: Each field has four layers:
+/// - Data: `field_type` - The shape of data
+/// - Logic: `layout.visible_if`, `layout.readonly_if` - Conditional rules
+/// - Physics: `physics` - Sync/merge strategy
+/// - Intelligence: `intelligence` - AI/LLM hints
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FieldDef {
+    // --- Identity ---
     pub id: Uuid,
     pub tenant_id: Uuid,
-    /// Parent EntityType
     pub entity_type_id: Uuid,
-    /// Internal field name (snake_case)
     pub name: String,
-    /// Display label
     pub label: String,
-    /// Field data type (DATA layer of Diamond)
-    pub field_type: FieldType,
-    /// Is this field required?
-    pub is_required: bool,
-    /// Is field unique within entity?
-    pub is_unique: bool,
-    /// Show in list views by default?
-    pub show_in_list: bool,
-    /// Show in card views?
-    pub show_in_card: bool,
-    /// Include in search index?
-    pub is_searchable: bool,
-    /// Can be used for filtering?
-    pub is_filterable: bool,
-    /// Can be sorted?
-    pub is_sortable: bool,
-    /// Is read-only (system field)?
-    pub is_readonly: bool,
-    /// Default value (JSON)
-    pub default_value: Option<serde_json::Value>,
-    /// Placeholder text for forms
-    pub placeholder: Option<String>,
-    /// Help text / tooltip
-    pub help_text: Option<String>,
-    /// Legacy validation rules (deprecated - use `rules` instead)
-    pub validation: Option<FieldValidation>,
-    /// Type-specific options (raw JSON - can be array of strings, array of objects, or FieldOptions struct)
-    pub options: Option<serde_json::Value>,
-    /// UI rendering hints
-    pub ui_hints: Option<FieldUiHints>,
-    /// Display order in forms/lists
-    pub sort_order: i32,
-    /// Group/section for form layout
-    pub group: Option<String>,
-    /// Context-specific rendering hints
-    pub context_hints: Option<HashMap<FieldContext, ContextRenderHints>>,
     
-    // =========================================================================
-    // ANTIGRAVITY DIAMOND LAYERS
-    // =========================================================================
+    // --- Core Type (Data Layer) ---
+    pub field_type: FieldType,
+    
+    // --- Diamond Layers (The New Power) ---
     
     /// LAYOUT: Adaptive UI configuration
-    /// Controls visibility, readonly state, grid layout, and section placement
     #[serde(default)]
     pub layout: LayoutConfig,
     
-    /// PHYSICS: Sync/merge strategy for conflict resolution
-    /// Determines how concurrent edits are merged (CRDT vs LWW)
+    /// PHYSICS: Sync/merge strategy
     #[serde(default)]
     pub physics: MergeStrategy,
     
     /// INTELLIGENCE: AI/LLM metadata
-    /// Hints for PII handling, embeddings, and auto-generation
     #[serde(default)]
     pub intelligence: AiMetadata,
     
-    /// RULES: New validation engine
-    /// Portable (WASM) + Async (DB) validation rules
+    /// RULES: New validation engine (replaces legacy validation)
     #[serde(default)]
     pub rules: Vec<ValidationRule>,
     
-    /// Is this a system-managed field?
-    /// System fields cannot be deleted and have special handling
+    // --- System Meta ---
     #[serde(default)]
     pub is_system: bool,
-    
-    // =========================================================================
-    // TIMESTAMPS
-    // =========================================================================
-    
+    pub sort_order: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    
+    // --- Legacy Fields (Keep for migration compatibility) ---
+    pub default_value: Option<serde_json::Value>,
+    pub placeholder: Option<String>,
+    pub help_text: Option<String>,
+    /// @deprecated Use `rules` instead
+    pub validation: Option<FieldValidation>,
+    /// @deprecated Use `layout` instead
+    pub ui_hints: Option<FieldUiHints>,
+    /// @deprecated Use `layout.section` instead
+    pub group: Option<String>,
+    pub options: Option<serde_json::Value>,
+    pub context_hints: Option<HashMap<FieldContext, ContextRenderHints>>,
+    
+    // Legacy boolean flags (move to layout.visible_if/readonly_if)
+    #[serde(default)]
+    pub is_required: bool,
+    #[serde(default)]
+    pub is_unique: bool,
+    #[serde(default)]
+    pub show_in_list: bool,
+    #[serde(default)]
+    pub show_in_card: bool,
+    #[serde(default)]
+    pub is_searchable: bool,
+    #[serde(default)]
+    pub is_filterable: bool,
+    #[serde(default)]
+    pub is_sortable: bool,
+    #[serde(default)]
+    pub is_readonly: bool,
 }
 
-/// Validation rules for a field
+// ============================================================================
+// LEGACY STRUCTS - PRESERVED FOR SERDE COMPATIBILITY
+// ============================================================================
+
+/// Validation rules for a field (Legacy - use ValidationRule instead)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FieldValidation {
-    /// Minimum length for text fields
     pub min_length: Option<i32>,
-    /// Maximum length for text fields
     pub max_length: Option<i32>,
-    /// Minimum value for numeric fields
     pub min_value: Option<f64>,
-    /// Maximum value for numeric fields
     pub max_value: Option<f64>,
-    /// Regex pattern for validation
     pub pattern: Option<String>,
-    /// Custom validation message
     pub message: Option<String>,
 }
 
 /// Type-specific field options
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldOptions {
-    /// For Select/MultiSelect: list of options
     pub choices: Option<Vec<SelectChoice>>,
-    /// For Link/MultiLink: target EntityType name
     pub link_target: Option<String>,
-    /// For Link: display field from linked entity
     pub link_display_field: Option<String>,
-    /// For Money: currency code
     pub currency: Option<String>,
-    /// For Calculated: formula expression
     pub formula: Option<String>,
-    /// For Score: max score value
     pub max_score: Option<i32>,
 }
 
@@ -311,24 +299,22 @@ pub struct SelectChoice {
     pub sort_order: i32,
 }
 
-/// UI rendering hints
+/// UI rendering hints (Legacy - use LayoutConfig instead)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FieldUiHints {
-    /// Width in grid columns (1-12)
     pub width: Option<i32>,
-    /// Custom component to use
     pub component: Option<String>,
-    /// CSS class names
     pub class: Option<String>,
-    /// Hide label in forms
     #[serde(default)]
     pub hide_label: bool,
-    /// Display as read-only chip/badge
     #[serde(default)]
     pub as_badge: bool,
-    /// For lookup fields: target entity type to fetch
     pub lookup_entity: Option<String>,
 }
+
+// ============================================================================
+// IMPLEMENTATION
+// ============================================================================
 
 impl FieldDef {
     pub fn new(
@@ -346,6 +332,30 @@ impl FieldDef {
             name: name.to_string(),
             label: label.to_string(),
             field_type,
+            
+            // Antigravity Diamond Layers
+            layout: LayoutConfig::default(),
+            physics: MergeStrategy::default(),
+            intelligence: AiMetadata::default(),
+            rules: Vec::new(),
+            
+            // System Meta
+            is_system: false,
+            sort_order: 0,
+            created_at: now,
+            updated_at: now,
+            
+            // Legacy Fields (for compatibility)
+            default_value: None,
+            placeholder: None,
+            help_text: None,
+            validation: None,
+            ui_hints: None,
+            group: None,
+            options: None,
+            context_hints: None,
+            
+            // Legacy boolean flags
             is_required: false,
             is_unique: false,
             show_in_list: false,
@@ -354,65 +364,54 @@ impl FieldDef {
             is_filterable: false,
             is_sortable: false,
             is_readonly: false,
-            default_value: None,
-            placeholder: None,
-            help_text: None,
-            validation: None,
-            options: None,
-            ui_hints: None,
-            sort_order: 0,
-            group: None,
-            context_hints: None,
-            // Antigravity Diamond Layers
-            layout: LayoutConfig::default(),
-            physics: MergeStrategy::default(),
-            intelligence: AiMetadata::default(),
-            rules: Vec::new(),
-            is_system: false,
-            created_at: now,
-            updated_at: now,
         }
     }
-
+    
     /// Builder: make field required
     pub fn required(mut self) -> Self {
         self.is_required = true;
         self
     }
-
+    
     /// Builder: show in list view
     pub fn in_list(mut self) -> Self {
         self.show_in_list = true;
         self
     }
-
+    
     /// Builder: make searchable
     pub fn searchable(mut self) -> Self {
         self.is_searchable = true;
         self
     }
-
+    
     /// Builder: make filterable
     pub fn filterable(mut self) -> Self {
         self.is_filterable = true;
         self
     }
-
+    
     /// Builder: make sortable
     pub fn sortable(mut self) -> Self {
         self.is_sortable = true;
         self
     }
-
+    
     /// Builder: set sort order
     pub fn order(mut self, order: i32) -> Self {
         self.sort_order = order;
         self
     }
-
+    
     /// Builder: set group/section
-    pub fn group(mut self, group: &str) -> Self {
-        self.group = Some(group.to_string());
+    pub fn section(mut self, section: &str) -> Self {
+        self.layout.section = Some(section.to_string());
+        self
+    }
+    
+    /// Builder: mark as system field
+    pub fn system(mut self) -> Self {
+        self.is_system = true;
         self
     }
 }

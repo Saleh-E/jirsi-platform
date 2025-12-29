@@ -1,4 +1,4 @@
-//! Core Models - Shared domain types for the SaaS platform
+//! Core Models - System DNA for the Jirsi Platform
 //! 
 //! This crate contains all shared structs, enums, and types used across
 //! both frontend and backend. It serves as the single source of truth
@@ -6,7 +6,7 @@
 //!
 //! ## Antigravity Diamond Protocol
 //! 
-//! The core-models crate now implements the Diamond Protocol, where each
+//! The core-models crate implements the Diamond Protocol, where each
 //! field definition has four dimensions:
 //! - **Data**: Field types (Text, Number, Money, etc.)
 //! - **Logic**: Conditional visibility and editability rules
@@ -59,4 +59,3 @@ pub use association::*;
 pub use view::*;
 pub use event::*;
 pub use node::*;
-

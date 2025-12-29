@@ -1,36 +1,28 @@
 [package]
 name = "core-models"
-description = "Shared domain types and models for the SaaS platform"
+description = "System DNA: Shared domain models, logic engine, and physics"
 version.workspace = true
 edition.workspace = true
 
 [features]
 default = []
-backend = ["dep:sqlx"] # Enable async traits for server-side DB validation
+# Enable async database traits only when compiling for the server
+backend = ["dep:sqlx"]
 
 [dependencies]
-# Core serialization
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
-
-# Identity & Time
 uuid = { workspace = true, features = ["serde", "v4", "js"] }
 chrono = { workspace = true, features = ["serde"] }
-
-# Error handling
 thiserror = { workspace = true }
-
-# Numeric precision
 rust_decimal = "1.35"
-
-# Physics Engine (CRDT) - uses workspace version 0.18
+# Physics Engine (CRDT)
 yrs = { workspace = true }
 
-# Optional: Database (backend-only)
 [dependencies.sqlx]
 workspace = true
 optional = true
+features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono", "json"]
 
 [dev-dependencies]
 tokio = { workspace = true }
-
