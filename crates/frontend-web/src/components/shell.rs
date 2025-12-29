@@ -2,11 +2,15 @@
 //!
 //! A premium app shell with collapsible nav sections, keyboard shortcuts (Cmd+K),
 //! quick actions, and WebSocket-connected notifications.
+//!
+//! ## Antigravity Integration
+//! Uses PermissionContext for role-based sidebar visibility.
 
 use leptos::*;
 use leptos_router::*;
 use crate::context::theme::ThemeToggle;
 use crate::context::mobile::use_mobile;
+use crate::context::permission::use_permissions;
 use crate::components::bottom_nav::BottomNav;
 
 /// Sidebar nav section with collapsible state
@@ -190,6 +194,15 @@ pub fn Shell() -> impl IntoView {
     let (sidebar_collapsed, set_sidebar_collapsed) = create_signal(false);
     let navigate = use_navigate();
     
+    // Permission context for nav visibility
+    let perms = use_permissions();
+    
+    // Derived signals for permission-based visibility (avoid closure capture issues)
+    let perms_for_config = perms.clone();
+    let perms_for_users = perms.clone();
+    let show_config = Signal::derive(move || perms_for_config.is_admin_or_manager());
+    let show_users = Signal::derive(move || perms_for_users.is_admin());
+    
     // Mobile context
     let mobile_ctx = use_mobile();
     let is_mobile = move || mobile_ctx.is_mobile.get();
@@ -296,12 +309,16 @@ pub fn Shell() -> impl IntoView {
                         <NavItem href="/app/analytics" icon="📉" label="Analytics" />
                     </NavSection>
                     
-                    // Configuration Section
-                    <NavSection title="Configuration" icon="⚙️" expanded=false>
-                        <NavItem href="/app/settings" icon="🔧" label="Settings" />
-                        <NavItem href="/app/settings/workflows" icon="🔄" label="Workflows" />
-                        <NavItem href="/app/users" icon="👥" label="Users" />
-                    </NavSection>
+                    // Configuration Section (Admin/Manager only)
+                    <Show when=move || show_config.get()>
+                        <NavSection title="Configuration" icon="⚙️" expanded=false>
+                            <NavItem href="/app/settings" icon="🔧" label="Settings" />
+                            <NavItem href="/app/settings/workflows" icon="🔄" label="Workflows" />
+                            <Show when=move || show_users.get()>
+                                <NavItem href="/app/users" icon="👥" label="Users" />
+                            </Show>
+                        </NavSection>
+                    </Show>
                 </nav>
             </aside>
             
