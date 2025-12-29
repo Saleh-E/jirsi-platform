@@ -109,155 +109,318 @@ pub fn NodeInspector(
 }
 
 /// Render the Logic Tab for Antigravity Logic Engine configuration
+/// Now uses LogicBuilder for visual editing with JSON fallback
 fn render_logic_tab(node: NodeUI, on_update: Callback<(Uuid, Value)>) -> impl IntoView {
     let node_id = node.id;
     let config = node.config.clone();
     
     // Extract logic rules from config (or use defaults)
-    let visible_if_json = config.get("visible_if")
-        .map(|v| serde_json::to_string_pretty(v).unwrap_or_default())
-        .unwrap_or_else(|| r#"{"op": "always"}"#.to_string());
+    let visible_if_value = config.get("visible_if")
+        .cloned()
+        .unwrap_or_else(|| json!("Always"));
     
-    let enabled_if_json = config.get("enabled_if")
-        .map(|v| serde_json::to_string_pretty(v).unwrap_or_default())
-        .unwrap_or_else(|| r#"{"op": "always"}"#.to_string());
+    let enabled_if_value = config.get("enabled_if")
+        .cloned()
+        .unwrap_or_else(|| json!("Always"));
     
-    let (visible_if, set_visible_if) = create_signal(visible_if_json);
-    let (enabled_if, set_enabled_if) = create_signal(enabled_if_json);
-    let (validation_error, set_validation_error) = create_signal(Option::<String>::None);
+    let (visible_if, set_visible_if) = create_signal(visible_if_value);
+    let (enabled_if, set_enabled_if) = create_signal(enabled_if_value);
+    let (show_json_mode, set_show_json_mode) = create_signal(false);
+    let (json_error, set_json_error) = create_signal(Option::<String>::None);
     
-    let on_update_clone = on_update.clone();
-    let config_clone = config.clone();
+    // JSON editing signals (for advanced mode)
+    let visible_json_str = create_memo(move |_| {
+        serde_json::to_string_pretty(&visible_if.get()).unwrap_or_default()
+    });
+    let enabled_json_str = create_memo(move |_| {
+        serde_json::to_string_pretty(&enabled_if.get()).unwrap_or_default()
+    });
+    
+    let (visible_json_edit, set_visible_json_edit) = create_signal(String::new());
+    let (enabled_json_edit, set_enabled_json_edit) = create_signal(String::new());
+    
+    // Sync JSON edit fields when switching to JSON mode
+    create_effect(move |_| {
+        if show_json_mode.get() {
+            set_visible_json_edit.set(visible_json_str.get());
+            set_enabled_json_edit.set(enabled_json_str.get());
+        }
+    });
+    
+    // Use store_value for config to avoid closure capture issues
+    let config_stored = store_value(config.clone());
+    let on_update_stored = store_value(on_update.clone());
     
     view! {
         <div class="logic-tab">
+            // Header
             <div class="inspector-section">
                 <div class="logic-header">
                     <span class="logic-icon">"🔮"</span>
                     <h4>"Antigravity Logic Engine"</h4>
                 </div>
                 <p class="inspector-help">
-                    "Define conditions for when this node should be visible or enabled. "
-                    "Uses the same LogicOp format as field definitions."
+                    "Define conditions for when this node should be visible or enabled."
                 </p>
+                
+                // Mode toggle
+                <button 
+                    class="btn btn-sm btn-outline mode-toggle"
+                    on:click=move |_| set_show_json_mode.set(!show_json_mode.get())
+                >
+                    {move || if show_json_mode.get() { "🎨 Visual Mode" } else { "📝 JSON Mode" }}
+                </button>
             </div>
             
-            // Show validation error if any
-            {move || validation_error.get().map(|err| view! {
+            // Show error if any
+            {move || json_error.get().map(|err| view! {
                 <div class="logic-error">
                     <span class="error-icon">"⚠️"</span>
                     <span>{err}</span>
                 </div>
             })}
             
-            <div class="inspector-section">
-                <label class="inspector-label">"Visible If (JSON)"</label>
-                <p class="inspector-help">
-                    "When should this node be visible? Default: always"
-                </p>
-                <textarea 
-                    class="inspector-textarea code logic-json"
-                    placeholder=r#"{"op": "always"}"#
-                    prop:value=visible_if
-                    on:input=move |ev| {
-                        let val = event_target_value(&ev);
-                        set_visible_if.set(val.clone());
-                        // Validate JSON
-                        if let Err(e) = serde_json::from_str::<Value>(&val) {
-                            set_validation_error.set(Some(format!("Invalid JSON: {}", e)));
-                        } else {
-                            set_validation_error.set(None);
-                        }
-                    }
-                    on:blur=move |_| {
-                        let v_if = visible_if.get();
-                        let e_if = enabled_if.get();
-                        
-                        // Parse and merge with existing config
-                        if let (Ok(visible), Ok(enabled)) = (
-                            serde_json::from_str::<Value>(&v_if),
-                            serde_json::from_str::<Value>(&e_if)
-                        ) {
-                            let mut new_config = config_clone.clone();
-                            if let Some(obj) = new_config.as_object_mut() {
-                                obj.insert("visible_if".to_string(), visible);
-                                obj.insert("enabled_if".to_string(), enabled);
-                            }
-                            on_update.call((node_id, new_config));
-                        }
-                    }
-                ></textarea>
-            </div>
-            
-            <div class="inspector-section">
-                <label class="inspector-label">"Enabled If (JSON)"</label>
-                <p class="inspector-help">
-                    "When should this node be enabled (vs disabled/skipped)? Default: always"
-                </p>
-                <textarea 
-                    class="inspector-textarea code logic-json"
-                    placeholder=r#"{"op": "always"}"#
-                    prop:value=enabled_if
-                    on:input=move |ev| {
-                        let val = event_target_value(&ev);
-                        set_enabled_if.set(val.clone());
-                        // Validate JSON
-                        if let Err(e) = serde_json::from_str::<Value>(&val) {
-                            set_validation_error.set(Some(format!("Invalid JSON: {}", e)));
-                        } else {
-                            set_validation_error.set(None);
-                        }
-                    }
-                    on:blur=move |_| {
-                        let v_if = visible_if.get();
-                        let e_if = enabled_if.get();
-                        
-                        // Parse and merge with existing config
-                        if let (Ok(visible), Ok(enabled)) = (
-                            serde_json::from_str::<Value>(&v_if),
-                            serde_json::from_str::<Value>(&e_if)
-                        ) {
-                            let mut new_config = config.clone();
-                            if let Some(obj) = new_config.as_object_mut() {
-                                obj.insert("visible_if".to_string(), visible);
-                                obj.insert("enabled_if".to_string(), enabled);
-                            }
-                            on_update_clone.call((node_id, new_config));
-                        }
-                    }
-                ></textarea>
-            </div>
-            
-            // Quick reference for LogicOp
-            <div class="inspector-section logic-reference">
-                <label class="inspector-label">"LogicOp Quick Reference"</label>
-                <div class="logic-examples">
-                    <div class="logic-example">
-                        <code>r#"{"op": "always"}"#</code>
-                        <span>" - Always true (default)"</span>
+            // Visual Mode
+            <Show when=move || !show_json_mode.get()>
+                <div class="logic-visual-mode">
+                    // Visible If Builder
+                    <div class="inspector-section">
+                        <label class="inspector-label">"When is this node VISIBLE?"</label>
+                        <div class="logic-builder-wrapper">
+                            {render_visual_builder(
+                                visible_if,
+                                "visible".to_string(),
+                                move |new_value| {
+                                    set_visible_if.set(new_value.clone());
+                                    // Update config using stored values
+                                    let mut new_config = config_stored.get_value();
+                                    if let Some(obj) = new_config.as_object_mut() {
+                                        obj.insert("visible_if".to_string(), new_value);
+                                        obj.insert("enabled_if".to_string(), enabled_if.get_untracked());
+                                    }
+                                    on_update_stored.get_value().call((node_id, new_config));
+                                }
+                            )}
+                        </div>
                     </div>
-                    <div class="logic-example">
-                        <code>r#"{"op": "never"}"#</code>
-                        <span>" - Always false"</span>
-                    </div>
-                    <div class="logic-example">
-                        <code>r#"{"op": "hasRole", "args": {"role": "admin"}}"#</code>
-                        <span>" - User has role"</span>
-                    </div>
-                    <div class="logic-example">
-                        <code>r#"{"op": "equals", "args": {"field": "status", "value": "active"}}"#</code>
-                        <span>" - Field equals value"</span>
-                    </div>
-                    <div class="logic-example">
-                        <code>r#"{"op": "and", "args": [...]}"#</code>
-                        <span>" - All conditions"</span>
-                    </div>
-                    <div class="logic-example">
-                        <code>r#"{"op": "or", "args": [...]}"#</code>
-                        <span>" - Any condition"</span>
+                    
+                    // Enabled If Builder
+                    <div class="inspector-section">
+                        <label class="inspector-label">"When is this node ENABLED?"</label>
+                        <div class="logic-builder-wrapper">
+                            {render_visual_builder(
+                                enabled_if,
+                                "enabled".to_string(),
+                                move |new_value| {
+                                    set_enabled_if.set(new_value.clone());
+                                    // Update config using stored values
+                                    let mut new_config = config_stored.get_value();
+                                    if let Some(obj) = new_config.as_object_mut() {
+                                        obj.insert("visible_if".to_string(), visible_if.get_untracked());
+                                        obj.insert("enabled_if".to_string(), new_value);
+                                    }
+                                    on_update_stored.get_value().call((node_id, new_config));
+                                }
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
+            </Show>
+            
+            // JSON Mode
+            <Show when=move || show_json_mode.get()>
+                <div class="logic-json-mode">
+                    <div class="inspector-section">
+                        <label class="inspector-label">"Visible If (JSON)"</label>
+                        <textarea 
+                            class="inspector-textarea code logic-json"
+                            prop:value=visible_json_edit
+                            on:input=move |ev| set_visible_json_edit.set(event_target_value(&ev))
+                            on:blur=move |_| {
+                                match serde_json::from_str::<Value>(&visible_json_edit.get()) {
+                                    Ok(parsed) => {
+                                        set_json_error.set(None);
+                                        set_visible_if.set(parsed.clone());
+                                        // Update config using stored values
+                                        let mut new_config = config_stored.get_value();
+                                        if let Some(obj) = new_config.as_object_mut() {
+                                            obj.insert("visible_if".to_string(), parsed);
+                                            obj.insert("enabled_if".to_string(), enabled_if.get_untracked());
+                                        }
+                                        on_update_stored.get_value().call((node_id, new_config));
+                                    }
+                                    Err(e) => set_json_error.set(Some(format!("Invalid JSON: {}", e))),
+                                }
+                            }
+                        ></textarea>
+                    </div>
+                    
+                    <div class="inspector-section">
+                        <label class="inspector-label">"Enabled If (JSON)"</label>
+                        <textarea 
+                            class="inspector-textarea code logic-json"
+                            prop:value=enabled_json_edit
+                            on:input=move |ev| set_enabled_json_edit.set(event_target_value(&ev))
+                            on:blur=move |_| {
+                                match serde_json::from_str::<Value>(&enabled_json_edit.get()) {
+                                    Ok(parsed) => {
+                                        set_json_error.set(None);
+                                        set_enabled_if.set(parsed.clone());
+                                        // Update config
+                                        let mut new_config = config_stored.get_value();
+                                        if let Some(obj) = new_config.as_object_mut() {
+                                            obj.insert("visible_if".to_string(), visible_if.get_untracked());
+                                            obj.insert("enabled_if".to_string(), parsed);
+                                        }
+                                        on_update_stored.get_value().call((node_id, new_config));
+                                    }
+                                    Err(e) => set_json_error.set(Some(format!("Invalid JSON: {}", e))),
+                                }
+                            }
+                        ></textarea>
+                    </div>
+                </div>
+            </Show>
+        </div>
+    }
+}
+
+/// Render a visual builder for a single LogicOp
+fn render_visual_builder<F>(
+    value: ReadSignal<Value>,
+    id_prefix: String,
+    on_change: F,
+) -> impl IntoView 
+where 
+    F: Fn(Value) + Clone + 'static 
+{
+    let (selected_op, set_selected_op) = create_signal("always".to_string());
+    let (role_value, set_role_value) = create_signal(String::new());
+    let (field_name, set_field_name) = create_signal(String::new());
+    let (field_value, set_field_value) = create_signal(String::new());
+    
+    // Parse initial value
+    create_effect({
+        let set_selected_op = set_selected_op.clone();
+        let set_role_value = set_role_value.clone();
+        let set_field_name = set_field_name.clone();
+        let set_field_value = set_field_value.clone();
+        move |_| {
+            let val = value.get();
+            if val.as_str() == Some("Always") || val == json!({"op": "always"}) {
+                set_selected_op.set("always".to_string());
+            } else if val.as_str() == Some("Never") || val == json!({"op": "never"}) {
+                set_selected_op.set("never".to_string());
+            } else if let Some(obj) = val.as_object() {
+                if let Some(role_obj) = obj.get("HasRole") {
+                    set_selected_op.set("hasRole".to_string());
+                    if let Some(role) = role_obj.get("role").and_then(|r| r.as_str()) {
+                        set_role_value.set(role.to_string());
+                    }
+                } else if let Some(eq_obj) = obj.get("Equals") {
+                    set_selected_op.set("equals".to_string());
+                    if let Some(f) = eq_obj.get("field").and_then(|f| f.as_str()) {
+                        set_field_name.set(f.to_string());
+                    }
+                    if let Some(v) = eq_obj.get("value") {
+                        set_field_value.set(v.to_string());
+                    }
+                }
+            }
+        }
+    });
+    
+    let on_change_op = on_change.clone();
+    let on_change_role = on_change.clone();
+    let on_change_field = on_change.clone();
+    
+    let build_value = move || -> Value {
+        match selected_op.get().as_str() {
+            "never" => json!("Never"),
+            "hasRole" => json!({"HasRole": {"role": role_value.get()}}),
+            "equals" => {
+                let val_str = field_value.get();
+                let parsed = serde_json::from_str::<Value>(&val_str)
+                    .unwrap_or_else(|_| json!(val_str));
+                json!({"Equals": {"field": field_name.get(), "value": parsed}})
+            }
+            _ => json!("Always"),
+        }
+    };
+    
+    view! {
+        <div class="visual-logic-builder">
+            <select 
+                class="inspector-select logic-op-dropdown"
+                on:change={
+                    let on_change_op = on_change_op.clone();
+                    move |ev| {
+                        let val = event_target_value(&ev);
+                        set_selected_op.set(val);
+                        on_change_op(build_value());
+                    }
+                }
+            >
+                <option value="always" selected=move || selected_op.get() == "always">"✅ Always"</option>
+                <option value="never" selected=move || selected_op.get() == "never">"🚫 Never"</option>
+                <option value="hasRole" selected=move || selected_op.get() == "hasRole">"👤 Has Role"</option>
+                <option value="equals" selected=move || selected_op.get() == "equals">"🔍 Field Equals"</option>
+            </select>
+            
+            // Role selector (when hasRole is selected)
+            <Show when=move || selected_op.get() == "hasRole">
+                <div class="logic-param-row">
+                    <span class="param-label">"Role:"</span>
+                    <select 
+                        class="inspector-select param-select"
+                        on:change={
+                            let on_change_role = on_change_role.clone();
+                            move |ev| {
+                                set_role_value.set(event_target_value(&ev));
+                                on_change_role(build_value());
+                            }
+                        }
+                    >
+                        <option value="" selected=move || role_value.get().is_empty()>"Select..."</option>
+                        <option value="admin" selected=move || role_value.get() == "admin">"Admin"</option>
+                        <option value="manager" selected=move || role_value.get() == "manager">"Manager"</option>
+                        <option value="agent" selected=move || role_value.get() == "agent">"Agent"</option>
+                        <option value="viewer" selected=move || role_value.get() == "viewer">"Viewer"</option>
+                    </select>
+                </div>
+            </Show>
+            
+            // Field equals (when equals is selected)
+            <Show when=move || selected_op.get() == "equals">
+                <div class="logic-param-row">
+                    <span class="param-label">"Field:"</span>
+                    <input 
+                        type="text"
+                        class="inspector-input param-input"
+                        placeholder="status"
+                        prop:value=field_name
+                        on:input=move |ev| set_field_name.set(event_target_value(&ev))
+                        on:blur={
+                            let on_change_field = on_change_field.clone();
+                            move |_| on_change_field(build_value())
+                        }
+                    />
+                </div>
+                <div class="logic-param-row">
+                    <span class="param-label">"Value:"</span>
+                    <input 
+                        type="text"
+                        class="inspector-input param-input"
+                        placeholder="active"
+                        prop:value=field_value
+                        on:input=move |ev| set_field_value.set(event_target_value(&ev))
+                        on:blur={
+                            let on_change_field = on_change_field.clone();
+                            move |_| on_change_field(build_value())
+                        }
+                    />
+                </div>
+            </Show>
         </div>
     }
 }
