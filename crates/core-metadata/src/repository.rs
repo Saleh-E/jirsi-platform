@@ -128,6 +128,12 @@ impl MetadataRepository {
                 default_value, placeholder, help_text,
                 validation, options, ui_hints,
                 sort_order, "group",
+                -- Antigravity Diamond Layers
+                COALESCE(layout, '{}'::jsonb) as layout,
+                COALESCE(physics, '"lastWriteWins"'::jsonb) as physics,
+                COALESCE(intelligence, '{}'::jsonb) as intelligence,
+                COALESCE(rules, '[]'::jsonb) as rules,
+                COALESCE(is_system, false) as is_system,
                 created_at, updated_at
             FROM field_defs
             WHERE tenant_id = $1 AND entity_type_id = $2
@@ -310,12 +316,24 @@ fn field_def_from_row(row: &sqlx::postgres::PgRow) -> Result<FieldDef, MetadataE
         context_hints: None, // TODO: Load from DB when schema is updated
         sort_order: row.try_get("sort_order")?,
         group: row.try_get("group")?,
-        // Antigravity Diamond layers - use defaults until DB schema is updated
-        layout: Default::default(),
-        physics: Default::default(),
-        intelligence: Default::default(),
-        rules: Vec::new(),
-        is_system: false,
+        // Antigravity Diamond layers - parse from DB or use defaults
+        layout: row.try_get::<serde_json::Value, _>("layout")
+            .ok()
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default(),
+        physics: row.try_get::<serde_json::Value, _>("physics")
+            .ok()
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default(),
+        intelligence: row.try_get::<serde_json::Value, _>("intelligence")
+            .ok()
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default(),
+        rules: row.try_get::<serde_json::Value, _>("rules")
+            .ok()
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default(),
+        is_system: row.try_get("is_system").unwrap_or(false),
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
     })
