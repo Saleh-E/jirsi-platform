@@ -133,6 +133,12 @@ pub struct CreateFieldRequest {
     pub validation: Option<serde_json::Value>,
     pub ui_hints: Option<serde_json::Value>,
     pub sort_order: Option<i32>,
+    // Antigravity Diamond Layers
+    pub layout: Option<serde_json::Value>,
+    pub physics: Option<serde_json::Value>,
+    pub intelligence: Option<serde_json::Value>,
+    pub rules: Option<serde_json::Value>,
+    pub is_system: Option<bool>,
 }
 
 async fn create_field(
@@ -168,8 +174,13 @@ async fn create_field(
     sqlx::query(
         r#"INSERT INTO field_defs 
            (id, tenant_id, entity_type_id, name, label, field_type, is_required, is_unique, 
-            show_in_list, show_in_card, validation, ui_hints, options, sort_order, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)"#
+            show_in_list, show_in_card, validation, ui_hints, options, sort_order,
+            layout, physics, intelligence, rules, is_system,
+            created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 
+                   COALESCE($15, '{}'::jsonb), COALESCE($16, '"lastWriteWins"'::jsonb), 
+                   COALESCE($17, '{}'::jsonb), COALESCE($18, '[]'::jsonb), COALESCE($19, false),
+                   $20, $21)"#
     )
     .bind(id)
     .bind(tenant.id)
@@ -185,6 +196,12 @@ async fn create_field(
     .bind(payload.ui_hints)
     .bind(options_val)
     .bind(payload.sort_order.unwrap_or(0))
+    // Antigravity Diamond Layers
+    .bind(payload.layout)
+    .bind(payload.physics)
+    .bind(payload.intelligence)
+    .bind(payload.rules)
+    .bind(payload.is_system)
     .bind(now)
     .bind(now)
     .execute(&state.pool)
@@ -208,6 +225,12 @@ pub struct UpdateFieldRequest {
     pub ui_hints: Option<serde_json::Value>,
     pub options: Option<serde_json::Value>,
     pub sort_order: Option<i32>,
+    // Antigravity Diamond Layers
+    pub layout: Option<serde_json::Value>,
+    pub physics: Option<serde_json::Value>,
+    pub intelligence: Option<serde_json::Value>,
+    pub rules: Option<serde_json::Value>,
+    pub is_system: Option<bool>,
 }
 
 async fn update_field(
@@ -233,8 +256,13 @@ async fn update_field(
            ui_hints = COALESCE($7, ui_hints),
            options = COALESCE($8, options),
            sort_order = COALESCE($9, sort_order),
-           updated_at = $10
-           WHERE id = $11 AND tenant_id = $12"#
+           layout = COALESCE($10, layout),
+           physics = COALESCE($11, physics),
+           intelligence = COALESCE($12, intelligence),
+           rules = COALESCE($13, rules),
+           is_system = COALESCE($14, is_system),
+           updated_at = $15
+           WHERE id = $16 AND tenant_id = $17"#
     )
     .bind(payload.label)
     .bind(payload.is_required)
@@ -243,8 +271,14 @@ async fn update_field(
     .bind(payload.show_in_card)
     .bind(payload.validation)
     .bind(payload.ui_hints)
-    .bind(payload.options) // Explicit options update
+    .bind(payload.options)
     .bind(payload.sort_order)
+    // Antigravity Diamond Layers
+    .bind(payload.layout)
+    .bind(payload.physics)
+    .bind(payload.intelligence)
+    .bind(payload.rules)
+    .bind(payload.is_system)
     .bind(now)
     .bind(field_id)
     .bind(tenant.id)

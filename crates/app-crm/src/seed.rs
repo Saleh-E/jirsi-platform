@@ -100,11 +100,11 @@ pub fn seed_crm_metadata(tenant_id: Uuid) -> CrmMetadata {
         FieldDef::new(tenant_id, company_entity_id, "website", "Website", FieldType::Url)
             .order(6),
         FieldDef::new(tenant_id, company_entity_id, "address", "Address", FieldType::TextArea)
-            .group("location").order(7),
+            .section("location").order(7),
         FieldDef::new(tenant_id, company_entity_id, "city", "City", FieldType::Text)
-            .group("location").order(8),
+            .section("location").order(8),
         FieldDef::new(tenant_id, company_entity_id, "country", "Country", FieldType::Text)
-            .group("location").order(9),
+            .section("location").order(9),
         FieldDef::new(tenant_id, company_entity_id, "owner_id", "Owner", 
             FieldType::Link { target_entity: "user".to_string() })
             .filterable().order(10),

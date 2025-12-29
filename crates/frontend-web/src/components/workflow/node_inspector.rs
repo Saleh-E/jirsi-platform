@@ -1,4 +1,8 @@
 //! Node Inspector - Property editor sidebar for selected nodes
+//!
+//! ## Antigravity Integration
+//! Now includes a "Logic" tab for editing visibility and readonly conditions
+//! using the Logic Engine (LogicOp).
 
 use leptos::*;
 use serde_json::{json, Value};
@@ -6,17 +10,31 @@ use uuid::Uuid;
 
 use super::workflow_canvas::NodeUI;
 
+/// Tab selection for the inspector
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InspectorTab {
+    Properties,
+    Logic,
+}
+
 /// NodeInspector component - shows properties for selected node
+/// Now includes a Logic tab for Antigravity Logic Engine rules
 #[component]
 pub fn NodeInspector(
     #[prop(into)] selected_node: Signal<Option<NodeUI>>,
     #[prop(into)] on_update: Callback<(Uuid, Value)>,
     #[prop(into)] on_delete: Callback<Uuid>,
 ) -> impl IntoView {
+    let (active_tab, set_active_tab) = create_signal(InspectorTab::Properties);
+    
     view! {
         <div class="node-inspector">
             {move || {
                 if let Some(node) = selected_node.get() {
+                    let node_for_tabs = node.clone();
+                    let node_for_form = node.clone();
+                    let node_for_logic = node.clone();
+                    
                     view! {
                         <div class="inspector-content">
                             <div class="inspector-header">
@@ -33,18 +51,48 @@ pub fn NodeInspector(
                                 </button>
                             </div>
                             
-                            <div class="inspector-section">
-                                <label class="inspector-label">"Node Type"</label>
-                                <div class="inspector-value">{format_node_type(&node.node_type)}</div>
+                            // Tab navigation
+                            <div class="inspector-tabs">
+                                <button
+                                    class="inspector-tab"
+                                    class:active=move || active_tab.get() == InspectorTab::Properties
+                                    on:click=move |_| set_active_tab.set(InspectorTab::Properties)
+                                >
+                                    "⚙️ Properties"
+                                </button>
+                                <button
+                                    class="inspector-tab"
+                                    class:active=move || active_tab.get() == InspectorTab::Logic
+                                    on:click=move |_| set_active_tab.set(InspectorTab::Logic)
+                                >
+                                    "🔮 Logic"
+                                </button>
                             </div>
                             
-                            <div class="inspector-section">
-                                <label class="inspector-label">"Node ID"</label>
-                                <div class="inspector-value node-id">{node.id.to_string()}</div>
+                            // Tab content
+                            <div class="inspector-tab-content">
+                                {move || match active_tab.get() {
+                                    InspectorTab::Properties => {
+                                        view! {
+                                            <div class="inspector-section">
+                                                <label class="inspector-label">"Node Type"</label>
+                                                <div class="inspector-value">{format_node_type(&node_for_tabs.node_type)}</div>
+                                            </div>
+                                            
+                                            <div class="inspector-section">
+                                                <label class="inspector-label">"Node ID"</label>
+                                                <div class="inspector-value node-id">{node_for_tabs.id.to_string()}</div>
+                                            </div>
+                                            
+                                            // Render dynamic form based on node type
+                                            {render_node_form(node_for_form.clone(), on_update.clone())}
+                                        }.into_view()
+                                    }
+                                    InspectorTab::Logic => {
+                                        render_logic_tab(node_for_logic.clone(), on_update.clone()).into_view()
+                                    }
+                                }}
                             </div>
-                            
-                            // Render dynamic form based on node type
-                            {render_node_form(node.clone(), on_update.clone())}
                         </div>
                     }.into_view()
                 } else {
@@ -56,6 +104,160 @@ pub fn NodeInspector(
                     }.into_view()
                 }
             }}
+        </div>
+    }
+}
+
+/// Render the Logic Tab for Antigravity Logic Engine configuration
+fn render_logic_tab(node: NodeUI, on_update: Callback<(Uuid, Value)>) -> impl IntoView {
+    let node_id = node.id;
+    let config = node.config.clone();
+    
+    // Extract logic rules from config (or use defaults)
+    let visible_if_json = config.get("visible_if")
+        .map(|v| serde_json::to_string_pretty(v).unwrap_or_default())
+        .unwrap_or_else(|| r#"{"op": "always"}"#.to_string());
+    
+    let enabled_if_json = config.get("enabled_if")
+        .map(|v| serde_json::to_string_pretty(v).unwrap_or_default())
+        .unwrap_or_else(|| r#"{"op": "always"}"#.to_string());
+    
+    let (visible_if, set_visible_if) = create_signal(visible_if_json);
+    let (enabled_if, set_enabled_if) = create_signal(enabled_if_json);
+    let (validation_error, set_validation_error) = create_signal(Option::<String>::None);
+    
+    let on_update_clone = on_update.clone();
+    let config_clone = config.clone();
+    
+    view! {
+        <div class="logic-tab">
+            <div class="inspector-section">
+                <div class="logic-header">
+                    <span class="logic-icon">"🔮"</span>
+                    <h4>"Antigravity Logic Engine"</h4>
+                </div>
+                <p class="inspector-help">
+                    "Define conditions for when this node should be visible or enabled. "
+                    "Uses the same LogicOp format as field definitions."
+                </p>
+            </div>
+            
+            // Show validation error if any
+            {move || validation_error.get().map(|err| view! {
+                <div class="logic-error">
+                    <span class="error-icon">"⚠️"</span>
+                    <span>{err}</span>
+                </div>
+            })}
+            
+            <div class="inspector-section">
+                <label class="inspector-label">"Visible If (JSON)"</label>
+                <p class="inspector-help">
+                    "When should this node be visible? Default: always"
+                </p>
+                <textarea 
+                    class="inspector-textarea code logic-json"
+                    placeholder=r#"{"op": "always"}"#
+                    prop:value=visible_if
+                    on:input=move |ev| {
+                        let val = event_target_value(&ev);
+                        set_visible_if.set(val.clone());
+                        // Validate JSON
+                        if let Err(e) = serde_json::from_str::<Value>(&val) {
+                            set_validation_error.set(Some(format!("Invalid JSON: {}", e)));
+                        } else {
+                            set_validation_error.set(None);
+                        }
+                    }
+                    on:blur=move |_| {
+                        let v_if = visible_if.get();
+                        let e_if = enabled_if.get();
+                        
+                        // Parse and merge with existing config
+                        if let (Ok(visible), Ok(enabled)) = (
+                            serde_json::from_str::<Value>(&v_if),
+                            serde_json::from_str::<Value>(&e_if)
+                        ) {
+                            let mut new_config = config_clone.clone();
+                            if let Some(obj) = new_config.as_object_mut() {
+                                obj.insert("visible_if".to_string(), visible);
+                                obj.insert("enabled_if".to_string(), enabled);
+                            }
+                            on_update.call((node_id, new_config));
+                        }
+                    }
+                ></textarea>
+            </div>
+            
+            <div class="inspector-section">
+                <label class="inspector-label">"Enabled If (JSON)"</label>
+                <p class="inspector-help">
+                    "When should this node be enabled (vs disabled/skipped)? Default: always"
+                </p>
+                <textarea 
+                    class="inspector-textarea code logic-json"
+                    placeholder=r#"{"op": "always"}"#
+                    prop:value=enabled_if
+                    on:input=move |ev| {
+                        let val = event_target_value(&ev);
+                        set_enabled_if.set(val.clone());
+                        // Validate JSON
+                        if let Err(e) = serde_json::from_str::<Value>(&val) {
+                            set_validation_error.set(Some(format!("Invalid JSON: {}", e)));
+                        } else {
+                            set_validation_error.set(None);
+                        }
+                    }
+                    on:blur=move |_| {
+                        let v_if = visible_if.get();
+                        let e_if = enabled_if.get();
+                        
+                        // Parse and merge with existing config
+                        if let (Ok(visible), Ok(enabled)) = (
+                            serde_json::from_str::<Value>(&v_if),
+                            serde_json::from_str::<Value>(&e_if)
+                        ) {
+                            let mut new_config = config.clone();
+                            if let Some(obj) = new_config.as_object_mut() {
+                                obj.insert("visible_if".to_string(), visible);
+                                obj.insert("enabled_if".to_string(), enabled);
+                            }
+                            on_update_clone.call((node_id, new_config));
+                        }
+                    }
+                ></textarea>
+            </div>
+            
+            // Quick reference for LogicOp
+            <div class="inspector-section logic-reference">
+                <label class="inspector-label">"LogicOp Quick Reference"</label>
+                <div class="logic-examples">
+                    <div class="logic-example">
+                        <code>r#"{"op": "always"}"#</code>
+                        <span>" - Always true (default)"</span>
+                    </div>
+                    <div class="logic-example">
+                        <code>r#"{"op": "never"}"#</code>
+                        <span>" - Always false"</span>
+                    </div>
+                    <div class="logic-example">
+                        <code>r#"{"op": "hasRole", "args": {"role": "admin"}}"#</code>
+                        <span>" - User has role"</span>
+                    </div>
+                    <div class="logic-example">
+                        <code>r#"{"op": "equals", "args": {"field": "status", "value": "active"}}"#</code>
+                        <span>" - Field equals value"</span>
+                    </div>
+                    <div class="logic-example">
+                        <code>r#"{"op": "and", "args": [...]}"#</code>
+                        <span>" - All conditions"</span>
+                    </div>
+                    <div class="logic-example">
+                        <code>r#"{"op": "or", "args": [...]}"#</code>
+                        <span>" - Any condition"</span>
+                    </div>
+                </div>
+            </div>
         </div>
     }
 }
