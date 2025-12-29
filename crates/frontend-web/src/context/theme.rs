@@ -21,8 +21,8 @@ impl ThemeContext {
     /// Apply theme to DOM
     fn apply_theme(is_dark: bool) {
         if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-            if let Some(body) = document.body() {
-                let class_list = body.class_list();
+            if let Some(element) = document.document_element() {
+                let class_list = element.class_list();
                 if is_dark {
                     let _ = class_list.add_1("dark");
                     let _ = class_list.remove_1("light");
@@ -40,7 +40,7 @@ impl ThemeContext {
             .and_then(|w| w.local_storage().ok())
             .flatten()
         {
-            let _ = storage.set_item("theme", if is_dark { "dark" } else { "light" });
+            let _ = storage.set_item("jirsi_theme_v1", if is_dark { "dark" } else { "light" });
         }
     }
 
@@ -50,7 +50,7 @@ impl ThemeContext {
             .and_then(|w| w.local_storage().ok())
             .flatten()
         {
-            if let Ok(Some(theme)) = storage.get_item("theme") {
+            if let Ok(Some(theme)) = storage.get_item("jirsi_theme_v1") {
                 return theme == "dark";
             }
         }

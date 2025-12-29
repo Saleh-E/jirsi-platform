@@ -1,7 +1,7 @@
 //! Filter Builder Component
 //! 
 //! Provides a universal filter builder popover for entity list views.
-//! Supports field/operator/value filtering with visual filter chips.
+//! Uses Custom CustomSelect to avoid native white dropdowns.
 
 use leptos::*;
 use crate::api::FieldDef;
@@ -14,6 +14,74 @@ pub struct FilterCondition {
     pub field_label: String,
     pub operator: String,
     pub value: String,
+}
+
+/// Custom Select Component to replace native <select>
+#[component]
+fn CustomSelect(
+    #[prop(into)] value: Signal<String>,
+    #[prop(into)] options: Signal<Vec<(String, String)>>, // (value, label)
+    #[prop(into)] on_change: Callback<String>,
+    #[prop(optional)] placeholder: &'static str
+) -> impl IntoView {
+    let (is_open, set_is_open) = create_signal(false);
+    let placeholder = if placeholder.is_empty() { "Select..." } else { placeholder };
+    
+    // Determine label
+    let label = move || {
+        let val = value.get();
+        if val.is_empty() { return placeholder.to_string(); }
+        options.get().into_iter().find(|(v, _)| *v == val)
+             .map(|(_, l)| l).unwrap_or(val)
+    };
+
+    view! {
+        <div class="custom-select relative w-full">
+            <button
+                class="field-input w-full text-left flex justify-between items-center bg-white/5 border border-white/10 rounded-xl px-4 py-3 hover:bg-white/10 transition-colors"
+                on:click=move |e| {
+                    e.stop_propagation();
+                    set_is_open.update(|v| *v = !*v);
+                }
+            >
+                <span class={move || if value.get().is_empty() { "text-zinc-500" } else { "font-medium" }}>
+                    {label}
+                </span>
+                <i class="fa-solid fa-chevron-down text-zinc-500 text-xs transition-transform duration-300" 
+                   class:rotate-180=is_open></i>
+            </button>
+            
+            <Show when=move || is_open.get()>
+                // Backdrop (click outside)
+                <div class="fixed inset-0 z-40 cursor-default" on:click=move |_| set_is_open.set(false)></div>
+                
+                // Menu
+                <div class="absolute top-full left-0 right-0 mt-2 dropdown-menu border border-white/10 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-50 max-h-60 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-200">
+                     {move || options.get().into_iter().map(|(val, lbl)| {
+                         let val_clone = val.clone();
+                         let is_selected = val == value.get();
+                         view! {
+                             <div 
+                                class=format!("px-4 py-3 cursor-pointer transition-colors text-sm flex items-center justify-between {}", 
+                                    if is_selected { "ui-dropdown-item active" } else { "ui-dropdown-item" }
+                                )
+                                on:click=move |e| {
+                                    e.stop_propagation();
+                                    on_change.call(val_clone.clone());
+                                    set_is_open.set(false);
+                                }
+                             >
+                                 <span>{lbl}</span>
+                                 <Show when=move || is_selected>
+                                    <i class="fa-solid fa-check text-xs"></i>
+                                 </Show>
+                             </div>
+                         }
+                     }).collect_view()}
+                </div>
+            </Show>
+        </div>
+    }
 }
 
 /// Get operators for a field type
@@ -35,12 +103,19 @@ fn get_operators_for_type(field_type: &str) -> Vec<(&'static str, &'static str)>
             ("lt", "less than"),
             ("lte", "less or equal"),
         ],
-        "date" | "datetime" => vec![
-            ("equals", "is"),
+        "date" | "datetime" | "date_time" => vec![
+            ("equals", "is exactly"),
             ("before", "is before"),
             ("after", "is after"),
             ("between", "is between"),
+            ("last_7_days", "last 7 days"),
+            ("last_30_days", "last 30 days"),
+            ("this_week", "this week"),
+            ("this_month", "this month"),
+            ("last_month", "last month"),
+            ("this_year", "this year"),
             ("is_empty", "is empty"),
+            ("is_not_empty", "is set"),
         ],
         "select" | "status" => vec![
             ("equals", "is"),
@@ -66,38 +141,42 @@ fn get_operators_for_type(field_type: &str) -> Vec<(&'static str, &'static str)>
 /// Filter Builder Popover Component
 #[component]
 pub fn FilterBuilder(
-    /// Available fields from metadata
     fields: Signal<Vec<FieldDef>>,
-    /// Callback when filter is added
     on_add_filter: Callback<FilterCondition>,
-    /// Signal to control popover visibility
     show_popover: RwSignal<bool>,
 ) -> impl IntoView {
     let (selected_field, set_selected_field) = create_signal(String::new());
     let (selected_operator, set_selected_operator) = create_signal(String::new());
     let (filter_value, set_filter_value) = create_signal(String::new());
     
-    // Get the currently selected field definition
+    // Derived: Selected Field Def
     let selected_field_def = move || {
         let field_name = selected_field.get();
         fields.get().into_iter().find(|f| f.name == field_name)
     };
     
-    // Get operators for the selected field
-    let available_operators = move || {
+    // Derived: Field Options (for CustomSelect)
+    let field_list_options = move || {
+        fields.get().into_iter().map(|f| (f.name, f.label)).collect::<Vec<_>>()
+    };
+    
+    // Derived: Operator Options
+    let operator_options = move || {
         selected_field_def()
-            .map(|f| get_operators_for_type(&f.get_field_type()))
+            .map(|f| get_operators_for_type(&f.get_field_type())
+                .iter().map(|(v, l)| (v.to_string(), l.to_string())).collect::<Vec<_>>()
+            )
             .unwrap_or_default()
     };
     
-    // Check if value input is needed (some operators like is_empty don't need value)
+    // Derived: Needs Value Input?
     let needs_value_input = move || {
         let op = selected_operator.get();
         !matches!(op.as_str(), "is_empty" | "is_not_empty" | "is_true" | "is_false")
     };
     
-    // Get options if field is a select type
-    let field_options = move || {
+    // Derived: Value Options (if select field)
+    let value_options = move || {
         selected_field_def()
             .map(|f| f.get_options())
             .unwrap_or_default()
@@ -113,7 +192,7 @@ pub fn FilterBuilder(
             .unwrap_or(false)
     };
     
-    // Can apply filter?
+    // Can apply?
     let can_apply = move || {
         let field = selected_field.get();
         let operator = selected_operator.get();
@@ -123,10 +202,8 @@ pub fn FilterBuilder(
         (!needs_value_input() || !value.is_empty())
     };
     
-    // Counter for unique filter IDs
     let filter_counter = store_value(0u32);
     
-    // Apply filter
     let apply_filter = move |_| {
         if !can_apply() { return; }
         
@@ -145,14 +222,13 @@ pub fn FilterBuilder(
         
         on_add_filter.call(condition);
         
-        // Reset form
+        // Reset
         set_selected_field.set(String::new());
         set_selected_operator.set(String::new());
         set_filter_value.set(String::new());
         show_popover.set(false);
     };
     
-    // Cancel
     let cancel = move |_| {
         set_selected_field.set(String::new());
         set_selected_operator.set(String::new());
@@ -162,92 +238,63 @@ pub fn FilterBuilder(
 
     view! {
         <Show when=move || show_popover.get()>
-            <div class="filter-popover-backdrop" on:click=cancel></div>
-            <div class="filter-popover">
+            <div class="filter-popover-backdrop animate-fade-in" on:click=cancel></div>
+            <div class="filter-popover animate-scale-in">
                 <div class="filter-popover-header">
                     <h4>"Add Filter"</h4>
-                    <button class="close-btn" on:click=cancel>"×"</button>
+                    <button class="close-btn hover:text-white transition-colors" on:click=cancel>"×"</button>
                 </div>
                 
-                <div class="filter-popover-body">
-                    // Field selector
+                <div class="filter-popover-body space-y-4">
+                    // Field Selector
                     <div class="filter-field-group">
                         <label>"Field"</label>
-                        <select 
-                            class="filter-select"
-                            on:change=move |ev| {
-                                let value = event_target_value(&ev);
-                                set_selected_field.set(value);
+                        <CustomSelect 
+                            value=selected_field 
+                            options=Signal::derive(field_list_options)
+                            on_change=Callback::new(move |v| {
+                                set_selected_field.set(v);
                                 set_selected_operator.set(String::new());
                                 set_filter_value.set(String::new());
-                            }
-                            prop:value=selected_field
-                        >
-                            <option value="">"Select field..."</option>
-                            {move || fields.get().into_iter().map(|f| {
-                                let name = f.name.clone();
-                                let label = f.label.clone();
-                                view! {
-                                    <option value=name>{label}</option>
-                                }
-                            }).collect_view()}
-                        </select>
+                            })
+                            placeholder="Select field..."
+                        />
                     </div>
                     
-                    // Operator selector (shown after field is selected)
+                    // Operator Selector
                     <Show when=move || !selected_field.get().is_empty()>
-                        <div class="filter-field-group">
+                        <div class="filter-field-group animate-slide-in-up">
                             <label>"Condition"</label>
-                            <select 
-                                class="filter-select"
-                                on:change=move |ev| {
-                                    set_selected_operator.set(event_target_value(&ev));
-                                }
-                                prop:value=selected_operator
-                            >
-                                <option value="">"Select condition..."</option>
-                                {move || available_operators().into_iter().map(|(value, label)| {
-                                    view! {
-                                        <option value=value>{label}</option>
-                                    }
-                                }).collect_view()}
-                            </select>
+                            <CustomSelect 
+                                value=selected_operator 
+                                options=Signal::derive(operator_options)
+                                on_change=Callback::new(move |v| set_selected_operator.set(v))
+                                placeholder="Select condition..."
+                            />
                         </div>
                     </Show>
                     
-                    // Value input (shown after operator is selected, if needed)
+                    // Value Input
                     <Show when=move || !selected_operator.get().is_empty() && needs_value_input()>
-                        <div class="filter-field-group">
+                        <div class="filter-field-group animate-slide-in-up">
                             <label>"Value"</label>
                             {move || {
                                 if is_select_field() {
-                                    // Dropdown for select fields
                                     view! {
-                                        <select 
-                                            class="filter-select"
-                                            on:change=move |ev| {
-                                                set_filter_value.set(event_target_value(&ev));
-                                            }
-                                            prop:value=filter_value
-                                        >
-                                            <option value="">"Select value..."</option>
-                                            {move || field_options().into_iter().map(|(value, label)| {
-                                                view! {
-                                                    <option value=value>{label}</option>
-                                                }
-                                            }).collect_view()}
-                                        </select>
+                                        <CustomSelect 
+                                            value=filter_value 
+                                            options=Signal::derive(value_options)
+                                            on_change=Callback::new(move |v| set_filter_value.set(v))
+                                            placeholder="Select value..."
+                                        />
                                     }.into_view()
                                 } else {
-                                    // Text input for other fields
                                     view! {
                                         <input 
                                             type="text"
-                                            class="filter-input"
+                                            class="field-input w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-violet-500 focus:bg-white/10 transition-all outline-none"
                                             placeholder="Enter value..."
-                                            on:input=move |ev| {
-                                                set_filter_value.set(event_target_value(&ev));
-                                            }
+                                            on:input=move |ev| set_filter_value.set(event_target_value(&ev))
                                             prop:value=filter_value
                                         />
                                     }.into_view()
@@ -258,9 +305,9 @@ pub fn FilterBuilder(
                 </div>
                 
                 <div class="filter-popover-footer">
-                    <button class="btn btn-secondary" on:click=cancel>"Cancel"</button>
+                    <button class="ui-btn ui-btn-ghost" on:click=cancel>"Cancel"</button>
                     <button 
-                        class="btn btn-primary"
+                        class="ui-btn ui-btn-primary"
                         disabled=move || !can_apply()
                         on:click=apply_filter
                     >
@@ -275,14 +322,10 @@ pub fn FilterBuilder(
 /// Single Filter Chip Component
 #[component]
 pub fn FilterChip(
-    /// The filter condition to display
     filter: FilterCondition,
-    /// Callback when chip is removed
     on_remove: Callback<u32>,
 ) -> impl IntoView {
     let filter_id = filter.id;
-    let _display_label = format!("{}: {}", filter.field_label, filter.value);
-    
     let operator_label = match filter.operator.as_str() {
         "contains" => "contains",
         "equals" => "is",
@@ -307,12 +350,11 @@ pub fn FilterChip(
     };
     
     view! {
-        <div class="filter-chip">
-            <span class="chip-text">{display_text}</span>
+        <div class="flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1 text-xs text-violet-300 animate-scale-in">
+            <span>{display_text}</span>
             <button 
-                class="chip-remove"
+                class="hover:text-white transition-colors"
                 on:click=move |_| on_remove.call(filter_id)
-                title="Remove filter"
             >
                 "×"
             </button>
@@ -320,29 +362,25 @@ pub fn FilterChip(
     }
 }
 
-/// Filter Chip Bar - displays all active filters
+/// Filter Chip Bar
 #[component]
 pub fn FilterChipBar(
-    /// Active filters
     filters: Signal<Vec<FilterCondition>>,
-    /// Callback to remove a filter
     on_remove: Callback<u32>,
-    /// Callback to clear all filters
     on_clear_all: Callback<()>,
 ) -> impl IntoView {
     view! {
         <Show when=move || !filters.get().is_empty()>
-            <div class="filter-chip-bar">
-                <div class="filter-chips">
-                    {move || filters.get().into_iter().map(|f| {
-                        let on_remove = on_remove.clone();
-                        view! {
-                            <FilterChip filter=f on_remove=on_remove />
-                        }
-                    }).collect_view()}
-                </div>
+            <div class="flex flex-wrap gap-2 items-center mb-4 animate-fade-in">
+                {move || filters.get().into_iter().map(|f| {
+                    let on_remove = on_remove.clone();
+                    view! {
+                        <FilterChip filter=f on_remove=on_remove />
+                    }
+                }).collect_view()}
+                
                 <button 
-                    class="clear-filters-btn"
+                    class="text-xs text-zinc-500 hover:text-white underline transition-colors ml-2"
                     on:click=move |_| on_clear_all.call(())
                 >
                     "Clear all"

@@ -1,4 +1,4 @@
 [build]
 target = "index.html"
-dist = "dist_clean_8081"
+dist = "dist"
 url_base = "/"

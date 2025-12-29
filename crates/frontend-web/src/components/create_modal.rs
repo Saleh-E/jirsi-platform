@@ -132,14 +132,14 @@ pub fn CreateModal(
     
     view! {
         <div 
-            class="modal-overlay" 
+            class="ui-modal-overlay" 
             style=move || format!("z-index: {}", z_index_stored.get_value())
             on:click=move |_| on_close.call(())
         >
-            <div class="modal-container" on:click=move |ev| ev.stop_propagation()>
-                <div class="modal-header">
-                    <h2 class="modal-title">{format!("Create {}", entity_label_stored.get_value())}</h2>
-                    <button class="modal-close" on:click=move |_| on_close.call(())>"×"</button>
+            <div class="ui-modal" on:click=move |ev| ev.stop_propagation()>
+                <div class="ui-modal-header">
+                    <h2 class="ui-modal-title">{format!("Create {}", entity_label_stored.get_value())}</h2>
+                    <button class="ui-btn ui-btn-ghost" on:click=move |_| on_close.call(())>"×"</button>
                 </div>
                 
                 {move || {
@@ -384,17 +384,17 @@ pub fn CreateModal(
                                     />
                                 </div>
                                 
-                                <div class="modal-footer">
+                                <div class="ui-modal-footer">
                                     <button 
                                         type="button" 
-                                        class="btn btn-secondary"
+                                        class="ui-btn ui-btn-secondary"
                                         on:click=move |_| on_close.call(())
                                     >
                                         "Cancel"
                                     </button>
                                     <button 
                                         type="submit" 
-                                        class="btn btn-primary"
+                                        class="ui-btn ui-btn-primary"
                                         disabled=move || saving.get()
                                     >
                                         {move || if saving.get() { "Saving..." } else { "Create" }}

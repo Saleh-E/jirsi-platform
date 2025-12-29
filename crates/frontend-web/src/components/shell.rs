@@ -8,7 +8,6 @@ use leptos_router::*;
 use crate::context::theme::ThemeToggle;
 use crate::context::mobile::use_mobile;
 use crate::components::bottom_nav::BottomNav;
-use crate::components::conflict_resolver::{ConflictQueue, ConflictData, ResolutionResult};
 
 /// Sidebar nav section with collapsible state
 #[component]
@@ -191,17 +190,6 @@ pub fn Shell() -> impl IntoView {
     let (sidebar_collapsed, set_sidebar_collapsed) = create_signal(false);
     let navigate = use_navigate();
     
-    // Conflict queue for sync conflicts (Phase 2: Conflict Resolution UI)
-    let conflicts = create_rw_signal::<Vec<ConflictData>>(vec![]);
-    
-    let on_conflict_resolved = Callback::new(move |result: ResolutionResult| {
-        // Remove resolved conflict from queue
-        conflicts.update(|c| c.retain(|conflict| conflict.entity_id != result.entity_id));
-        
-        // TODO: Apply resolution to local storage / sync manager
-        leptos::logging::log!("Conflict resolved for entity {}: {:?}", result.entity_id, result.choice);
-    });
-    
     // Mobile context
     let mobile_ctx = use_mobile();
     let is_mobile = move || mobile_ctx.is_mobile.get();
@@ -364,11 +352,6 @@ pub fn Shell() -> impl IntoView {
                 
                 // Page Content
                 <div class="content">
-                    // Conflict Queue Banner (shows when syncing has conflicts)
-                    <ConflictQueue 
-                        conflicts=conflicts
-                        on_resolved=on_conflict_resolved.clone()
-                    />
                     <Outlet/>
                 </div>
             </main>

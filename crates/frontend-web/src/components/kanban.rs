@@ -28,10 +28,19 @@ pub fn KanbanView(
     entity_type: String,
     config: KanbanConfig,
     #[prop(optional)] field_options: Vec<(String, String)>,
+    /// List of fields that can be used for grouping (value, label)
+    #[prop(optional)] groupable_fields: Vec<(String, String)>,
+    /// Callback when user changes the grouping field
+    #[prop(optional, into)] on_group_change: Option<Callback<String>>,
 ) -> impl IntoView {
     let entity_type_stored = store_value(entity_type.clone());
-    let config_stored = store_value(config);
+    let config_stored = store_value(config.clone());
     let options_stored = store_value(field_options);
+    let groupable_stored = store_value(groupable_fields);
+    let on_group_change_stored = store_value(on_group_change);
+    
+    // Current grouping field (reactive to allow changes)
+    let (current_group_field, set_current_group_field) = create_signal(config.group_by_field.clone());
     
     // State for columns and records
     let (columns, set_columns) = create_signal::<Vec<KanbanColumn>>(Vec::new());
@@ -120,7 +129,40 @@ pub fn KanbanView(
                     view! { <div class="kanban-error">{err}</div> }.into_view()
                 } else {
                     let cfg = config_stored.get_value();
+                    let groupable = groupable_stored.get_value();
+                    let show_selector = !groupable.is_empty();
+                    
                     view! {
+                        // Kanban Header with Field Selector
+                        <Show when=move || show_selector>
+                            <div class="kanban-header flex items-center justify-between mb-4 px-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-secondary text-sm">"Group by:"</span>
+                                    <select
+                                        class="ui-input"
+                                        style="width: auto; min-width: 150px;"
+                                        on:change=move |ev| {
+                                            let new_field = event_target_value(&ev);
+                                            set_current_group_field.set(new_field.clone());
+                                            if let Some(cb) = on_group_change_stored.get_value() {
+                                                cb.call(new_field);
+                                            }
+                                        }
+                                    >
+                                        {groupable_stored.get_value().into_iter().map(|(val, label)| {
+                                            let is_selected = val == current_group_field.get();
+                                            view! {
+                                                <option value=val.clone() selected=is_selected>{label}</option>
+                                            }
+                                        }).collect_view()}
+                                    </select>
+                                </div>
+                                <span class="text-muted text-xs">
+                                    {move || format!("{} cards", columns.get().iter().map(|c| c.records.len()).sum::<usize>())}
+                                </span>
+                            </div>
+                        </Show>
+                        
                         <div class="kanban-board flex gap-4 overflow-x-auto pb-4">
                             <For
                                 each=move || columns.get()

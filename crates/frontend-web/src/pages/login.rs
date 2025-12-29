@@ -79,7 +79,7 @@ pub fn LoginPage() -> impl IntoView {
                         />
                     </div>
                     
-                    <button type="submit" class="btn btn-primary" disabled=move || loading.get()>
+                    <button type="submit" class="ui-btn ui-btn-primary w-full" disabled=move || loading.get()>
                         {move || if loading.get() { "Signing in..." } else { "Sign In" }}
                     </button>
                 </form>

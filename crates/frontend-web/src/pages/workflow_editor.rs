@@ -245,17 +245,17 @@ pub fn WorkflowEditorPage() -> impl IntoView {
                     </span>
                 </div>
                 <div class="toolbar-right">
-                    {move || save_message.get().map(|msg| view! { <span class="save-message">{msg}</span> })}
-                    {move || error.get().map(|e| view! { <span class="error-message">{e}</span> })}
+                    {move || save_message.get().map(|msg| view! { <span class="text-status-success text-sm">{msg}</span> })}
+                    {move || error.get().map(|e| view! { <span class="text-status-error text-sm">{e}</span> })}
                     <button 
-                        class="save-btn"
+                        class="ui-btn ui-btn-primary"
                         disabled=saving
                         on:click=save_graph
                     >
                         {move || if saving.get() { "Saving..." } else { "💾 Save" }}
                     </button>
                     <button 
-                        class="test-webhook-btn"
+                        class="ui-btn ui-btn-secondary"
                         on:click=move |_| set_show_test_webhook.set(true)
                     >
                         "🧪 Test Webhook"
@@ -265,21 +265,21 @@ pub fn WorkflowEditorPage() -> impl IntoView {
             
             // Test Webhook Modal
             <Show when=move || show_test_webhook.get()>
-                <div class="modal-overlay" on:click=move |_| set_show_test_webhook.set(false)>
-                    <div class="test-webhook-modal" on:click=|e| e.stop_propagation()>
-                        <div class="modal-header">
+                <div class="ui-modal-overlay" on:click=move |_| set_show_test_webhook.set(false)>
+                    <div class="ui-modal" style="max-width: 600px;" on:click=|e| e.stop_propagation()>
+                        <div class="ui-modal-header">
                             <h3>"🧪 Test Webhook Trigger"</h3>
-                            <button class="close-btn" on:click=move |_| set_show_test_webhook.set(false)>"×"</button>
+                            <button class="ui-btn ui-btn-ghost" on:click=move |_| set_show_test_webhook.set(false)>"×"</button>
                         </div>
-                        <div class="modal-body">
-                            <p class="modal-description">
+                        <div class="ui-modal-body">
+                            <p class="text-secondary mb-4">
                                 "Simulate an incoming webhook event to test your workflow. 
                                 The payload below will be sent as if it came from an external system."
                             </p>
-                            <label>"Webhook Payload (JSON):"</label>
+                            <label class="text-sm font-semibold text-secondary block mb-2">"Webhook Payload (JSON):"</label>
                             <textarea 
-                                class="payload-editor"
-                                rows="12"
+                                class="ui-input font-mono"
+                                style="min-height: 200px;"
                                 prop:value=test_payload
                                 on:input=move |ev| {
                                     let value = event_target_value(&ev);
@@ -289,21 +289,21 @@ pub fn WorkflowEditorPage() -> impl IntoView {
                             {move || test_result.get().map(|result| {
                                 let is_success = result.starts_with("✅");
                                 view! {
-                                    <div class=move || format!("test-result {}", if is_success { "success" } else { "error" })>
+                                    <div class=move || format!("mt-4 p-3 rounded-lg {}", if is_success { "bg-status-success text-white" } else { "bg-status-error text-white" })>
                                         {result}
                                     </div>
                                 }
                             })}
                         </div>
-                        <div class="modal-footer">
+                        <div class="ui-modal-footer">
                             <button 
-                                class="btn-secondary" 
+                                class="ui-btn ui-btn-secondary" 
                                 on:click=move |_| set_show_test_webhook.set(false)
                             >
                                 "Cancel"
                             </button>
                             <button 
-                                class="btn-primary"
+                                class="ui-btn ui-btn-primary"
                                 on:click=move |_| {
                                     let payload = test_payload.get();
                                     let wf_id = current_workflow_id.get();

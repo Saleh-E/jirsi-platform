@@ -113,17 +113,17 @@ pub fn AssociationModal(
                     </div>
                     
                     // Footer
-                    <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                    <div class="ui-modal-footer">
                         <button
                             type="button"
-                            class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                            class="ui-btn ui-btn-ghost"
                             on:click=move |_| on_close.call(())
                         >
                             "Cancel"
                         </button>
                         <button
                             type="submit"
-                            class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md disabled:opacity-50"
+                            class="ui-btn ui-btn-primary"
                             disabled=move || is_saving.get()
                         >
                             {move || if is_saving.get() { "Creating..." } else { "Create" }}

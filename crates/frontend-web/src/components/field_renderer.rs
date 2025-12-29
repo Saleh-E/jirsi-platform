@@ -145,9 +145,21 @@ fn render_field_value(field: &FieldDef, value: &serde_json::Value, _editable: bo
         // Date - format nicely
         "date" => {
             let date_str = value.as_str().unwrap_or("").to_string();
-            view! {
-                <span class="field-date">{date_str}</span>
-            }.into_view()
+            if date_str.is_empty() {
+                view! {
+                    <span class="field-date field-empty" title="Click to set date">"—"</span>
+                }.into_view()
+            } else {
+                // Format date nicely (YYYY-MM-DD -> readable format)
+                let display = if date_str.len() >= 10 {
+                    date_str[..10].to_string()
+                } else {
+                    date_str
+                };
+                view! {
+                    <span class="field-date">{display}</span>
+                }.into_view()
+            }
         }
         
         // DateTime - format with time
@@ -259,22 +271,49 @@ pub fn EditableFieldValue(
     let (current_value, set_current_value) = create_signal(value.clone());
     let field_type = field.get_field_type();
     let field_type_for_edit = field_type.clone();
+    let field_type_for_click = field_type.clone();
+    
+    // Date and datetime fields use single click for better UX
+    let use_single_click = matches!(field_type.as_str(), "date" | "date_time" | "datetime" | "datetime-local");
     
     view! {
         <div 
             class="editable-field"
-            on:dblclick=move |_| set_editing.set(true)
+            class:editable-date=use_single_click
+            on:click=move |_| {
+                if use_single_click {
+                    set_editing.set(true);
+                }
+            }
+            on:dblclick=move |_| {
+                if !use_single_click {
+                    set_editing.set(true);
+                }
+            }
         >
             {move || {
                 let _ft = field_type_for_edit.clone();
                 if editing.get() {
                     render_edit_input(&field, current_value.get(), set_editing, set_current_value, on_change.clone()).into_view()
                 } else {
-                    view! {
-                        <div class="editable-field-view" title="Double-click to edit">
-                            {render_field_value(&field, &current_value.get(), false)}
-                        </div>
-                    }.into_view()
+                    let ft = field_type_for_click.clone();
+                    let is_empty = current_value.get().is_null() || 
+                        current_value.get().as_str().map(|s| s.is_empty()).unwrap_or(false);
+                    
+                    // Show helpful placeholder for empty date fields
+                    if is_empty && matches!(ft.as_str(), "date" | "date_time" | "datetime" | "datetime-local") {
+                        view! {
+                            <div class="editable-field-view editable-field-placeholder" title="Click to set">
+                                <span class="field-empty clickable">"Set date"</span>
+                            </div>
+                        }.into_view()
+                    } else {
+                        view! {
+                            <div class="editable-field-view" title=if matches!(ft.as_str(), "date" | "date_time") { "Click to edit" } else { "Double-click to edit" }>
+                                {render_field_value(&field, &current_value.get(), false)}
+                            </div>
+                        }.into_view()
+                    }
                 }
             }}
         </div>

@@ -126,7 +126,7 @@ pub fn ReportsPage() -> impl IntoView {
                         {move || selected_report.get().name()}
                     </h1>
                     <div class="reports-actions">
-                        <button class="btn-export" on:click=move |_| export_to_csv()>
+                        <button class="ui-btn ui-btn-secondary" on:click=move |_| export_to_csv()>
                             "📥 Export CSV"
                         </button>
                     </div>

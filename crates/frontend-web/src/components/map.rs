@@ -197,18 +197,52 @@ pub fn MapView(
     });
 
     view! {
-        <div class="map-container" style="height: calc(100vh - 140px); width: 100%; position: relative;">
-            {move || {
-                if loading.get() {
-                    view! { <div class="map-loading">"Loading map data..."</div> }.into_view()
-                } else if let Some(err) = error.get() {
-                    view! { <div class="map-error">{err}</div> }.into_view()
-                } else {
-                    view! {
-                       <div id=map_id.clone() style="height: 100%; width: 100%; z-index: 1;"></div>
-                    }.into_view()
-                }
-            }}
+        <div class="map-view-wrapper bg-surface rounded-lg overflow-hidden" style="height: calc(100vh - 140px); width: 100%;">
+            // Header with marker count
+            <div class="map-header flex items-center justify-between px-4 py-2 border-b border-default">
+                <div class="flex items-center gap-3">
+                    <span class="text-primary font-semibold">"🗺️ Map View"</span>
+                    <span class="ui-badge ui-badge-info">
+                        {move || format!("{} properties", markers.get().len())}
+                    </span>
+                </div>
+                // Legend
+                <div class="map-legend flex items-center gap-4 text-xs">
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500"></span> "Active"</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500"></span> "Reserved"</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> "Sold"</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500"></span> "Rented"</span>
+                </div>
+            </div>
+            
+            // Map container
+            <div class="map-container" style="height: calc(100% - 40px); width: 100%; position: relative;">
+                {move || {
+                    if loading.get() {
+                        view! { 
+                            <div class="flex items-center justify-center h-full bg-surface">
+                                <div class="text-center text-secondary">
+                                    <div class="text-4xl mb-2 animate-pulse">"🗺️"</div>
+                                    <div>"Loading map data..."</div>
+                                </div>
+                            </div>
+                        }.into_view()
+                    } else if let Some(err) = error.get() {
+                        view! { 
+                            <div class="flex items-center justify-center h-full bg-surface">
+                                <div class="text-center">
+                                    <div class="text-4xl mb-2">"❌"</div>
+                                    <div class="text-error">{err}</div>
+                                </div>
+                            </div>
+                        }.into_view()
+                    } else {
+                        view! {
+                           <div id=map_id.clone() style="height: 100%; width: 100%; z-index: 1;"></div>
+                        }.into_view()
+                    }
+                }}
+            </div>
         </div>
     }
 }

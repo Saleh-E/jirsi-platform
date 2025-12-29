@@ -138,14 +138,14 @@ pub fn SignaturePad(
             <div class="flex gap-2 mt-3">
                 <button
                     type="button"
-                    class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded border border-gray-300 dark:border-gray-600"
+                    class="ui-btn ui-btn-secondary"
                     on:click=clear
                 >
                     "Clear"
                 </button>
                 <button
                     type="button"
-                    class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded"
+                    class="ui-btn ui-btn-primary"
                     on:click=save
                 >
                     "Save Signature"

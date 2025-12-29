@@ -23,7 +23,7 @@ pub use login::LoginPage;
 pub use register::RegisterPage;
 pub use profile::ProfilePage;
 pub use settings::SettingsPage;
-pub use dashboard::DashboardPage;
+pub use dashboard::Dashboard;
 pub use reports::ReportsPage;
 pub use inbox::InboxPage;
 pub use workflow_editor::WorkflowEditorPage;
