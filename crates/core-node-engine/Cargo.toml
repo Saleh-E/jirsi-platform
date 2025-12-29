@@ -1,10 +1,11 @@
 [package]
 name = "core-node-engine"
-description = "Node graph execution engine for workflows and automations"
+description = "Node graph execution engine for workflows and automations - Antigravity LogicOp enabled"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
+# Antigravity: core-models with backend feature for LogicOp
 core-models = { path = "../core-models" }
 serde = { workspace = true }
 serde_json = { workspace = true }

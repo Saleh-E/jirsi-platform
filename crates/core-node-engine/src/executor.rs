@@ -1,13 +1,17 @@
 //! Graph executor - runs node graphs
+//!
+//! ## Antigravity Integration
+//! Now supports LogicOp for evaluating node visibility and enabled conditions.
 
 use chrono::Utc;
 use core_models::{
     EdgeDef, ExecutionStatus, GraphExecution, NodeDef, NodeGraphDef,
+    logic::{LogicOp, EvalContext},
 };
 use serde_json::Value;
 use sqlx::PgPool;
 use std::collections::HashMap;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::nodes::NodeRegistry;
@@ -18,6 +22,7 @@ use crate::ai::AiService;
 use std::sync::Arc;
 
 /// Graph executor - runs node graphs
+/// Now with Antigravity LogicOp support for conditional node execution
 #[allow(dead_code)]
 pub struct GraphExecutor {
     pool: PgPool,
@@ -75,15 +80,28 @@ impl GraphExecutor {
         };
 
         // Initialize with trigger data
-        context.values.insert("$trigger".to_string(), trigger_data);
+        context.values.insert("$trigger".to_string(), trigger_data.clone());
 
         // Topological sort
         let sorted_nodes = self.topological_sort(nodes, edges)?;
 
         // Execute nodes in order
         for node in sorted_nodes {
+            // Check legacy is_enabled flag
             if !node.is_enabled {
-                debug!(node_id = %node.id, "Skipping disabled node");
+                debug!(node_id = %node.id, "Skipping disabled node (legacy flag)");
+                continue;
+            }
+            
+            // Antigravity: Check LogicOp enabled_if condition from node config
+            if !self.evaluate_node_condition(&node, &trigger_data, &context) {
+                debug!(node_id = %node.id, "Skipping node (LogicOp enabled_if = false)");
+                context.logs.push(serde_json::json!({
+                    "node_id": node.id,
+                    "label": node.label,
+                    "status": "skipped",
+                    "reason": "enabled_if condition evaluated to false",
+                }));
                 continue;
             }
 
@@ -121,6 +139,46 @@ impl GraphExecutor {
         );
 
         Ok(execution)
+    }
+
+    /// Evaluate node's enabled_if condition using Antigravity Logic Engine
+    /// 
+    /// Reads the `enabled_if` field from node.config and evaluates it using LogicOp.
+    /// Returns true if the node should execute, false if it should be skipped.
+    fn evaluate_node_condition(
+        &self,
+        node: &NodeDef,
+        _trigger_data: &Value, // Reserved for future use (e.g., trigger-level conditions)
+        context: &ExecutionContext,
+    ) -> bool {
+        // Try to parse enabled_if from node config
+        let enabled_if = match node.config.get("enabled_if") {
+            Some(condition_value) => {
+                match serde_json::from_value::<LogicOp>(condition_value.clone()) {
+                    Ok(logic_op) => logic_op,
+                    Err(e) => {
+                        warn!(
+                            node_id = %node.id,
+                            error = %e,
+                            "Failed to parse enabled_if LogicOp, defaulting to always"
+                        );
+                        LogicOp::Always
+                    }
+                }
+            }
+            None => LogicOp::Always, // Default: always execute if no condition specified
+        };
+        
+        // Build record data from context values
+        let record_data: HashMap<String, Value> = context.values.iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        
+        // Build EvalContext for Logic Engine
+        let eval_ctx = EvalContext::with_data(&record_data);
+        
+        // Evaluate the condition
+        enabled_if.evaluate(&eval_ctx)
     }
 
     /// Execute a single node

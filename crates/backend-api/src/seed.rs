@@ -224,6 +224,7 @@ async fn seed_property_entity_tx(
 }
 
 /// Helper to seed a single field definition within a transaction
+/// Now includes Antigravity Diamond layers with sensible defaults
 async fn seed_field_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -239,10 +240,36 @@ async fn seed_field_tx(
     let now = Utc::now();
     let id = Uuid::new_v4();
     
+    // Default Diamond layers
+    let default_layout = serde_json::json!({
+        "form_span": 12,
+        "section": null,
+        "visible_if": {"op": "always"},
+        "readonly_if": {"op": "never"}
+    });
+    let default_physics = serde_json::json!("lastWriteWins");
+    let default_intelligence = serde_json::json!({
+        "description": null,
+        "is_pii": false,
+        "embed": false,
+        "auto_generate": false
+    });
+    // Auto-add required rule if is_required is true
+    let rules = if is_required {
+        serde_json::json!([{"rule": "required"}])
+    } else {
+        serde_json::json!([])
+    };
+    
     sqlx::query(
         r#"
-        INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, is_required, show_in_list, sort_order, options, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        INSERT INTO field_defs (
+            id, tenant_id, entity_type_id, name, label, field_type, 
+            is_required, show_in_list, sort_order, options,
+            layout, physics, intelligence, rules, is_system,
+            created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         "#
     )
     .bind(id)
@@ -255,6 +282,12 @@ async fn seed_field_tx(
     .bind(show_in_list)
     .bind(sort_order)
     .bind(options)
+    // Antigravity Diamond Layers
+    .bind(default_layout)
+    .bind(default_physics)
+    .bind(default_intelligence)
+    .bind(rules)
+    .bind(false) // is_system = false for user-created fields
     .bind(now)
     .bind(now)
     .execute(&mut **tx)
@@ -964,6 +997,7 @@ async fn seed_entity_metadata(pool: &PgPool, tenant_id: Uuid) -> Result<(), sqlx
 }
 
 // Helper to seed a single field definition (UPDATED signature)
+// Now includes Antigravity Diamond layers with sensible defaults
 async fn seed_field(
     pool: &PgPool,
     tenant_id: Uuid,
@@ -979,10 +1013,36 @@ async fn seed_field(
     let now = Utc::now();
     let id = Uuid::new_v4();
     
+    // Default Diamond layers
+    let default_layout = serde_json::json!({
+        "form_span": 12,
+        "section": null,
+        "visible_if": {"op": "always"},
+        "readonly_if": {"op": "never"}
+    });
+    let default_physics = serde_json::json!("lastWriteWins");
+    let default_intelligence = serde_json::json!({
+        "description": null,
+        "is_pii": false,
+        "embed": false,
+        "auto_generate": false
+    });
+    // Auto-add required rule if is_required is true
+    let rules = if is_required {
+        serde_json::json!([{"rule": "required"}])
+    } else {
+        serde_json::json!([])
+    };
+    
     sqlx::query(
         r#"
-        INSERT INTO field_defs (id, tenant_id, entity_type_id, name, label, field_type, is_required, show_in_list, sort_order, options, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        INSERT INTO field_defs (
+            id, tenant_id, entity_type_id, name, label, field_type, 
+            is_required, show_in_list, sort_order, options,
+            layout, physics, intelligence, rules, is_system,
+            created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         "#
     )
     .bind(id)
@@ -995,6 +1055,12 @@ async fn seed_field(
     .bind(show_in_list)
     .bind(sort_order)
     .bind(options)
+    // Antigravity Diamond Layers
+    .bind(default_layout)
+    .bind(default_physics)
+    .bind(default_intelligence)
+    .bind(rules)
+    .bind(false) // is_system = false for user-created fields
     .bind(now)
     .bind(now)
     .execute(pool)
