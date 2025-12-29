@@ -217,6 +217,12 @@ fn create_field(tenant_id: Uuid, entity_type_id: Uuid, name: &str, label: &str, 
         context_hints: None,
         sort_order: 0,
         group: None,
+        // Antigravity Diamond layers
+        layout: Default::default(),
+        physics: Default::default(),
+        intelligence: Default::default(),
+        rules: Vec::new(),
+        is_system: false,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     }

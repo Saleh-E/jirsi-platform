@@ -310,6 +310,12 @@ fn field_def_from_row(row: &sqlx::postgres::PgRow) -> Result<FieldDef, MetadataE
         context_hints: None, // TODO: Load from DB when schema is updated
         sort_order: row.try_get("sort_order")?,
         group: row.try_get("group")?,
+        // Antigravity Diamond layers - use defaults until DB schema is updated
+        layout: Default::default(),
+        physics: Default::default(),
+        intelligence: Default::default(),
+        rules: Vec::new(),
+        is_system: false,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
     })

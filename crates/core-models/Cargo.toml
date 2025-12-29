@@ -4,11 +4,33 @@ description = "Shared domain types and models for the SaaS platform"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+backend = ["dep:sqlx"] # Enable async traits for server-side DB validation
+
 [dependencies]
-serde = { workspace = true }
+# Core serialization
+serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
-uuid = { workspace = true }
-chrono = { workspace = true }
+
+# Identity & Time
+uuid = { workspace = true, features = ["serde", "v4", "js"] }
+chrono = { workspace = true, features = ["serde"] }
+
+# Error handling
 thiserror = { workspace = true }
-rust_decimal = "1.33"
+
+# Numeric precision
+rust_decimal = "1.35"
+
+# Physics Engine (CRDT) - uses workspace version 0.18
 yrs = { workspace = true }
+
+# Optional: Database (backend-only)
+[dependencies.sqlx]
+workspace = true
+optional = true
+
+[dev-dependencies]
+tokio = { workspace = true }
+

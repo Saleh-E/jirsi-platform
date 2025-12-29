@@ -1028,7 +1028,9 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "sqlx",
  "thiserror 1.0.69",
+ "tokio",
  "uuid 1.19.0",
  "yrs",
 ]

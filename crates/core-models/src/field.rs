@@ -1,11 +1,23 @@
 //! FieldDef model - Single source of truth for all field definitions
 //! 
 //! The Golden Rule: A field is defined once in FieldDef and reused everywhere.
+//!
+//! ## Antigravity Diamond Protocol
+//! 
+//! Each field definition now has four dimensions:
+//! - **Data**: The shape (FieldType - Text, Number, Money, etc.)
+//! - **Logic**: The rules (visible_if, readonly_if via LayoutConfig)
+//! - **Physics**: The sync strategy (CRDT vs Last-Write-Wins)
+//! - **Intelligence**: AI hints (PII, embeddings, auto-generation)
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+
+// Import Antigravity layers
+use crate::metadata::{AiMetadata, LayoutConfig, MergeStrategy};
+use crate::validation::ValidationRule;
 
 /// All supported field types in the system
 /// Uses tagged serde format for type-specific configuration
@@ -162,6 +174,14 @@ impl Default for ContextRenderHints {
 }
 
 /// Field definition - describes a single field on an EntityType
+/// 
+/// ## Antigravity Diamond Layers
+/// 
+/// In addition to legacy fields, each FieldDef now supports:
+/// - `layout`: Adaptive UI configuration (visibility, readonly conditions, grid span)
+/// - `physics`: Sync/merge strategy (CRDT or Last-Write-Wins)
+/// - `intelligence`: AI metadata (PII, embeddings, auto-generation)
+/// - `rules`: New validation engine with portable + async rules
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldDef {
     pub id: Uuid,
@@ -172,7 +192,7 @@ pub struct FieldDef {
     pub name: String,
     /// Display label
     pub label: String,
-    /// Field data type
+    /// Field data type (DATA layer of Diamond)
     pub field_type: FieldType,
     /// Is this field required?
     pub is_required: bool,
@@ -196,7 +216,7 @@ pub struct FieldDef {
     pub placeholder: Option<String>,
     /// Help text / tooltip
     pub help_text: Option<String>,
-    /// Validation rules
+    /// Legacy validation rules (deprecated - use `rules` instead)
     pub validation: Option<FieldValidation>,
     /// Type-specific options (raw JSON - can be array of strings, array of objects, or FieldOptions struct)
     pub options: Option<serde_json::Value>,
@@ -208,6 +228,40 @@ pub struct FieldDef {
     pub group: Option<String>,
     /// Context-specific rendering hints
     pub context_hints: Option<HashMap<FieldContext, ContextRenderHints>>,
+    
+    // =========================================================================
+    // ANTIGRAVITY DIAMOND LAYERS
+    // =========================================================================
+    
+    /// LAYOUT: Adaptive UI configuration
+    /// Controls visibility, readonly state, grid layout, and section placement
+    #[serde(default)]
+    pub layout: LayoutConfig,
+    
+    /// PHYSICS: Sync/merge strategy for conflict resolution
+    /// Determines how concurrent edits are merged (CRDT vs LWW)
+    #[serde(default)]
+    pub physics: MergeStrategy,
+    
+    /// INTELLIGENCE: AI/LLM metadata
+    /// Hints for PII handling, embeddings, and auto-generation
+    #[serde(default)]
+    pub intelligence: AiMetadata,
+    
+    /// RULES: New validation engine
+    /// Portable (WASM) + Async (DB) validation rules
+    #[serde(default)]
+    pub rules: Vec<ValidationRule>,
+    
+    /// Is this a system-managed field?
+    /// System fields cannot be deleted and have special handling
+    #[serde(default)]
+    pub is_system: bool,
+    
+    // =========================================================================
+    // TIMESTAMPS
+    // =========================================================================
+    
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -309,6 +363,12 @@ impl FieldDef {
             sort_order: 0,
             group: None,
             context_hints: None,
+            // Antigravity Diamond Layers
+            layout: LayoutConfig::default(),
+            physics: MergeStrategy::default(),
+            intelligence: AiMetadata::default(),
+            rules: Vec::new(),
+            is_system: false,
             created_at: now,
             updated_at: now,
         }
