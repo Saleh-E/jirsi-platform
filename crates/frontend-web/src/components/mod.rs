@@ -1,4 +1,7 @@
 //! UI Components
+//!
+//! ## Antigravity Integration
+//! Includes CollaborativeTextField for TextMerge physics (CRDT).
 
 pub mod shell;
 pub mod sidebar;
@@ -46,4 +49,6 @@ pub mod rich_text_editor;
 pub mod conflict_resolver;
 pub mod audit_timeline;
 pub mod pwa_install;
+pub mod collaborative_field;
 
+pub use collaborative_field::{CollaborativeTextField, should_use_crdt};

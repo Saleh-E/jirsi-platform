@@ -70,11 +70,40 @@ pub fn PublicLayout() -> impl IntoView {
     
     view! {
         <div class="public-layout" class:light-mode=is_light_mode>
-            // Dynamic CSS Variables
+            // 🎨 CHAMELEON ENGINE: Dynamic Brand CSS Variables
+            // Injects tenant branding as CSS custom properties for instant theming
             {move || branding.get().flatten().map(|b| {
+                // Generate full brand color palette from primary/secondary
+                let primary = &b.primary_color;
+                let secondary = &b.secondary_color;
+                
+                // Chameleon Engine CSS - transforms entire UI based on tenant branding
                 let css = format!(
-                    ":root {{ --primary-color: {}; --secondary-color: {}; }}",
-                    b.primary_color, b.secondary_color
+                    r#":root {{
+    /* CHAMELEON ENGINE - Tenant Brand Colors */
+    --color-brand-primary: {primary};
+    --color-brand-secondary: {secondary};
+    --color-brand-gradient: linear-gradient(135deg, {primary} 0%, {secondary} 100%);
+    --color-brand-gradient-hover: linear-gradient(135deg, {secondary} 0%, {primary} 100%);
+    
+    /* Derived from brand (alpha variations) */
+    --color-brand-primary-10: {primary}1a;
+    --color-brand-primary-20: {primary}33;
+    --color-brand-primary-50: {primary}80;
+    --color-brand-secondary-10: {secondary}1a;
+    --color-brand-secondary-20: {secondary}33;
+    
+    /* Brand shadows and glows */
+    --shadow-brand: 0 4px 20px {primary}40;
+    --shadow-brand-lg: 0 8px 32px {primary}50;
+    --glow-brand: 0 0 20px {primary}60;
+    
+    /* Legacy compatibility */
+    --primary-color: {primary};
+    --secondary-color: {secondary};
+}}"#,
+                    primary = primary,
+                    secondary = secondary,
                 );
                 view! { <style>{css}</style> }
             })}
