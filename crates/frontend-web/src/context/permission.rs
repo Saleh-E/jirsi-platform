@@ -49,6 +49,60 @@ impl UserRole {
             Self::Viewer => "viewer",
         }
     }
+    
+    /// UI sidebar sections visible to this role (Chameleon Engine)
+    pub fn sidebar_sections(&self) -> Vec<&'static str> {
+        match self {
+            Self::Admin => vec!["dashboard", "crm", "real_estate", "reports", "settings", "marketplace", "automation"],
+            Self::Manager => vec!["dashboard", "crm", "real_estate", "reports", "automation"],
+            Self::Agent => vec!["dashboard", "clients", "properties", "deals", "calendar", "dialer"],
+            Self::Broker => vec!["dashboard", "agents", "properties", "deals", "commissions", "reports"],
+            Self::Landlord => vec!["dashboard", "my_properties", "contracts", "financials", "maintenance"],
+            Self::Tenant => vec!["my_home", "payments", "requests", "documents"],
+            Self::Vendor => vec!["work_orders", "schedule", "invoices"],
+            Self::Member => vec!["dashboard", "contacts", "tasks"],
+            Self::Viewer => vec!["dashboard"],
+        }
+    }
+    
+    /// Entities this role can access
+    pub fn accessible_entities(&self) -> Vec<&'static str> {
+        match self {
+            Self::Admin | Self::Manager => vec!["*"],
+            Self::Agent => vec!["contact", "property", "deal", "contract", "viewing", "task", "requirement"],
+            Self::Broker => vec!["contact", "property", "deal", "contract", "agent", "report", "commission"],
+            Self::Landlord => vec!["property", "contract", "tenant", "maintenance_request", "payment"],
+            Self::Tenant => vec!["contract", "payment", "maintenance_request", "viewing"],
+            Self::Vendor => vec!["task", "property", "work_order"],
+            Self::Member => vec!["contact", "deal", "task"],
+            Self::Viewer => vec![],
+        }
+    }
+    
+    /// Check if role has dialer access
+    pub fn has_dialer(&self) -> bool {
+        matches!(self, Self::Admin | Self::Agent | Self::Broker)
+    }
+    
+    /// Check if role can manage payments
+    pub fn can_manage_payments(&self) -> bool {
+        matches!(self, Self::Admin | Self::Manager | Self::Landlord | Self::Broker)
+    }
+    
+    /// Get display name for role
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Admin => "Administrator",
+            Self::Manager => "Manager",
+            Self::Member => "Team Member",
+            Self::Agent => "Agent",
+            Self::Broker => "Broker",
+            Self::Landlord => "Landlord",
+            Self::Tenant => "Tenant",
+            Self::Vendor => "Vendor",
+            Self::Viewer => "Viewer",
+        }
+    }
 }
 
 /// Permission context available throughout the app

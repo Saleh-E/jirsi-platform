@@ -2,9 +2,12 @@
 
 pub mod home;
 pub mod app_store;
+pub mod agent_command_center;
+pub mod broker_dashboard;
 pub mod entity_list;
 pub mod entity_detail;
 pub mod landlord_onboarding;
+pub mod landlord_portal;
 pub mod login;
 pub mod register;
 pub mod public;
@@ -17,6 +20,7 @@ pub mod workflow_editor;
 pub mod workflow_list;
 pub mod automation;
 pub mod component_playground;
+pub mod tenant_portal;
 
 pub use home::HomePage;
 pub use entity_list::EntityListPage;
