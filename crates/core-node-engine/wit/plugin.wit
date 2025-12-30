@@ -1,0 +1,151 @@
+// Jirsi Plugin WIT Interface
+// Using WASM Component Model for plugin sandboxing
+// Version 1.0.0
+
+package jirsi:plugin@1.0.0;
+
+/// Core types used across the plugin interface
+interface types {
+    /// Unique identifier
+    type uuid = string;
+    
+    /// JSON value for flexible data
+    type json-value = string;
+    
+    /// Entity type codes (e.g., "contact", "deal", "property")
+    type entity-type-code = string;
+    
+    /// Plugin result status
+    enum result-status {
+        success,
+        error,
+        pending,
+    }
+    
+    /// Plugin execution result
+    record plugin-result {
+        status: result-status,
+        data: option<json-value>,
+        error-message: option<string>,
+    }
+    
+    /// Entity reference
+    record entity-ref {
+        id: uuid,
+        entity-type: entity-type-code,
+    }
+    
+    /// Entity data
+    record entity-data {
+        id: uuid,
+        entity-type: entity-type-code,
+        data: json-value,
+    }
+    
+    /// User context for the current execution
+    record user-context {
+        user-id: uuid,
+        tenant-id: uuid,
+        email: string,
+        roles: list<string>,
+    }
+    
+    /// Execution context passed to plugins
+    record execution-context {
+        request-id: uuid,
+        user: user-context,
+        timestamp: u64,
+        trigger-entity: option<entity-ref>,
+    }
+    
+    /// HTTP request for external calls
+    record http-request {
+        method: string,
+        url: string,
+        headers: list<tuple<string, string>>,
+        body: option<string>,
+    }
+    
+    /// HTTP response
+    record http-response {
+        status: u16,
+        headers: list<tuple<string, string>>,
+        body: string,
+    }
+    
+    /// Log level for tracing
+    enum log-level {
+        debug,
+        info,
+        warn,
+        error,
+    }
+}
+
+/// Host functions provided by the Jirsi runtime
+interface host-functions {
+    use types.{uuid, json-value, entity-type-code, entity-data, entity-ref, http-request, http-response, log-level};
+    
+    /// Read an entity by ID
+    get-entity: func(entity-type: entity-type-code, id: uuid) -> result<entity-data, string>;
+    
+    /// Query entities with filters
+    query-entities: func(entity-type: entity-type-code, filters: json-value, limit: u32) -> result<list<entity-data>, string>;
+    
+    /// Create a new entity
+    create-entity: func(entity-type: entity-type-code, data: json-value) -> result<entity-data, string>;
+    
+    /// Update an existing entity
+    update-entity: func(entity-type: entity-type-code, id: uuid, data: json-value) -> result<entity-data, string>;
+    
+    /// Delete an entity (soft delete)
+    delete-entity: func(entity-type: entity-type-code, id: uuid) -> result<bool, string>;
+    
+    /// Get current user context
+    get-user-context: func() -> result<json-value, string>;
+    
+    /// Get tenant settings
+    get-tenant-settings: func(key: string) -> result<option<string>, string>;
+    
+    /// Set tenant settings
+    set-tenant-settings: func(key: string, value: string) -> result<bool, string>;
+    
+    /// Log a message
+    log: func(level: log-level, message: string);
+    
+    /// Make an HTTP request to external service
+    /// WARNING: Subject to rate limiting and URL allowlisting
+    http-fetch: func(request: http-request) -> result<http-response, string>;
+    
+    /// Get the current timestamp (milliseconds since epoch)
+    now: func() -> u64;
+    
+    /// Generate a new UUID
+    generate-uuid: func() -> uuid;
+    
+    /// Send a notification
+    send-notification: func(channel: string, recipient: string, template-id: string, data: json-value) -> result<bool, string>;
+}
+
+/// Plugin interface that plugins must implement
+interface plugin {
+    use types.{json-value, execution-context, plugin-result};
+    
+    /// Execute the plugin with the given input
+    execute: func(context: execution-context, input: json-value) -> plugin-result;
+    
+    /// Get plugin metadata
+    get-metadata: func() -> json-value;
+    
+    /// Validate configuration
+    validate-config: func(config: json-value) -> result<bool, string>;
+}
+
+/// World that combines all interfaces
+world jirsi-plugin {
+    /// Import host functions from the runtime
+    import host-functions;
+    
+    /// Export the plugin interface
+    export plugin;
+}

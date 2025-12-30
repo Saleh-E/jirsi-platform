@@ -491,7 +491,7 @@ fn render_node_form(node: NodeUI, on_update: Callback<(Uuid, Value)>) -> View {
         _ => {
             view! {
                 <div class="inspector-section">
-                    <p class="text-muted">"No additional configuration for this node type."</p>
+                    <p class="text-slate-500">"No additional configuration for this node type."</p>
                 </div>
             }.into_view()
         }

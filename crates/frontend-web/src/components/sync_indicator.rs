@@ -164,7 +164,7 @@ pub fn SyncIndicator() -> impl IntoView {
                 <span class="icon">
                     {move || if is_syncing.get() { "↻" } else { "☁" }}
                 </span>
-                <span class="status-text">
+                <span class="text-xs text-slate-400">
                     {move || match status.get() {
                         SyncStatus::Synced => "Online",
                         SyncStatus::Saving => "Saving...",

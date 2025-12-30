@@ -29,18 +29,20 @@ fn NavSection(
     let (is_expanded, set_expanded) = create_signal(expanded);
     
     view! {
-        <div class="nav-section" class:collapsed=move || !is_expanded.get()>
+        <div class="flex flex-col gap-1 mb-2">
             <button 
-                class="nav-section-header"
+                class="flex items-center justify-between w-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
                 on:click=move |_| set_expanded.update(|v| *v = !*v)
             >
-                <span class="section-icon">{icon}</span>
-                <span class="section-title">{title}</span>
-                <span class="section-chevron">
+                <div class="flex items-center gap-3">
+                    <span class="text-base min-w-[1.25rem] text-center">{icon}</span>
+                    <span class="truncate group-[.sidebar-collapsed]:hidden transition-opacity">{title}</span>
+                </div>
+                <span class="text-[10px] opacity-70 group-[.sidebar-collapsed]:hidden">
                     {move || if is_expanded.get() { "▼" } else { "▶" }}
                 </span>
             </button>
-            <div class="nav-section-items" class:hidden=move || !is_expanded.get()>
+            <div class="flex flex-col gap-0.5" class:hidden=move || !is_expanded.get()>
                 {children()}
             </div>
         </div>
@@ -69,13 +71,19 @@ fn NavItem(
     view! {
         <a 
             href={href} 
-            class="nav-item"
-            class:active=is_active
+            class="group/item flex items-center gap-3 px-3 py-2 mx-2 rounded-lg text-sm font-medium transition-colors relative"
+            class:bg-white_10=is_active
+            class:text-white=is_active
+            class:text-slate-400=move || !is_active()
+            class:hover:bg-white_5=move || !is_active()
+            class:hover:text-white=move || !is_active()
         >
-            <span class="nav-icon">{icon}</span>
-            <span class="nav-label">{label}</span>
+            <span class="min-w-[1.25rem] text-center text-lg">{icon}</span>
+            <span class="truncate group-[.sidebar-collapsed]:hidden">{label}</span>
             {badge.map(|b| view! {
-                <span class="nav-badge">{move || b.get()}</span>
+                <span class="absolute right-2 px-1.5 py-0.5 rounded-full bg-indigo-500 text-[10px] font-bold text-white group-[.sidebar-collapsed]:top-1 group-[.sidebar-collapsed]:right-1 group-[.sidebar-collapsed]:w-2 group-[.sidebar-collapsed]:h-2 group-[.sidebar-collapsed]:p-0 group-[.sidebar-collapsed]:rounded-full group-[.sidebar-collapsed]:text-transparent overflow-hidden">
+                    {move || b.get()}
+                </span>
             })}
         </a>
     }
@@ -88,40 +96,40 @@ fn QuickCreateButton() -> impl IntoView {
     let (create_entity_type, set_create_entity_type) = create_signal::<Option<String>>(None);
     
     view! {
-        <div class="quick-create-container">
+        <div class="relative">
             <button 
-                class="btn-quick-create"
+                class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/30 transition-all hover:scale-105"
                 on:click=move |_| set_show_menu.update(|v| *v = !*v)
                 title="Quick Create"
             >
-                <span class="icon">"+"</span>
+                <span class="text-xl font-bold leading-none pb-0.5">"+"</span>
             </button>
             {move || show_menu.get().then(|| {
                 view! {
-                    <div class="quick-create-menu">
-                        <button class="menu-item" on:click=move |_| {
+                    <div class="absolute right-0 mt-2 w-48 py-1 rounded-xl bg-surface border border-white/10 shadow-2xl shadow-indigo-500/10 backdrop-blur-xl z-50 animate-in fade-in zoom-in duration-200 origin-top-right">
+                        <button class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-3" on:click=move |_| {
                             set_show_menu.set(false);
                             set_create_entity_type.set(Some("contact".to_string()));
                         }>
-                            <span>"👤"</span> "New Contact"
+                            <span class="text-lg">"👤"</span> "New Contact"
                         </button>
-                        <button class="menu-item" on:click=move |_| {
+                        <button class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-3" on:click=move |_| {
                             set_show_menu.set(false);
                             set_create_entity_type.set(Some("deal".to_string()));
                         }>
-                            <span>"💰"</span> "New Deal"
+                            <span class="text-lg">"💰"</span> "New Deal"
                         </button>
-                        <button class="menu-item" on:click=move |_| {
+                        <button class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-3" on:click=move |_| {
                             set_show_menu.set(false);
                             set_create_entity_type.set(Some("task".to_string()));
                         }>
-                            <span>"✓"</span> "New Task"
+                            <span class="text-lg">"✓"</span> "New Task"
                         </button>
-                        <button class="menu-item" on:click=move |_| {
+                        <button class="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-3" on:click=move |_| {
                             set_show_menu.set(false);
                             set_create_entity_type.set(Some("property".to_string()));
                         }>
-                            <span>"🏠"</span> "New Property"
+                            <span class="text-lg">"🏠"</span> "New Property"
                         </button>
                     </div>
                 }
@@ -160,25 +168,26 @@ fn NotificationsBell() -> impl IntoView {
     // TODO: Connect to SocketContext when integrated
     
     view! {
-        <div class="notifications-container">
+        <div class="relative">
             <button 
-                class="btn-notifications"
+                class="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-colors relative"
                 on:click=move |_| set_show_panel.update(|v| *v = !*v)
                 title="Notifications"
             >
-                <span class="icon">"🔔"</span>
+                <span class="text-lg">"🔔"</span>
                 {move || (unread_count.get() > 0).then(|| view! {
-                    <span class="notification-badge">{unread_count}</span>
+                    <span class="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-surface animate-pulse"></span>
                 })}
             </button>
             {move || show_panel.get().then(|| view! {
-                <div class="notifications-panel">
-                    <div class="panel-header">
-                        <h3>"Notifications"</h3>
-                        <button class="btn-mark-read">"Mark all read"</button>
+                <div class="absolute right-0 mt-2 w-80 rounded-xl bg-surface border border-white/10 shadow-2xl shadow-black/50 backdrop-blur-xl z-50 animate-in fade-in zoom-in duration-200 origin-top-right overflow-hidden">
+                    <div class="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
+                        <h3 class="font-semibold text-sm">"Notifications"</h3>
+                        <button class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">"Mark all read"</button>
                     </div>
-                    <div class="panel-body">
-                        <p class="empty-state">"No new notifications"</p>
+                    <div class="p-8 text-center text-slate-500 text-sm">
+                        <span class="block text-2xl mb-2 opacity-50">"🔕"</span>
+                        <p>"No new notifications"</p>
                     </div>
                 </div>
             })}
@@ -257,21 +266,26 @@ pub fn Shell() -> impl IntoView {
     });
 
     view! {
-        <div class="app-shell" class:sidebar-collapsed=sidebar_collapsed class:is-mobile=is_mobile>
-            // Command Palette Modal
-            {move || show_command_palette.get().then(|| view! {
-                <CommandPalette on_close=move || set_show_command_palette.set(false) />
-            })}
+        <crate::components::holographic_shell::HolographicShell>
+            <div class="app-shell group flex min-h-screen overflow-hidden relative z-20" class:sidebar-collapsed=sidebar_collapsed class:is-mobile=is_mobile>
+                // Command Palette Modal
+                {move || show_command_palette.get().then(|| view! {
+                    <CommandPalette on_close=move || set_show_command_palette.set(false) />
+                })}
             
             // Sidebar
-            <aside class="sidebar">
-                <div class="sidebar-header">
-                    <h1 class="logo">
-                        <span class="logo-icon">"⚡"</span>
-                        <span class="logo-text" class:hidden=sidebar_collapsed>"Jirsi"</span>
+            <aside 
+                class="fixed inset-y-0 left-0 z-50 bg-surface/95 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col glass-morphism"
+                class:w-64=move || !sidebar_collapsed.get()
+                class:w-16=move || sidebar_collapsed.get()
+            >
+                <div class="h-16 flex items-center justify-between px-4 border-b border-white/10 shrink-0">
+                    <h1 class="flex items-center gap-2 font-bold text-xl tracking-tight">
+                        <span class="text-2xl">"⚡"</span>
+                        <span class="group-[.sidebar-collapsed]:hidden transition-opacity">"Jirsi"</span>
                     </h1>
                     <button 
-                        class="btn-collapse"
+                        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                         on:click=move |_| set_sidebar_collapsed.update(|v| *v = !*v)
                         title="Toggle sidebar"
                     >
@@ -279,7 +293,7 @@ pub fn Shell() -> impl IntoView {
                     </button>
                 </div>
                 
-                <nav class="sidebar-nav">
+                <nav class="flex-1 overflow-y-auto py-4 custom-scrollbar">
                     // Apps Section
                     <NavSection title="Apps" icon="🚀" expanded=true>
                         <NavItem href="/" icon="📊" label="Dashboard" />
@@ -320,45 +334,61 @@ pub fn Shell() -> impl IntoView {
                         </NavSection>
                     </Show>
                 </nav>
+                
+                // Neural Status Footer
+                {move || if sidebar_collapsed.get() {
+                    view! { <crate::components::neural_status::NeuralStatusCompact /> }.into_view()
+                } else {
+                    view! { <crate::components::neural_status::NeuralStatus /> }.into_view()
+                }}
             </aside>
             
             // Main Content Area
-            <main class="main-content">
+            <main 
+                class="flex-1 flex flex-col min-w-0 transition-all duration-300"
+                class:ml-64=move || !sidebar_collapsed.get()
+                class:ml-16=move || sidebar_collapsed.get()
+            >
                 // Power Header
-                <header class="topbar">
+                <header class="h-16 sticky top-0 z-40 bg-surface/80 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 gap-4">
                     // Search Bar (Command Palette Trigger)
                     <div 
-                        class="search-bar"
+                        class="flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-400 w-96 cursor-text hover:bg-white/10 hover:border-white/20 transition-all group/search"
                         on:click=move |_| set_show_command_palette.set(true)
                     >
-                        <span class="search-icon">"🔍"</span>
-                        <span class="search-placeholder">"Search... "</span>
-                        <span class="search-shortcut">"⌘K"</span>
+                        <span class="opacity-50 group-hover/search:opacity-100 transition-opacity">"🔍"</span>
+                        <span class="flex-1">"Search... "</span>
+                        <span class="px-2 py-0.5 rounded bg-white/5 text-[10px] font-bold border border-white/5">"⌘K"</span>
                     </div>
                     
                     // Actions
-                    <div class="topbar-actions">
+                    <div class="flex items-center gap-4">
                         <crate::components::sync_indicator::SyncIndicator />
                         <QuickCreateButton />
                         <NotificationsBell />
                         <ThemeToggle />
                         
                         // User Menu
-                        <div class="user-menu-container">
+                        <div class="relative">
                             <button 
-                                class="user-btn" 
+                                class="flex items-center gap-3 pl-3 pr-2 py-1.5 rounded-full hover:bg-white/5 border border-transparent hover:border-white/10 transition-all"
                                 on:click=move |_| set_show_user_menu.update(|v| *v = !*v)
                             >
-                                <span class="user-avatar">"👤"</span>
-                                <span class="user-email">{user_email}</span>
-                                <span class="arrow">"▼"</span>
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold border border-white/20 shadow-lg shadow-indigo-500/20">
+                                    "👤"
+                                </div>
+                                <span class="text-sm font-medium text-slate-200">{user_email}</span>
+                                <span class="text-xs text-slate-500">"▼"</span>
                             </button>
                             {move || show_user_menu.get().then(|| view! {
-                                <div class="user-dropdown">
-                                    <a href="/app/profile" class="dropdown-item">"👤 Profile"</a>
-                                    <a href="/app/settings" class="dropdown-item">"⚙️ Settings"</a>
-                                    <hr/>
-                                    <button class="dropdown-item logout" on:click=on_logout.clone()>
+                                <div class="absolute right-0 mt-2 w-48 py-1 rounded-xl bg-surface border border-white/10 shadow-2xl shadow-black/50 backdrop-blur-xl z-50 animate-in fade-in zoom-in duration-200">
+                                    <a href="/app/profile" class="block px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors">"👤 Profile"</a>
+                                    <a href="/app/settings" class="block px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition-colors">"⚙️ Settings"</a>
+                                    <div class="h-px bg-white/10 my-1"></div>
+                                    <button 
+                                        class="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                                        on:click=on_logout.clone()
+                                    >
                                         "🚪 Logout"
                                     </button>
                                 </div>
@@ -368,14 +398,15 @@ pub fn Shell() -> impl IntoView {
                 </header>
                 
                 // Page Content
-                <div class="content">
+                <div class="flex-1 p-6 overflow-x-hidden">
                     <Outlet/>
                 </div>
             </main>
             
             // Bottom Nav (Mobile Only)
             {move || is_mobile().then(|| view! { <BottomNav /> })}
-        </div>
+            </div>
+        </crate::components::holographic_shell::HolographicShell>
     }
 }
 
@@ -453,13 +484,13 @@ fn CommandPalette(
     };
     
     view! {
-        <div class="command-palette-overlay" on:click=move |_| on_close_clone()>
-            <div class="command-palette" on:click=|e| e.stop_propagation()>
-                <div class="palette-input-wrapper">
-                    <span class="search-icon">"🔍"</span>
+        <div class="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/50 backdrop-blur-sm transition-opacity" on:click=move |_| on_close_clone()>
+            <div class="w-full max-w-2xl bg-surface border border-white/10 rounded-2xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden animate-spring-up" on:click=|e| e.stop_propagation()>
+                <div class="flex items-center gap-4 px-6 py-4 border-b border-white/10">
+                    <span class="text-xl opacity-50">"🔍"</span>
                     <input 
                         type="text"
-                        class="palette-input"
+                        class="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder-slate-500 h-10"
                         placeholder="Search contacts, deals, properties..."
                         prop:value=query
                         on:input=move |e| set_query.set(event_target_value(&e))
@@ -467,27 +498,29 @@ fn CommandPalette(
                         node_ref=input_ref
                     />
                     {move || loading.get().then(|| view! {
-                        <span class="loading-spinner">"⟳"</span>
+                        <span class="animate-spin text-indigo-400">"⟳"</span>
                     })}
                 </div>
                 
-                <div class="palette-results">
+                <div class="max-h-[60vh] overflow-y-auto custom-scrollbar p-2">
                     {move || {
                         let res = results.get();
                         let sel = selected_index.get();
                         
                         if res.is_empty() && query.get().len() >= 2 {
                             view! {
-                                <div class="no-results">
+                                <div class="p-8 text-center text-slate-500">
                                     "No results found"
                                 </div>
                             }.into_view()
                         } else if res.is_empty() {
                             view! {
-                                <div class="search-hint">
-                                    <p>"Start typing to search..."</p>
-                                    <div class="quick-actions">
-                                        <span class="hint">"Try: contact name, deal title, property address"</span>
+                                <div class="p-8 text-center">
+                                    <p class="text-slate-400 text-sm mb-4">"Start typing to search..."</p>
+                                    <div class="flex flex-wrap justify-center gap-2">
+                                        <span class="px-2 py-1 rounded bg-white/5 text-xs text-slate-500 border border-white/5">"contact name"</span>
+                                        <span class="px-2 py-1 rounded bg-white/5 text-xs text-slate-500 border border-white/5">"deal title"</span>
+                                        <span class="px-2 py-1 rounded bg-white/5 text-xs text-slate-500 border border-white/5">"property address"</span>
                                     </div>
                                 </div>
                             }.into_view()
@@ -500,24 +533,32 @@ fn CommandPalette(
                             
                             grouped.into_iter().map(|(entity_type, items)| {
                                 view! {
-                                    <div class="result-group">
-                                        <div class="group-header">{entity_type.to_uppercase()}</div>
+                                    <div class="mb-2">
+                                        <div class="px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider">{entity_type.to_uppercase()}</div>
                                         {items.into_iter().map(|(i, item)| {
                                             let url = item.url.clone();
                                             let navigate = navigate.clone();
                                             let on_close = on_close.clone();
                                             view! {
                                                 <div 
-                                                    class="result-item"
-                                                    class:selected=move || sel == i
+                                                    class="flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer transition-colors"
+                                                    class:bg-indigo-600=move || sel == i
+                                                    class:text-white=move || sel == i
+                                                    class:text-slate-300=move || sel != i
+                                                    class:hover:bg-white_5=move || sel != i
                                                     on:click=move |_| {
                                                         navigate(&url, Default::default());
                                                         on_close();
                                                     }
                                                 >
-                                                    <span class="result-icon">{item.icon}</span>
-                                                    <span class="result-title">{item.title}</span>
-                                                    <span class="result-subtitle">{item.subtitle}</span>
+                                                    <span class="text-xl">{item.icon}</span>
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="font-medium truncate">{item.title}</div>
+                                                        <div class="text-xs opacity-70 truncate">{item.subtitle}</div>
+                                                    </div>
+                                                    {move || (sel == i).then(|| view! {
+                                                        <span class="text-xs opacity-70">"↵"</span>
+                                                    })}
                                                 </div>
                                             }
                                         }).collect_view()}
@@ -528,10 +569,10 @@ fn CommandPalette(
                     }}
                 </div>
                 
-                <div class="palette-footer">
-                    <span>"↑↓ Navigate"</span>
-                    <span>"↵ Select"</span>
-                    <span>"Esc Close"</span>
+                <div class="flex items-center gap-4 px-4 py-3 bg-white/5 border-t border-white/10 text-xs text-slate-500 font-medium">
+                    <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-white/10 min-w-[20px] text-center">"↑"</kbd> <kbd class="px-1.5 py-0.5 rounded bg-white/10 min-w-[20px] text-center">"↓"</kbd> "Navigate"</span>
+                    <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-white/10 min-w-[20px] text-center">"↵"</kbd> "Select"</span>
+                    <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-white/10 min-w-[20px] text-center">"Esc"</kbd> "Close"</span>
                 </div>
             </div>
         </div>
@@ -546,6 +587,98 @@ struct SearchResult {
     title: String,
     subtitle: String,
     url: String,
+    #[allow(dead_code)]
+    action: Option<SearchAction>,
+}
+
+// Action types for command bar
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+enum SearchAction {
+    Navigate(String),
+    CreateEntity { entity_type: String, prefill: Option<String> },
+    QuickAction { action_id: String },
+}
+
+// Intent parsing - detect commands like "add contact John Doe"
+fn parse_intent(query: &str) -> Option<SearchResult> {
+    let q = query.to_lowercase();
+    let words: Vec<&str> = q.split_whitespace().collect();
+    
+    if words.is_empty() {
+        return None;
+    }
+    
+    // Detect "add/create/new" commands
+    let action_words = ["add", "create", "new"];
+    let entity_types = [
+        ("contact", "👤", "/app/crm/entity/contact", "contact"),
+        ("deal", "💰", "/app/crm/entity/deal", "deal"),
+        ("property", "🏠", "/app/realestate/entity/property", "property"),
+        ("task", "✓", "/app/crm/entity/task", "task"),
+        ("company", "🏢", "/app/crm/entity/company", "company"),
+        ("viewing", "👁", "/app/realestate/entity/viewing", "viewing"),
+    ];
+    
+    if let Some(action_word) = words.first() {
+        if action_words.contains(action_word) && words.len() >= 2 {
+            // Check for entity type
+            for (entity_name, icon, base_url, entity_code) in entity_types.iter() {
+                if words.get(1) == Some(entity_name) {
+                    // Extract prefill data (remaining words)
+                    let prefill: String = words.iter().skip(2).cloned().collect::<Vec<_>>().join(" ");
+                    let prefill_param = if !prefill.is_empty() { 
+                        format!("?prefill={}", urlencoding::encode(&prefill)) 
+                    } else { 
+                        String::new() 
+                    };
+                    
+                    return Some(SearchResult {
+                        entity_type: "Quick Action".to_string(),
+                        icon,
+                        title: format!("Create new {}", entity_name),
+                        subtitle: if !prefill.is_empty() { 
+                            format!("Pre-fill: {}", prefill) 
+                        } else { 
+                            format!("Open {} creation form", entity_name) 
+                        },
+                        url: format!("{}/new{}", base_url, prefill_param),
+                        action: Some(SearchAction::CreateEntity {
+                            entity_type: entity_code.to_string(),
+                            prefill: if prefill.is_empty() { None } else { Some(prefill) },
+                        }),
+                    });
+                }
+            }
+        }
+    }
+    
+    // Detect navigation shortcuts
+    let navigation_shortcuts = [
+        ("dashboard", "📊", "Go to Dashboard", "/", "Command Center", "dashboard"),
+        ("contacts", "👤", "Go to Contacts", "/app/crm/entity/contact", "View all contacts", "contacts"),
+        ("deals", "💰", "Go to Deals", "/app/crm/entity/deal", "View all deals", "deals"),
+        ("properties", "🏠", "Go to Properties", "/app/realestate/entity/property", "View all properties", "properties"),
+        ("settings", "⚙️", "Go to Settings", "/app/settings", "System settings", "settings"),
+        ("reports", "📊", "Go to Reports", "/app/reports", "View reports", "reports"),
+        ("inbox", "📬", "Go to Inbox", "/app/inbox", "View messages", "inbox"),
+        ("calendar", "📅", "Go to Calendar", "/app/calendar", "View calendar", "calendar"),
+    ];
+    
+    for (keyword, icon, title, url, subtitle, _id) in navigation_shortcuts.iter() {
+        if q.contains(keyword) || keyword.contains(&q) {
+            return Some(SearchResult {
+                entity_type: "Navigation".to_string(),
+                icon,
+                title: title.to_string(),
+                subtitle: subtitle.to_string(),
+                url: url.to_string(),
+                action: Some(SearchAction::Navigate(url.to_string())),
+            });
+        }
+    }
+    
+    None
 }
 
 // Search API call - searches across contacts, deals, properties
@@ -554,6 +687,11 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
     
     let mut results = vec![];
     let q = query.to_lowercase();
+    
+    // First, check for intent/command parsing
+    if let Some(intent_result) = parse_intent(query) {
+        results.push(intent_result);
+    }
     
     // Search contacts
     let contacts_url = format!("{}/entities/contact?tenant_id={}", API_BASE, TENANT_ID);
@@ -583,6 +721,7 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
                     title: name.to_string(),
                     subtitle: email.to_string(),
                     url: format!("/app/crm/entity/contact/{}", id),
+                    action: None,
                 });
             }
         }
@@ -603,10 +742,11 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
             if title.to_lowercase().contains(&q) {
                 results.push(SearchResult {
                     entity_type: "Deals".to_string(),
-                    icon: "�",
+                    icon: "💰",
                     title: title.to_string(),
                     subtitle: "".to_string(),
                     url: format!("/app/crm/entity/deal/{}", id),
+                    action: None,
                 });
             }
         }
@@ -631,6 +771,7 @@ async fn search_entities(query: &str) -> Result<Vec<SearchResult>, String> {
                     title: title.to_string(),
                     subtitle: "".to_string(),
                     url: format!("/app/realestate/entity/property/{}", id),
+                    action: None,
                 });
             }
         }

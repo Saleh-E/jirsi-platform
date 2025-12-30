@@ -272,13 +272,13 @@ pub fn WorkflowEditorPage() -> impl IntoView {
                             <button class="ui-btn ui-btn-ghost" on:click=move |_| set_show_test_webhook.set(false)>"×"</button>
                         </div>
                         <div class="ui-modal-body">
-                            <p class="text-secondary mb-4">
+                            <p class="text-slate-400 mb-4">
                                 "Simulate an incoming webhook event to test your workflow. 
                                 The payload below will be sent as if it came from an external system."
                             </p>
                             <label class="text-sm font-semibold text-secondary block mb-2">"Webhook Payload (JSON):"</label>
                             <textarea 
-                                class="ui-input font-mono"
+                                class="bg-surface border border-white/10 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                 style="min-height: 200px;"
                                 prop:value=test_payload
                                 on:input=move |ev| {

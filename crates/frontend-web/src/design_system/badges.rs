@@ -25,17 +25,13 @@ pub enum BadgeColor {
 impl BadgeColor {
     pub fn class(&self) -> &'static str {
         match self {
-            BadgeColor::Neutral => "ui-badge-neutral",
-            BadgeColor::Success => "ui-badge-success",
-            BadgeColor::Warning => "ui-badge-warning",
-            BadgeColor::Error => "ui-badge-error",
-            BadgeColor::Info => "ui-badge-info",
-            BadgeColor::Blue => "ui-badge-info",
-            BadgeColor::Green => "ui-badge-success",
-            BadgeColor::Amber => "ui-badge-warning",
-            BadgeColor::Red => "ui-badge-error",
-            BadgeColor::Purple => "ui-badge-purple",
-            BadgeColor::Cyan => "ui-badge-cyan",
+            BadgeColor::Neutral => "bg-slate-500/10 text-slate-400 border-slate-500/20",
+            BadgeColor::Success | BadgeColor::Green => "bg-green-500/10 text-green-400 border-green-500/20",
+            BadgeColor::Warning | BadgeColor::Amber => "bg-amber-500/10 text-amber-400 border-amber-500/20",
+            BadgeColor::Error | BadgeColor::Red => "bg-red-500/10 text-red-400 border-red-500/20",
+            BadgeColor::Info | BadgeColor::Blue => "bg-blue-500/10 text-blue-400 border-blue-500/20",
+            BadgeColor::Purple => "bg-purple-500/10 text-purple-400 border-purple-500/20",
+            BadgeColor::Cyan => "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
         }
     }
     
@@ -63,9 +59,9 @@ pub fn Badge(
     let color = color.unwrap_or_default();
     
     view! {
-        <span class=format!("ui-badge {}", color.class())>
+        <span class=format!("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border {}", color.class())>
             {icon.map(|i| view! {
-                <i class=format!("fa-solid {} mr-1 text-xs", i)></i>
+                <i class=format!("fa-solid {} mr-1.5 text-xs", i)></i>
             })}
             {label}
         </span>
@@ -98,8 +94,8 @@ pub fn StatusBadge(
         .join(" ");
     
     view! {
-        <span class=format!("ui-badge {}", badge_color.class())>
-            <span class="ui-badge-dot"></span>
+        <span class=format!("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border {}", badge_color.class())>
+            <span class="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse"></span>
             {display_status}
         </span>
     }
@@ -124,7 +120,7 @@ pub fn PriorityBadge(
         .unwrap_or_default() + &priority[1..];
     
     view! {
-        <span class=format!("ui-badge {}", color.class())>
+        <span class=format!("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border {}", color.class())>
             <i class=format!("fa-solid {} mr-1 text-xs", icon)></i>
             {display}
         </span>

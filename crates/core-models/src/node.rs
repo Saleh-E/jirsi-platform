@@ -73,6 +73,8 @@ pub enum NodeType {
     TriggerOnEvent,
     TriggerSchedule,
     TriggerManual,
+    /// State machine trigger - fires on state transitions
+    TriggerStateChange,
 
     // Conditions
     ConditionIf,
@@ -90,17 +92,29 @@ pub enum NodeType {
     // Actions
     ActionSendEmail,
     ActionSendSms,
+    /// WhatsApp Business API integration (Meta Cloud API)
+    ActionWhatsapp,
     ActionSendWebhook,
     ActionCreateInteraction,
     ActionCreateTask,
     ActionScheduleMeeting,
     ActionDelay,
+    /// Collect payment via Stripe/PaymentProvider
+    ActionCollectPayment,
 
     // AI
     AiSummarize,
     AiClassify,
     AiExtract,
     AiGenerate,
+    /// RAG-powered context-aware AI (replaces generic AiGenerate for production)
+    AiContextAware,
+    
+    // Logic/Intelligence (Real Estate)
+    /// Smart matching - matches demand (leads/requirements) with supply (properties)
+    LogicMatch,
+    /// Geo-fence check - validates coordinates within a target zone
+    LogicGeoFence,
     
     // User-defined logic (WASM)
     ScriptNode,

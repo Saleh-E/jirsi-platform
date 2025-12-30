@@ -10,7 +10,7 @@ module.exports = defineConfig({
     reporter: 'html',
 
     use: {
-        baseURL: 'http://localhost:8080',
+        baseURL: 'http://localhost:8104',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
     },
@@ -31,8 +31,8 @@ module.exports = defineConfig({
     ],
 
     webServer: {
-        command: 'cd crates/frontend-web && trunk serve',
-        url: 'http://localhost:8080',
+        command: 'cd crates/frontend-web && trunk serve --port 8104',
+        url: 'http://localhost:8104',
         reuseExistingServer: !process.env.CI,
     },
 });

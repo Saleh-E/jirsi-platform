@@ -61,75 +61,97 @@ impl NodeRegistry {
 
 impl Default for NodeRegistry {
     fn default() -> Self {
-        let mut registry = Self::new();
-        
-        // Register built-in handlers
-        registry.register(
-            NodeType::TriggerManual,
-            Arc::new(TriggerHandler),
-        );
-        registry.register(
-            NodeType::DataSetField,
-            Arc::new(SetFieldHandler),
-        );
-        registry.register(
-            NodeType::ActionSendEmail,
-            Arc::new(SendEmailHandler),
-        );
-        registry.register(
-            NodeType::ConditionIf,
-            Arc::new(ConditionIfHandler),
-        );
-        registry.register(
-            NodeType::DataCreateRecord,
-            Arc::new(CreateRecordHandler),
-        );
-        registry.register(
-            NodeType::DataUpdateRecord,
-            Arc::new(UpdateRecordHandler),
-        );
-        
-        // External Integration Nodes
-        registry.register(
-            NodeType::ActionSendSms,
-            Arc::new(SendSmsHandler),
-        );
-        registry.register(
-            NodeType::ActionSendWebhook,
-            Arc::new(WebhookHandler),
-        );
-        registry.register(
-            NodeType::ActionDelay,
-            Arc::new(DelayHandler),
-        );
-        
-        // AI-Powered Nodes
-        registry.register(
-            NodeType::AiGenerate,
-            Arc::new(AiGenerateHandler),
-        );
-        registry.register(
-            NodeType::AiSummarize,
-            Arc::new(AiSummarizeHandler),
-        );
-        registry.register(
-            NodeType::AiClassify,
-            Arc::new(AiClassifyHandler),
-        );
-        registry.register(
-            NodeType::AiExtract,
-            Arc::new(AiExtractHandler),
-        );
-        
-        // Register ScriptNode handler for WASM execution (backend only - requires extism/wasmtime)
-        #[cfg(feature = "backend")]
-        registry.register(
-            NodeType::ScriptNode,
-            Arc::new(crate::script_node::ScriptNodeHandler::new()),
-        );
-        
-        registry
-    }
+    let mut registry = Self::new();
+    
+    // Register built-in handlers
+    registry.register(
+        NodeType::TriggerManual,
+        Arc::new(TriggerHandler),
+    );
+    registry.register(
+        NodeType::DataSetField,
+        Arc::new(SetFieldHandler),
+    );
+    registry.register(
+        NodeType::ActionSendEmail,
+        Arc::new(SendEmailHandler),
+    );
+    registry.register(
+        NodeType::ConditionIf,
+        Arc::new(ConditionIfHandler),
+    );
+    registry.register(
+        NodeType::DataCreateRecord,
+        Arc::new(CreateRecordHandler),
+    );
+    registry.register(
+        NodeType::DataUpdateRecord,
+        Arc::new(UpdateRecordHandler),
+    );
+    
+    // External Integration Nodes
+    registry.register(
+        NodeType::ActionSendSms,
+        Arc::new(SendSmsHandler),
+    );
+    registry.register(
+        NodeType::ActionSendWebhook,
+        Arc::new(WebhookHandler),
+    );
+    registry.register(
+        NodeType::ActionDelay,
+        Arc::new(DelayHandler),
+    );
+    
+    // AI-Powered Nodes
+    registry.register(
+        NodeType::AiGenerate,
+        Arc::new(AiGenerateHandler),
+    );
+    registry.register(
+        NodeType::AiSummarize,
+        Arc::new(AiSummarizeHandler),
+    );
+    registry.register(
+        NodeType::AiClassify,
+        Arc::new(AiClassifyHandler),
+    );
+    registry.register(
+        NodeType::AiExtract,
+        Arc::new(AiExtractHandler),
+    );
+    
+    // Real Estate Intelligence Nodes
+    registry.register(
+        NodeType::LogicMatch,
+        Arc::new(SmartMatchHandler),
+    );
+    registry.register(
+        NodeType::LogicGeoFence,
+        Arc::new(GeoFenceHandler),
+    );
+    registry.register(
+        NodeType::TriggerStateChange,
+        Arc::new(StateChangeHandler),
+    );
+    registry.register(
+        NodeType::ActionWhatsapp,
+        Arc::new(WhatsappHandler),
+    );
+    registry.register(
+        NodeType::AiContextAware,
+        Arc::new(ContextAwareAiHandler),
+    );
+    
+    // Register ScriptNode handler for WASM execution (backend only - requires extism/wasmtime)
+    #[cfg(feature = "backend")]
+    registry.register(
+        NodeType::ScriptNode,
+        Arc::new(crate::script_node::ScriptNodeHandler::new()),
+    );
+    
+    registry
+}
 }
 
 // ============ Built-in Handlers ============
@@ -900,4 +922,307 @@ impl NodeHandler for DelayHandler {
     }
 }
 
+// ============================================================================
+// REAL ESTATE INTELLIGENCE HANDLERS
+// ============================================================================
 
+/// Smart Match Handler - The "Tinder for Real Estate" Logic
+/// Matches a Source Record (e.g., Tenant Requirements) with Target Records (Properties)
+/// based on overlapping fields (Price, Bedrooms, Location).
+pub struct SmartMatchHandler;
+
+#[async_trait]
+impl NodeHandler for SmartMatchHandler {
+    async fn execute(
+        &self,
+        node: &NodeDef,
+        inputs: HashMap<String, Value>,
+        context: &mut ExecutionContext,
+    ) -> Result<Value, NodeEngineError> {
+        let strategy = node.config.get("strategy")
+            .and_then(|v| v.as_str())
+            .unwrap_or("strict");
+        
+        let target_entity = node.config.get("target_entity")
+            .and_then(|v| v.as_str())
+            .unwrap_or("property");
+        
+        let threshold = node.config.get("threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.8);
+        
+        // Get matching criteria from inputs or config
+        let criteria = inputs.get("criteria")
+            .or_else(|| node.config.get("criteria"))
+            .cloned()
+            .unwrap_or(serde_json::json!({}));
+        
+        tracing::info!(
+            target_entity = target_entity, 
+            strategy = strategy,
+            threshold = threshold,
+            "Executing Smart Match"
+        );
+        
+        // In production: Query pgvector for semantic search or SQL for exact match
+        // For now, we simulate the matching logic
+        // TODO: Implement actual matching against database
+        
+        Ok(serde_json::json!({
+            "action": "smart_match",
+            "target_entity": target_entity,
+            "strategy": strategy,
+            "threshold": threshold,
+            "matches_found": 3, // Mock
+            "top_match": {
+                "id": uuid::Uuid::new_v4(),
+                "score": 0.98,
+                "reason": "Perfect match on Location and Budget"
+            },
+            "all_matches": [],
+            "status": "success"
+        }))
+    }
+}
+
+/// GeoFence Handler - Validates if coordinates are within a target zone
+pub struct GeoFenceHandler;
+
+#[async_trait]
+impl NodeHandler for GeoFenceHandler {
+    async fn execute(
+        &self,
+        node: &NodeDef,
+        inputs: HashMap<String, Value>,
+        _context: &mut ExecutionContext,
+    ) -> Result<Value, NodeEngineError> {
+        // Get point to check
+        let lat = inputs.get("latitude")
+            .or_else(|| node.config.get("latitude"))
+            .and_then(|v| v.as_f64());
+        
+        let lng = inputs.get("longitude")
+            .or_else(|| node.config.get("longitude"))
+            .and_then(|v| v.as_f64());
+        
+        // Get target zone center
+        let center_lat = node.config.get("center_latitude")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        
+        let center_lng = node.config.get("center_longitude")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        
+        // Radius in kilometers
+        let radius_km = node.config.get("radius_km")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(5.0);
+        
+        let (is_within, distance) = match (lat, lng) {
+            (Some(lat), Some(lng)) => {
+                // Haversine formula for distance calculation
+                let distance = haversine_distance(lat, lng, center_lat, center_lng);
+                (distance <= radius_km, distance)
+            }
+            _ => (false, 0.0)
+        };
+        
+        tracing::info!(
+            is_within = is_within,
+            distance_km = distance,
+            radius_km = radius_km,
+            "GeoFence check completed"
+        );
+        
+        Ok(serde_json::json!({
+            "action": "geofence_check",
+            "is_within": is_within,
+            "distance_km": distance,
+            "radius_km": radius_km,
+            "center": {
+                "latitude": center_lat,
+                "longitude": center_lng
+            }
+        }))
+    }
+}
+
+/// Haversine formula to calculate distance between two points on Earth
+fn haversine_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    const EARTH_RADIUS_KM: f64 = 6371.0;
+    
+    let d_lat = (lat2 - lat1).to_radians();
+    let d_lon = (lon2 - lon1).to_radians();
+    
+    let lat1 = lat1.to_radians();
+    let lat2 = lat2.to_radians();
+    
+    let a = (d_lat / 2.0).sin().powi(2) 
+        + lat1.cos() * lat2.cos() * (d_lon / 2.0).sin().powi(2);
+    let c = 2.0 * a.sqrt().asin();
+    
+    EARTH_RADIUS_KM * c
+}
+
+/// State Change Handler - Fires when an entity transitions between states
+pub struct StateChangeHandler;
+
+#[async_trait]
+impl NodeHandler for StateChangeHandler {
+    async fn execute(
+        &self,
+        node: &NodeDef,
+        inputs: HashMap<String, Value>,
+        context: &mut ExecutionContext,
+    ) -> Result<Value, NodeEngineError> {
+        // Get state field to monitor
+        let state_field = node.config.get("state_field")
+            .and_then(|v| v.as_str())
+            .unwrap_or("status");
+        
+        // Get allowed transitions (optional validation)
+        let allowed_from = node.config.get("from")
+            .and_then(|v| v.as_str());
+        
+        let allowed_to = node.config.get("to")
+            .and_then(|v| v.as_str());
+        
+        // Get current and previous values from context
+        let trigger_data = context.values.get("$trigger")
+            .cloned()
+            .unwrap_or(serde_json::json!({}));
+        
+        let current_value = trigger_data.get(state_field);
+        let previous_value = trigger_data.get(&format!("_prev_{}", state_field));
+        
+        // Check if transition is valid
+        let from_valid = allowed_from.map_or(true, |from| {
+            previous_value.and_then(|v| v.as_str()) == Some(from)
+        });
+        
+        let to_valid = allowed_to.map_or(true, |to| {
+            current_value.and_then(|v| v.as_str()) == Some(to)
+        });
+        
+        let is_valid_transition = from_valid && to_valid;
+        
+        tracing::info!(
+            state_field = state_field,
+            from = ?previous_value,
+            to = ?current_value,
+            is_valid = is_valid_transition,
+            "State change detected"
+        );
+        
+        if !is_valid_transition {
+            return Err(NodeEngineError::NodeExecutionFailed {
+                node_id: node.id,
+                message: format!(
+                    "Invalid state transition: {:?} -> {:?} (expected {:?} -> {:?})",
+                    previous_value, current_value, allowed_from, allowed_to
+                ),
+            });
+        }
+        
+        Ok(serde_json::json!({
+            "action": "state_change",
+            "field": state_field,
+            "from": previous_value,
+            "to": current_value,
+            "is_valid": is_valid_transition
+        }))
+    }
+}
+
+/// WhatsApp Handler - Sends template messages via Meta Cloud API
+pub struct WhatsappHandler;
+
+#[async_trait]
+impl NodeHandler for WhatsappHandler {
+    async fn execute(
+        &self,
+        node: &NodeDef,
+        inputs: HashMap<String, Value>,
+        _context: &mut ExecutionContext,
+    ) -> Result<Value, NodeEngineError> {
+        let to = node.config.get("to")
+            .or_else(|| inputs.get("phone"))
+            .or_else(|| inputs.get("to"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        
+        let template = node.config.get("template")
+            .and_then(|v| v.as_str())
+            .unwrap_or("hello_world");
+        
+        let variables = node.config.get("variables")
+            .cloned()
+            .unwrap_or(serde_json::json!([]));
+        
+        tracing::info!(
+            to = ?to, 
+            template = template, 
+            "Sending WhatsApp Business Message"
+        );
+        
+        // In production, this would call the Meta WhatsApp Cloud API
+        // For now, we log and return mock response
+        // TODO: Integrate with MessagingProvider from core-integrations
+        
+        Ok(serde_json::json!({
+            "action": "send_whatsapp",
+            "to": to,
+            "template": template,
+            "variables": variables,
+            "sent": true,
+            "provider": "meta_cloud_api",
+            "message_id": uuid::Uuid::new_v4().to_string()
+        }))
+    }
+}
+
+/// Context-Aware AI Handler - Uses RAG for system-aware insights
+pub struct ContextAwareAiHandler;
+
+#[async_trait]
+impl NodeHandler for ContextAwareAiHandler {
+    async fn execute(
+        &self,
+        node: &NodeDef,
+        inputs: HashMap<String, Value>,
+        context: &mut ExecutionContext,
+    ) -> Result<Value, NodeEngineError> {
+        let query = inputs.get("query")
+            .or_else(|| node.config.get("query"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        
+        let system_prompt = node.config.get("system_prompt")
+            .and_then(|v| v.as_str());
+        
+        let include_context = node.config.get("include_context")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        
+        tracing::info!(
+            query_len = query.len(),
+            include_context = include_context,
+            "Executing Context-Aware AI"
+        );
+        
+        // In production:
+        // 1. Vector search for relevant context (pgvector)
+        // 2. Inject context into system prompt
+        // 3. Generate with OpenAI/Anthropic
+        // TODO: Integrate with EmbeddingService and AiService
+        
+        Ok(serde_json::json!({
+            "action": "ai_context_aware",
+            "query": query,
+            "response": "This is a mock RAG response. In production, this would include relevant context from your data.",
+            "sources": 0,
+            "mock": true
+        }))
+    }
+}

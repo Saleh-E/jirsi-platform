@@ -18,12 +18,14 @@ pub enum ButtonVariant {
 
 impl ButtonVariant {
     pub fn class(&self) -> &'static str {
+        // Base classes + Variant classes
+        // Base: inline-flex items-center justify-center rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed
         match self {
-            ButtonVariant::Primary => "ui-btn ui-btn-primary",
-            ButtonVariant::Secondary => "ui-btn ui-btn-secondary",
-            ButtonVariant::Ghost => "ui-btn ui-btn-ghost",
-            ButtonVariant::Danger => "ui-btn ui-btn-danger",
-            ButtonVariant::Success => "ui-btn ui-btn-success",
+            ButtonVariant::Primary => "inline-flex items-center justify-center rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 focus:ring-indigo-500",
+            ButtonVariant::Secondary => "inline-flex items-center justify-center rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10 focus:ring-slate-500 backdrop-blur-sm",
+            ButtonVariant::Ghost => "inline-flex items-center justify-center rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed bg-transparent text-slate-400 hover:text-white hover:bg-white/5 focus:ring-slate-500",
+            ButtonVariant::Danger => "inline-flex items-center justify-center rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed bg-red-600 text-white hover:bg-red-500 focus:ring-red-500",
+            ButtonVariant::Success => "inline-flex items-center justify-center rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed bg-green-600 text-white hover:bg-green-500 focus:ring-green-500",
         }
     }
 }
@@ -40,9 +42,9 @@ pub enum ButtonSize {
 impl ButtonSize {
     pub fn class(&self) -> &'static str {
         match self {
-            ButtonSize::Sm => "ui-btn-sm",
-            ButtonSize::Md => "ui-btn-md",
-            ButtonSize::Lg => "ui-btn-lg",
+            ButtonSize::Sm => "h-8 px-3 text-sm gap-1.5",
+            ButtonSize::Md => "h-10 px-4 py-2 text-sm gap-2",
+            ButtonSize::Lg => "h-12 px-6 text-base gap-2.5",
         }
     }
 }
@@ -113,7 +115,7 @@ pub fn IconButton(
     
     view! {
         <button
-            class=format!("{} ui-btn-icon", variant.class())
+            class=format!("{} h-10 w-10 p-0 shrink-0", variant.class())
             title=tooltip.unwrap_or_default()
             on:click=move |ev| {
                 if let Some(handler) = on_click {
@@ -135,11 +137,12 @@ pub fn LinkButton(
     children: Children,
 ) -> impl IntoView {
     let variant = variant.unwrap_or(ButtonVariant::Primary);
+    let size = ButtonSize::Md; // Default size for links
     
     view! {
         <a
             href=href
-            class=variant.class()
+            class=format!("{} {}", variant.class(), size.class())
         >
             {icon.map(|i| view! {
                 <i class=format!("fa-solid {} mr-2", i)></i>

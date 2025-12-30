@@ -2,11 +2,23 @@
 //!
 //! Provides the execution runtime for Houdini-style node graphs.
 
+#[cfg(feature = "backend")]
+pub mod circuit_breaker;
 pub mod context;
 pub mod error;
 pub mod events;
+pub mod matching;
 pub mod nodes;
+#[cfg(feature = "backend")]
+pub mod notifications;
+#[cfg(feature = "backend")]
+pub mod payments;
+#[cfg(feature = "backend")]
+pub mod plugin_sandbox;
+pub mod state_machine;
 pub mod strategies;
+#[cfg(feature = "backend")]
+pub mod whatsapp;
 
 // WASM executor and script node only available with backend feature (uses extism/wasmtime)
 #[cfg(feature = "backend")]

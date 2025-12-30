@@ -2,3 +2,12 @@
 target = "index.html"
 dist = "dist"
 url_base = "/"
+
+[[proxy]]
+rewrite = "/api/"
+backend = "http://localhost:3000/api/"
+
+[[hooks]]
+stage = "pre_build"
+command = "npx"
+command_arguments = ["tailwindcss", "-i", "./input.css", "-o", "./assets/tailwind.css", "--minify"]

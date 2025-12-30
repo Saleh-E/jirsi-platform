@@ -485,7 +485,7 @@ fn UsersSettings() -> impl IntoView {
                                     <td>
                                         <span class=status_class>{&member.status}</span>
                                     </td>
-                                    <td class="text-muted">
+                                    <td class="text-slate-500">
                                         {member.last_active.clone().unwrap_or_else(|| "—".to_string())}
                                     </td>
                                     <td>
@@ -997,7 +997,7 @@ fn IntegrationsSettings() -> impl IntoView {
                                 </div>
                             </div>
                             <div class="integration-status">
-                                <span class="status-dot inactive"></span>
+                                <span class="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></span>
                                 "Not Connected"
                             </div>
                             <button
@@ -1082,7 +1082,7 @@ fn IntegrationsSettings() -> impl IntoView {
                                     </div>
                                 }.into_view(),
                                 _ => view! {
-                                    <p class="text-muted">"Configuration coming soon..."</p>
+                                    <p class="text-slate-500">"Configuration coming soon..."</p>
                                 }.into_view(),
                             }}
                         </div>

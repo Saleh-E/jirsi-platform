@@ -66,5 +66,8 @@ leptos_axum = { version = "0.6" }
 # Background jobs
 apalis = { version = "0.5", features = ["postgres"] }
 
+# Redis (for circuit breaker, rate limiting, caching)
+redis = { version = "0.23", features = ["tokio-comp", "connection-manager"] }
+
 # Testing
 tokio-test = "0.4"

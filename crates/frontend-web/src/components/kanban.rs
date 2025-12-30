@@ -121,12 +121,12 @@ pub fn KanbanView(
     });
     
     view! {
-        <div class="kanban-container">
+        <div class="flex flex-col h-full">
             {move || {
                 if loading.get() {
-                    view! { <div class="kanban-loading">"Loading..."</div> }.into_view()
+                    view! { <div class="flex items-center justify-center p-8 text-slate-400">"Loading..."</div> }.into_view()
                 } else if let Some(err) = error.get() {
-                    view! { <div class="kanban-error">{err}</div> }.into_view()
+                    view! { <div class="p-4 text-red-400 bg-red-500/10 rounded-lg">{err}</div> }.into_view()
                 } else {
                     let cfg = config_stored.get_value();
                     let groupable = groupable_stored.get_value();
@@ -135,12 +135,11 @@ pub fn KanbanView(
                     view! {
                         // Kanban Header with Field Selector
                         <Show when=move || show_selector>
-                            <div class="kanban-header flex items-center justify-between mb-4 px-2">
+                            <div class="flex items-center justify-between mb-4 px-2">
                                 <div class="flex items-center gap-2">
-                                    <span class="text-secondary text-sm">"Group by:"</span>
+                                    <span class="text-slate-400 text-sm">"Group by:"</span>
                                     <select
-                                        class="ui-input"
-                                        style="width: auto; min-width: 150px;"
+                                        class="bg-surface border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         on:change=move |ev| {
                                             let new_field = event_target_value(&ev);
                                             set_current_group_field.set(new_field.clone());
@@ -157,13 +156,13 @@ pub fn KanbanView(
                                         }).collect_view()}
                                     </select>
                                 </div>
-                                <span class="text-muted text-xs">
+                                <span class="text-slate-500 text-xs">
                                     {move || format!("{} cards", columns.get().iter().map(|c| c.records.len()).sum::<usize>())}
                                 </span>
                             </div>
                         </Show>
                         
-                        <div class="kanban-board flex gap-4 overflow-x-auto pb-4">
+                        <div class="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
                             <For
                                 each=move || columns.get()
                                 key=|col| col.value.clone()
@@ -176,7 +175,7 @@ pub fn KanbanView(
                                     
                                     view! {
                                         <div 
-                                            class="kanban-column flex-shrink-0 w-72 bg-gray-800 rounded-lg"
+                                            class="flex-shrink-0 w-72 bg-surface/50 backdrop-blur-lg rounded-xl border border-white/10 overflow-hidden"
                                             style=format!("--column-color: {}", column_color)
                                             on:dragover=move |ev| {
                                                 ev.prevent_default();
@@ -214,7 +213,7 @@ pub fn KanbanView(
                                                 }
                                             }
                                         >
-                                            <div class="kanban-column-header p-3 border-b border-gray-700 flex justify-between">
+                                            <div class="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
                                                 <div class="flex items-center gap-2">
                                                     <span 
                                                         class="w-3 h-3 rounded-full" 
@@ -222,11 +221,11 @@ pub fn KanbanView(
                                                     ></span>
                                                     <span class="font-medium text-white">{column_label}</span>
                                                 </div>
-                                                <span class="bg-gray-700 text-gray-300 text-xs px-2 py-1 rounded-full">
+                                                <span class="bg-white/10 text-slate-300 text-xs px-2 py-0.5 rounded-full">
                                                     {record_count}
                                                 </span>
                                             </div>
-                                            <div class="kanban-column-body p-2 space-y-2">
+                                            <div class="p-2 space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
                                                 {records.into_iter().map(|record| {
                                                     let record_id = record.get("id")
                                                         .and_then(|v| v.as_str())
@@ -240,13 +239,13 @@ pub fn KanbanView(
                                                     
                                                     view! {
                                                         <div 
-                                                            class="kanban-card bg-gray-700 rounded-lg p-3 cursor-move hover:bg-gray-650"
+                                                            class="bg-surface rounded-lg p-3 cursor-move hover:bg-white/10 transition-colors border border-white/5 shadow-sm"
                                                             draggable="true"
                                                             on:dragstart=move |_| {
                                                                 set_dragging_id.set(Some(drag_id.clone()));
                                                             }
                                                         >
-                                                            <div class="card-title font-medium text-white">{title}</div>
+                                                            <div class="font-medium text-white text-sm">{title}</div>
                                                         </div>
                                                     }
                                                 }).collect_view()}

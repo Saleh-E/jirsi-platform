@@ -1,0 +1,96 @@
+# Jirsi Platform - Fly.io Configuration
+# Edge deployment with geo-routing
+
+app = "jirsi-api"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile.fly"
+
+[env]
+  RUST_LOG = "info"
+  PORT = "8080"
+  DATABASE_POOL_SIZE = "10"
+
+# Multiple regions for edge deployment
+[[regions]]
+  id = "ams"
+  name = "Amsterdam"
+  primary = true
+
+[[regions]]
+  id = "iad"
+  name = "Washington DC"
+
+[[regions]]
+  id = "sin"
+  name = "Singapore"
+
+[[regions]]
+  id = "syd"
+  name = "Sydney"
+
+[[regions]]
+  id = "dxb"
+  name = "Dubai"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [services.concurrency]
+    hard_limit = 250
+    soft_limit = 200
+    type = "connections"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    grace_period = "1s"
+    interval = "15s"
+    restart_limit = 0
+    timeout = "2s"
+
+  [[services.http_checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "get"
+    path = "/health"
+    protocol = "http"
+    restart_limit = 0
+
+[mounts]
+  source = "jirsi_data"
+  destination = "/data"
+
+# Auto-scaling configuration
+[autoscaling]
+  min_machines_running = 1
+  
+[[autoscaling.regions]]
+  code = "ams"
+  min = 2
+  max = 10
+
+[[autoscaling.regions]]
+  code = "iad"
+  min = 1
+  max = 5
+
+[[autoscaling.regions]]
+  code = "sin"
+  min = 1
+  max = 5
+
+# Metrics
+[metrics]
+  port = 9091
+  path = "/metrics"

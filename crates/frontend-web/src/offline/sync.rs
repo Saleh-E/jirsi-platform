@@ -360,3 +360,218 @@ enum PushError {
     Network(String),
     Server(String),
 }
+
+// ============================================================================
+// OPTIMISTIC UI SUPPORT
+// ============================================================================
+
+/// Represents a pending optimistic operation that can be rolled back
+#[derive(Clone, Debug)]
+pub struct OptimisticOperation {
+    pub id: Uuid,
+    pub entity_type: String,
+    pub entity_id: Uuid,
+    pub operation: OptimisticOpType,
+    pub original_data: Option<serde_json::Value>,
+    pub new_data: serde_json::Value,
+    pub created_at: i64,
+}
+
+/// Type of optimistic operation
+#[derive(Clone, Debug)]
+pub enum OptimisticOpType {
+    Create,
+    Update,
+    Delete,
+}
+
+/// Result of an optimistic operation
+#[derive(Clone, Debug)]
+pub enum OptimisticResult {
+    /// Operation succeeded - data synced to server
+    Success { new_version: u64 },
+    /// Operation pending - waiting for network
+    Pending,
+    /// Operation failed - needs rollback
+    Failed { error: String },
+    /// Operation was rolled back
+    RolledBack,
+}
+
+impl SyncManager {
+    /// Perform an optimistic update - apply locally first, then sync to server
+    /// Returns immediately after local update; server sync happens in background
+    pub fn optimistic_update(
+        &self,
+        entity_type: &str,
+        entity_id: &Uuid,
+        new_data: serde_json::Value,
+        tenant_id: &Uuid,
+    ) -> Result<OptimisticOperation, String> {
+        // Get original data for potential rollback via query
+        let query = format!(
+            "SELECT data FROM local_entity_records WHERE id = '{}'",
+            entity_id
+        );
+        let original_data = self.local_db.query(&query)
+            .ok()
+            .and_then(|rows| rows.first().cloned())
+            .and_then(|row| {
+                row.get("data")
+                    .and_then(|d| d.as_str())
+                    .and_then(|s| serde_json::from_str(s).ok())
+            });
+        
+        // Create operation record
+        let operation = OptimisticOperation {
+            id: Uuid::new_v4(),
+            entity_type: entity_type.to_string(),
+            entity_id: *entity_id,
+            operation: if original_data.is_some() { OptimisticOpType::Update } else { OptimisticOpType::Create },
+            original_data,
+            new_data: new_data.clone(),
+            created_at: chrono::Utc::now().timestamp(),
+        };
+        
+        // Apply locally immediately (optimistic) - save_record marks as dirty automatically
+        self.local_db.save_record(
+            entity_type,
+            entity_id,
+            tenant_id,
+            &new_data,
+        ).map_err(|e| format!("Local update failed: {}", e))?;
+        
+        gloo_console::info!("Optimistic update applied for", entity_id.to_string());
+        
+        Ok(operation)
+    }
+    
+    /// Perform an optimistic delete
+    pub fn optimistic_delete(
+        &self,
+        entity_type: &str,
+        entity_id: &Uuid,
+        _tenant_id: &Uuid,
+    ) -> Result<OptimisticOperation, String> {
+        // Get original data for rollback via query
+        let query = format!(
+            "SELECT data FROM local_entity_records WHERE id = '{}'",
+            entity_id
+        );
+        let original_data = self.local_db.query(&query)
+            .ok()
+            .and_then(|rows| rows.first().cloned())
+            .and_then(|row| {
+                row.get("data")
+                    .and_then(|d| d.as_str())
+                    .and_then(|s| serde_json::from_str(s).ok())
+            });
+        
+        let operation = OptimisticOperation {
+            id: Uuid::new_v4(),
+            entity_type: entity_type.to_string(),
+            entity_id: *entity_id,
+            operation: OptimisticOpType::Delete,
+            original_data,
+            new_data: serde_json::json!(null),
+            created_at: chrono::Utc::now().timestamp(),
+        };
+        
+        // Mark for deletion locally (soft delete + dirty flag)
+        self.local_db.delete_record(entity_id)
+            .map_err(|e| format!("Local delete failed: {}", e))?;
+        
+        gloo_console::info!("Optimistic delete applied for", entity_id.to_string());
+        
+        Ok(operation)
+    }
+    
+    /// Rollback an optimistic operation (e.g., if server sync failed)
+    pub fn rollback_operation(&self, operation: &OptimisticOperation, tenant_id: &Uuid) -> Result<(), String> {
+        match operation.operation {
+            OptimisticOpType::Create => {
+                // Delete the optimistically created record (hard delete via SQL)
+                let sql = format!(
+                    "DELETE FROM local_entity_records WHERE id = '{}'",
+                    operation.entity_id
+                );
+                self.local_db.execute(&sql)
+                    .map_err(|e| format!("Rollback delete failed: {}", e))?;
+            }
+            OptimisticOpType::Update => {
+                // Restore original data
+                if let Some(ref original) = operation.original_data {
+                    self.local_db.save_record(
+                        &operation.entity_type,
+                        &operation.entity_id,
+                        tenant_id,
+                        original,
+                    ).map_err(|e| format!("Rollback update failed: {}", e))?;
+                    
+                    // Clear dirty flag since we're restoring synced state
+                    let _ = self.local_db.mark_synced(&operation.entity_id, 0);
+                }
+            }
+            OptimisticOpType::Delete => {
+                // Restore the deleted record
+                if let Some(ref original) = operation.original_data {
+                    self.local_db.save_record(
+                        &operation.entity_type,
+                        &operation.entity_id,
+                        tenant_id,
+                        original,
+                    ).map_err(|e| format!("Rollback restore failed: {}", e))?;
+                    
+                    let _ = self.local_db.mark_synced(&operation.entity_id, 0);
+                }
+            }
+        }
+        
+        gloo_console::info!("Rolled back operation", operation.id.to_string());
+        Ok(())
+    }
+    
+    /// Sync a specific optimistic operation to the server
+    /// Returns the result which can be used to trigger rollback if needed
+    pub async fn sync_optimistic_operation(
+        &self,
+        operation: &OptimisticOperation,
+        tenant_id: &Uuid,
+    ) -> OptimisticResult {
+        if !Self::is_online() {
+            return OptimisticResult::Pending;
+        }
+        
+        // Create a dirty record from the operation
+        let record = DirtyRecord {
+            id: operation.entity_id.to_string(),
+            tenant_id: tenant_id.to_string(),
+            entity_type: operation.entity_type.clone(),
+            data: operation.new_data.clone(),
+            server_version: 0, // Will be set by server
+            is_deleted: matches!(operation.operation, OptimisticOpType::Delete),
+        };
+        
+        match self.push_single_record(&record, tenant_id).await {
+            Ok(new_version) => {
+                // Update local version
+                let _ = self.local_db.mark_synced(&operation.entity_id, new_version);
+                OptimisticResult::Success { new_version }
+            }
+            Err(PushError::Conflict { server_version: _ }) => {
+                // Conflict - caller should handle rollback or merge
+                OptimisticResult::Failed { error: "Version conflict".to_string() }
+            }
+            Err(PushError::Network(e)) => {
+                // Network error - keep pending for retry
+                gloo_console::warn!("Network error, will retry:", &e);
+                OptimisticResult::Pending
+            }
+            Err(PushError::Server(e)) => {
+                // Server error - may need rollback
+                OptimisticResult::Failed { error: e }
+            }
+        }
+    }
+}
+

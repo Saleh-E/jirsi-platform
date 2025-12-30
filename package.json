@@ -1,0 +1,10 @@
+{
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "tailwindcss": "^4.1.18"
+  },
+  "scripts": {
+    "test:visual:baseline": "npx playwright test --update-snapshots",
+    "test:visual:compare": "npx playwright test"
+  }
+}

@@ -118,16 +118,16 @@ pub fn SmartTable(
     };
     
     view! {
-        <div class="smart-table-wrapper">
-            <table class="smart-table">
+        <div class="w-full overflow-x-auto rounded-xl border border-white/10 bg-surface/30 backdrop-blur-md">
+            <table class="w-full border-collapse text-left">
                 <thead>
                     <tr>
                         // Checkbox header for bulk select
                         {selectable.then(|| {
                             let all_count = all_ids_stored.get_value().len();
                             view! {
-                                <th class="smart-table-header bulk-checkbox-header">
-                                    <input type="checkbox" class="bulk-checkbox" checked={move || selected_ids.get().len() == all_count && all_count > 0} on:change=toggle_all />
+                                <th class="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-white/10 w-10">
+                                    <input type="checkbox" class="rounded border-slate-600 bg-white/5 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer" checked={move || selected_ids.get().len() == all_count && all_count > 0} on:change=toggle_all />
                                 </th>
                             }
                         })}
@@ -137,18 +137,18 @@ pub fn SmartTable(
                                 .map(|f| f.label.clone())
                                 .unwrap_or_else(|| col.field.clone());
                             view! {
-                                <th class="smart-table-header">
-                                    <span class="header-label">{label}</span>
+                                <th class="px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-white/10 whitespace-nowrap">
+                                    <span class="flex items-center gap-2">{label}</span>
                                 </th>
                             }
                         }).collect::<Vec<_>>()}
                         // Action column header when editable
                         {editable.then(|| view! {
-                            <th class="smart-table-header action-header"></th>
+                            <th class="px-4 py-3 border-b border-white/10 w-12"></th>
                         })}
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-white/5">
                     <For
                         each=move || table_data.get()
                         key=|row| row.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string()
@@ -164,14 +164,14 @@ pub fn SmartTable(
                             let entity = entity_type_stored.get_value();
                             
                             view! {
-                                <tr class="smart-table-row">
+                                <tr class="group transition-colors hover:bg-white/5">
                                     // Checkbox cell for row selection
                                     {selectable.then(|| {
                                         let rid = row_id.clone();
                                         let rid_check = row_id.clone();
                                         view! {
-                                            <td class="smart-table-cell bulk-checkbox-cell">
-                                                <input type="checkbox" class="bulk-checkbox" checked=move || selected_ids.get().contains(&rid_check) on:change=move |_| toggle_row(rid.clone()) on:click=|ev: web_sys::MouseEvent| ev.stop_propagation() />
+                                            <td class="px-4 py-3 whitespace-nowrap">
+                                                <input type="checkbox" class="rounded border-slate-600 bg-white/5 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer" checked=move || selected_ids.get().contains(&rid_check) on:change=move |_| toggle_row(rid.clone()) on:click=|ev: web_sys::MouseEvent| ev.stop_propagation() />
                                             </td>
                                         }
                                     })}
@@ -216,9 +216,9 @@ pub fn SmartTable(
                                         let row_for_nav = row_for_action.clone();
                                         let on_nav = on_row_click_action.clone();
                                         view! {
-                                            <td class="smart-table-cell action-cell">
+                                            <td class="px-4 py-3 whitespace-nowrap text-right">
                                                 <button 
-                                                    class="row-action-btn" 
+                                                    class="w-8 h-8 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100" 
                                                     on:click=move |_| {
                                                         if let Some(ref cb) = on_nav {
                                                             cb.call(row_for_nav.clone());
@@ -238,7 +238,7 @@ pub fn SmartTable(
             </table>
         </div>
     }
-}
+    }
 
 /// Individual cell with inline editing
 #[component]
@@ -424,8 +424,11 @@ fn SmartTableCell(
     
     view! {
         <td 
-            class="smart-table-cell"
-            class:editing=is_editing
+            class="px-6 py-4 text-sm text-slate-300 whitespace-nowrap transition-colors"
+            class:bg-white_5=is_editing
+            class:ring-2=is_editing
+            class:ring-indigo-500_50=is_editing
+            class:ring-inset=is_editing
             on:click=handle_click
         >
             {move || {
@@ -516,10 +519,9 @@ fn SmartTableCell(
                                     }
                                 }
                             };
-                            
                             view! {
                                 // Stop propagation to prevent td click handler from interfering
-                                <div class="cell-edit-wrapper cell-smart-select" on:click=|ev| ev.stop_propagation()>
+                                <div class="w-full min-w-[140px]" on:click=|ev| ev.stop_propagation()>
                                     <SmartSelect
                                         options=select_options
                                         value=current
@@ -537,10 +539,10 @@ fn SmartTableCell(
                         "number" | "integer" | "decimal" | "money" => {
                             let current = local_value.get_value().as_f64().unwrap_or(0.0).to_string();
                             view! {
-                                <div class="cell-edit-wrapper">
+                                <div class="flex items-center gap-1 w-full">
                                     <input
                                         type="number"
-                                        class="cell-input"
+                                        class="bg-transparent border-none outline-none text-white w-full p-0 h-full focus:ring-0"
                                         value=current
                                         autofocus=true
                                         on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
@@ -553,24 +555,24 @@ fn SmartTableCell(
                                         on:blur=handle_blur
                                         on:keydown=handle_keydown
                                     />
-                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                    <button class="ml-2 w-6 h-6 flex items-center justify-center rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" on:click=handle_confirm>"✓"</button>
                                 </div>
                             }.into_view()
                         }
                         "boolean" => {
                             let checked = local_value.get_value().as_bool().unwrap_or(false);
                             view! {
-                                <div class="cell-edit-wrapper">
+                                <div class="flex items-center gap-2">
                                     <input
                                         type="checkbox"
-                                        class="cell-checkbox"
+                                        class="rounded border-slate-600 bg-white/5 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
                                         checked=checked
                                         on:change=move |ev| {
                                             let target = event_target::<web_sys::HtmlInputElement>(&ev);
                                             local_value.set_value(serde_json::json!(target.checked()));
                                         }
                                     />
-                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                    <button class="w-6 h-6 flex items-center justify-center rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" on:click=handle_confirm>"✓"</button>
                                 </div>
                             }.into_view()
                         }
@@ -584,10 +586,10 @@ fn SmartTableCell(
                                 current.clone()
                             };
                             view! {
-                                <div class="cell-edit-wrapper">
+                                <div class="flex items-center gap-1 w-full">
                                     <input
                                         type="date"
-                                        class="cell-input cell-date-input"
+                                        class="bg-transparent border-none outline-none text-white w-full p-0 h-full focus:ring-0 calendar-picker-indicator:filter-invert"
                                         value=date_value
                                         autofocus=true
                                         on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
@@ -598,7 +600,7 @@ fn SmartTableCell(
                                         on:blur=handle_blur
                                         on:keydown=handle_keydown
                                     />
-                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                    <button class="ml-2 w-6 h-6 flex items-center justify-center rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" on:click=handle_confirm>"✓"</button>
                                 </div>
                             }.into_view()
                         }
@@ -631,7 +633,7 @@ fn SmartTableCell(
                             });
 
                             view! {
-                                <div class="cell-edit-wrapper cell-link-select" on:click=|ev| ev.stop_propagation()>
+                                <div class="w-full min-w-[200px]" on:click=|ev| ev.stop_propagation()>
                                     <AsyncEntitySelect
                                         entity_type=target_entity
                                         value=link_signal
@@ -644,10 +646,10 @@ fn SmartTableCell(
                             // Default text input
                             let current = local_value.get_value().as_str().unwrap_or("").to_string();
                             view! {
-                                <div class="cell-edit-wrapper">
+                                <div class="flex items-center gap-1 w-full">
                                     <input
                                         type="text"
-                                        class="cell-input"
+                                        class="bg-transparent border-none outline-none text-white w-full p-0 h-full focus:ring-0"
                                         value=current
                                         autofocus=true
                                         on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()
@@ -658,13 +660,12 @@ fn SmartTableCell(
                                         on:blur=handle_blur
                                         on:keydown=handle_keydown
                                     />
-                                    <button class="confirm-btn" on:click=handle_confirm>"✓"</button>
+                                    <button class="ml-2 w-6 h-6 flex items-center justify-center rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors" on:click=handle_confirm>"✓"</button>
                                 </div>
                             }.into_view()
                         }
                     }
                 } else {
-                    // Display mode
                     // Display mode
                     match ft.to_lowercase().as_str() {
                         "link" => {
@@ -685,9 +686,16 @@ fn render_cell_display(field_type: &str, value: &serde_json::Value) -> View {
     match field_type.to_lowercase().as_str() {
         "status" | "select" => {
             let text = value.as_str().unwrap_or("");
-            let status_class = get_status_class(text);
+            let status_color = match text.to_lowercase().as_str() {
+                "new" | "open" | "active" => "bg-blue-500/10 text-blue-400 border-blue-500/20",
+                "in_progress" | "pending" | "working" => "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                "won" | "completed" | "closed" | "success" => "bg-green-500/10 text-green-400 border-green-500/20",
+                "lost" | "cancelled" | "failed" => "bg-red-500/10 text-red-400 border-red-500/20",
+                "qualified" | "contacted" => "bg-purple-500/10 text-purple-400 border-purple-500/20",
+                _ => "bg-slate-500/10 text-slate-400 border-slate-500/20",
+            };
             view! {
-                <span class=format!("status-badge {}", status_class)>
+                <span class=format!("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border {}", status_color)>
                     {text.to_string()}
                 </span>
             }.into_view()
@@ -695,7 +703,7 @@ fn render_cell_display(field_type: &str, value: &serde_json::Value) -> View {
         "boolean" => {
             let checked = value.as_bool().unwrap_or(false);
             view! {
-                <span class="bool-display">
+                <span class=if checked { "text-green-400 font-bold" } else { "text-slate-600" }>
                     {if checked { "✓" } else { "—" }}
                 </span>
             }.into_view()
@@ -703,7 +711,7 @@ fn render_cell_display(field_type: &str, value: &serde_json::Value) -> View {
         "money" | "currency" => {
             let amount = value.as_f64().unwrap_or(0.0);
             view! {
-                <span class="money-display">
+                <span class="font-mono text-emerald-400">
                     {format!("${:.2}", amount)}
                 </span>
             }.into_view()
@@ -720,13 +728,13 @@ fn render_cell_display(field_type: &str, value: &serde_json::Value) -> View {
                 date_str.to_string()
             };
             view! {
-                <span class="date-display">{display_date}</span>
+                <span class="text-slate-400 font-mono text-xs">{display_date}</span>
             }.into_view()
         }
         "email" => {
             let email = value.as_str().unwrap_or("");
             view! {
-                <a class="email-link" href=format!("mailto:{}", email)>
+                <a class="text-indigo-400 hover:text-indigo-300 hover:underline" href=format!("mailto:{}", email)>
                     {email.to_string()}
                 </a>
             }.into_view()
@@ -734,7 +742,7 @@ fn render_cell_display(field_type: &str, value: &serde_json::Value) -> View {
         "phone" => {
             let phone = value.as_str().unwrap_or("");
             view! {
-                <a class="phone-link" href=format!("tel:{}", phone)>
+                <a class="text-indigo-400 hover:text-indigo-300 hover:underline" href=format!("tel:{}", phone)>
                     {phone.to_string()}
                 </a>
             }.into_view()
@@ -748,21 +756,9 @@ fn render_cell_display(field_type: &str, value: &serde_json::Value) -> View {
                 _ => value.to_string(),
             };
             view! {
-                <span class="cell-text">{text}</span>
+                <span class="truncate block max-w-[200px]" title=text.clone()>{text}</span>
             }.into_view()
         }
-    }
-}
-
-/// Get CSS class for status badge
-fn get_status_class(status: &str) -> &'static str {
-    match status.to_lowercase().as_str() {
-        "new" | "open" | "active" => "status-new",
-        "in_progress" | "pending" | "working" => "status-progress",
-        "won" | "completed" | "closed" | "success" => "status-won",
-        "lost" | "cancelled" | "failed" => "status-lost",
-        "qualified" | "contacted" => "status-qualified",
-        _ => "status-default",
     }
 }
 
@@ -789,8 +785,8 @@ pub fn DataTable(
         .collect();
 
     view! {
-        <div class="data-table-wrapper">
-            <table class="data-table">
+        <div class="w-full overflow-x-auto rounded-xl border border-white/10 bg-surface/30 backdrop-blur-md">
+            <table class="w-full border-collapse text-left">
                 <thead>
                     <tr>
                         {visible_columns.iter().map(|col| {
@@ -799,21 +795,26 @@ pub fn DataTable(
                                 .map(|f| f.label.clone())
                                 .unwrap_or_else(|| col.field.clone());
                             view! {
-                                <th class="table-header">{label}</th>
+                                <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-white/10 whitespace-nowrap">
+                                    {label}
+                                </th>
                             }
                         }).collect::<Vec<_>>()}
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-white/5">
                     {data.iter().map(|row| {
                         view! {
-                            <tr class="table-row">
+                            <tr class="group transition-colors hover:bg-white/5">
                                 {visible_columns.iter().map(|col| {
                                     let value = row.get(&col.field)
                                         .cloned()
                                         .unwrap_or(serde_json::Value::Null);
+                                    let display = value.as_str().map(|s| s.to_string()).unwrap_or_else(|| value.to_string());
                                     view! {
-                                        <td class="table-cell">{value.to_string()}</td>
+                                        <td class="px-6 py-4 text-sm text-slate-300 whitespace-nowrap">
+                                            {display}
+                                        </td>
                                     }
                                 }).collect::<Vec<_>>()}
                             </tr>

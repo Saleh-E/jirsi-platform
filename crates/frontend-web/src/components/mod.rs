@@ -50,5 +50,8 @@ pub mod conflict_resolver;
 pub mod audit_timeline;
 pub mod pwa_install;
 pub mod collaborative_field;
+pub mod holographic_shell;
+pub mod neural_status;
+pub mod dialer_widget;
 
 pub use collaborative_field::{CollaborativeTextField, should_use_crdt};

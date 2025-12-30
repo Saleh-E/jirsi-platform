@@ -91,6 +91,71 @@ pub fn Dashboard() -> impl IntoView {
                     }}
                 </Suspense>
             </div>
+            
+            // Real Estate Live Metrics
+            <section class="animate-slide-in-left" style="animation-delay: 350ms">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-sm font-bold text-zinc-500 tracking-widest uppercase">
+                        "Real Estate Metrics"
+                    </h2>
+                    <span class="text-xs text-zinc-600">"Live"</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Suspense fallback=move || view! { <div class="col-span-3 text-center text-zinc-500 animate-pulse">"Loading metrics..."</div> }>
+                        {move || {
+                            dashboard_data.get().map(|res| {
+                                match res {
+                                    Ok(data) => {
+                                        let kpis = data.kpis;
+                                        view! {
+                                            <div class="glass-surface p-4 flex items-center gap-4">
+                                                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center text-2xl">
+                                                    {"🏠"}
+                                                </div>
+                                                <div class="flex-1">
+                                                    <div class="text-2xl font-bold text-white font-mono">
+                                                        {kpis.total_leads}
+                                                    </div>
+                                                    <div class="text-xs text-slate-400 uppercase tracking-wider">
+                                                        "Properties"
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="glass-surface p-4 flex items-center gap-4">
+                                                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center text-2xl">
+                                                    {"👁"}
+                                                </div>
+                                                <div class="flex-1">
+                                                    <div class="text-2xl font-bold text-white font-mono">
+                                                        {kpis.ongoing_deals}
+                                                    </div>
+                                                    <div class="text-xs text-slate-400 uppercase tracking-wider">
+                                                        "Viewings"
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="glass-surface p-4 flex items-center gap-4">
+                                                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center text-2xl">
+                                                    {"📜"}
+                                                </div>
+                                                <div class="flex-1">
+                                                    <div class="text-2xl font-bold text-white font-mono">
+                                                        {format!("{:.0}", kpis.forecasted_revenue / 10000.0) }
+                                                    </div>
+                                                    <div class="text-xs text-slate-400 uppercase tracking-wider">
+                                                        "Contracts"
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }.into_view()
+                                    }
+                                    Err(_) => view! { <div class="col-span-3 text-red-500">"Error loading metrics"</div> }.into_view()
+                                }
+                            })
+                        }}
+                    </Suspense>
+                </div>
+            </section>
 
             // Recent Transmissions (Static for now, but PhantomRow ready)
             <section class="animate-slide-in-left" style="animation-delay: 400ms">

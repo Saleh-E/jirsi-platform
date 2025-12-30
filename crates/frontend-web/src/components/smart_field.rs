@@ -219,7 +219,7 @@ fn render_detail_display(field: &FieldDef, value: &JsonValue) -> View {
 fn render_kanban_cell(field: &FieldDef, value: &JsonValue) -> View {
     let display_value = format_display_value(field, value);
     view! {
-        <div class="kanban-field">
+        <div class="flex flex-col gap-2">
             <span class="field-label-compact">{&field.label}:</span>
             <span class="field-value-compact">{display_value}</span>
         </div>

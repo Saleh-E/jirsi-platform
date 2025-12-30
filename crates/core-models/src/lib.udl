@@ -1,0 +1,253 @@
+// Jirsi Core Models - UniFFI Interface Definition
+// Enables native iOS (Swift) and Android (Kotlin) bindings
+// Version 1.0.0
+
+namespace jirsi {
+    // Exported types and functions
+};
+
+// ============================================================================
+// Core Types
+// ============================================================================
+
+[Error]
+enum JirsiError {
+    "NotFound",
+    "Unauthorized",
+    "ValidationError",
+    "DatabaseError",
+    "NetworkError",
+    "SyncError",
+};
+
+dictionary Uuid {
+    string value;
+};
+
+// ============================================================================
+// Contact Entity
+// ============================================================================
+
+dictionary Contact {
+    Uuid id;
+    string? first_name;
+    string? last_name;
+    string? email;
+    string? phone;
+    string? company;
+    string? job_title;
+    string status;
+    string? avatar_url;
+    string? notes;
+    string created_at;
+    string? updated_at;
+};
+
+dictionary ContactListItem {
+    Uuid id;
+    string display_name;
+    string? email;
+    string? phone;
+    string? avatar_url;
+    string status;
+};
+
+dictionary ContactFilter {
+    string? status;
+    string? search_query;
+    i32 limit;
+    i32 offset;
+};
+
+// ============================================================================
+// Deal Entity
+// ============================================================================
+
+dictionary Deal {
+    Uuid id;
+    string name;
+    f64? amount;
+    string stage;
+    string? expected_close_date;
+    Uuid? contact_id;
+    Uuid? property_id;
+    string? notes;
+    string created_at;
+};
+
+dictionary DealListItem {
+    Uuid id;
+    string name;
+    f64? amount;
+    string stage;
+};
+
+// ============================================================================
+// Property Entity (Real Estate)
+// ============================================================================
+
+dictionary Property {
+    Uuid id;
+    string title;
+    string? address;
+    string? city;
+    f64? price;
+    i32? bedrooms;
+    i32? bathrooms;
+    f64? area_sqm;
+    string property_type;
+    string status;
+    string? description;
+    sequence<string> images;
+    string created_at;
+};
+
+dictionary PropertyListItem {
+    Uuid id;
+    string title;
+    string? city;
+    f64? price;
+    string property_type;
+    string status;
+    string? thumbnail_url;
+};
+
+// ============================================================================
+// Task Entity
+// ============================================================================
+
+dictionary Task {
+    Uuid id;
+    string title;
+    string? description;
+    string? due_date;
+    string priority;
+    boolean is_completed;
+    Uuid? entity_id;
+    string? entity_type;
+    string created_at;
+};
+
+// ============================================================================
+// Sync State
+// ============================================================================
+
+dictionary SyncState {
+    string status; // "synced", "syncing", "pending", "offline", "error"
+    i32 pending_changes;
+    string? last_sync_at;
+    string? error_message;
+};
+
+// ============================================================================
+// Repository Interface - Main entry point for mobile apps
+// ============================================================================
+
+interface JirsiRepository {
+    // Constructor
+    constructor(string database_path, string api_base_url);
+    
+    // ========== Contacts ==========
+    
+    [Throws=JirsiError]
+    sequence<ContactListItem> list_contacts(ContactFilter filter);
+    
+    [Throws=JirsiError]
+    Contact get_contact(Uuid id);
+    
+    [Throws=JirsiError]
+    Contact create_contact(Contact contact);
+    
+    [Throws=JirsiError]
+    Contact update_contact(Uuid id, Contact contact);
+    
+    [Throws=JirsiError]
+    boolean delete_contact(Uuid id);
+    
+    // ========== Deals ==========
+    
+    [Throws=JirsiError]
+    sequence<DealListItem> list_deals();
+    
+    [Throws=JirsiError]
+    Deal get_deal(Uuid id);
+    
+    // ========== Properties ==========
+    
+    [Throws=JirsiError]
+    sequence<PropertyListItem> list_properties();
+    
+    [Throws=JirsiError]
+    Property get_property(Uuid id);
+    
+    // ========== Tasks ==========
+    
+    [Throws=JirsiError]
+    sequence<Task> list_tasks_for_entity(string entity_type, Uuid entity_id);
+    
+    [Throws=JirsiError]
+    Task create_task(Task task);
+    
+    [Throws=JirsiError]
+    boolean complete_task(Uuid id);
+    
+    // ========== Sync ==========
+    
+    [Throws=JirsiError]
+    SyncState get_sync_state();
+    
+    [Throws=JirsiError]
+    SyncState sync_now();
+    
+    // ========== Search ==========
+    
+    [Throws=JirsiError]
+    sequence<ContactListItem> search_contacts(string query, i32 limit);
+    
+    [Throws=JirsiError]
+    sequence<PropertyListItem> search_properties(string query, i32 limit);
+};
+
+// ============================================================================
+// Auth Interface
+// ============================================================================
+
+dictionary AuthTokens {
+    string access_token;
+    string? refresh_token;
+    i64 expires_at;
+};
+
+dictionary LoginCredentials {
+    string email;
+    string password;
+    string? tenant_code;
+};
+
+dictionary UserProfile {
+    Uuid id;
+    string email;
+    string? first_name;
+    string? last_name;
+    string? avatar_url;
+    sequence<string> roles;
+};
+
+interface JirsiAuth {
+    constructor(string api_base_url, string token_storage_path);
+    
+    [Throws=JirsiError]
+    AuthTokens login(LoginCredentials credentials);
+    
+    [Throws=JirsiError]
+    void logout();
+    
+    [Throws=JirsiError]
+    boolean is_authenticated();
+    
+    [Throws=JirsiError]
+    UserProfile get_current_user();
+    
+    [Throws=JirsiError]
+    AuthTokens refresh_token();
+};

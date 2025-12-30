@@ -1,8 +1,10 @@
 //! Pages
 
 pub mod home;
+pub mod app_store;
 pub mod entity_list;
 pub mod entity_detail;
+pub mod landlord_onboarding;
 pub mod login;
 pub mod register;
 pub mod public;

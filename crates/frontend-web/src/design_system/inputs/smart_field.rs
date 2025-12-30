@@ -85,7 +85,7 @@ pub fn SmartField(
 
             // The "Sync" indicator: A tiny green pulse when data saves
             <Show when=move || show_saved.get()>
-                <div class="absolute right-2 bottom-2 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_var(--success-glow)]" />
+                <div class="absolute right-2 bottom-2 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
             </Show>
         </div>
     }

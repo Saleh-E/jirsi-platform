@@ -7,12 +7,17 @@ use leptos::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// User role from auth context
+/// User role from auth context - synced with backend
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UserRole {
     Admin,
     Manager,
+    Member,
     Agent,
+    Broker,
+    Landlord,
+    Tenant,
+    Vendor,
     Viewer,
 }
 
@@ -21,7 +26,12 @@ impl UserRole {
         match s.to_lowercase().as_str() {
             "admin" => Self::Admin,
             "manager" => Self::Manager,
+            "member" => Self::Member,
             "agent" => Self::Agent,
+            "broker" => Self::Broker,
+            "landlord" => Self::Landlord,
+            "tenant" => Self::Tenant,
+            "vendor" => Self::Vendor,
             _ => Self::Viewer,
         }
     }
@@ -30,7 +40,12 @@ impl UserRole {
         match self {
             Self::Admin => "admin",
             Self::Manager => "manager",
+            Self::Member => "member",
             Self::Agent => "agent",
+            Self::Broker => "broker",
+            Self::Landlord => "landlord",
+            Self::Tenant => "tenant",
+            Self::Vendor => "vendor",
             Self::Viewer => "viewer",
         }
     }
@@ -119,13 +134,27 @@ fn compute_permissions(role: &UserRole) -> HashMap<String, bool> {
             let key = format!("{}:{}", resource, action);
             let allowed = match role {
                 UserRole::Admin => true,
-                UserRole::Manager => match *action {
+                UserRole::Manager => true,
+                UserRole::Broker => match *action {
                     "read" | "write" | "delete" => true,
                     _ => false,
                 },
-                UserRole::Agent => match *action {
+                UserRole::Member | UserRole::Agent => match *action {
                     "read" | "write" => true,
                     "delete" => false,
+                    _ => false,
+                },
+                UserRole::Landlord => match (*resource, *action) {
+                    ("property" | "deal" | "contact", "read" | "write") => true,
+                    _ => false,
+                },
+                UserRole::Tenant => match (*resource, *action) {
+                    ("property", "read") => true,
+                    _ => false,
+                },
+                UserRole::Vendor => match (*resource, *action) {
+                    ("property", "read") => true,
+                    ("contact", "read" | "write") => true,
                     _ => false,
                 },
                 UserRole::Viewer => match *action {
@@ -139,8 +168,10 @@ fn compute_permissions(role: &UserRole) -> HashMap<String, bool> {
     
     // Special permissions
     perms.insert("admin_panel:access".to_string(), matches!(role, UserRole::Admin));
-    perms.insert("workflows:execute".to_string(), matches!(role, UserRole::Admin | UserRole::Manager));
-    perms.insert("reports:export".to_string(), matches!(role, UserRole::Admin | UserRole::Manager));
+    perms.insert("workflows:execute".to_string(), matches!(role, UserRole::Admin | UserRole::Manager | UserRole::Broker));
+    perms.insert("reports:export".to_string(), matches!(role, UserRole::Admin | UserRole::Manager | UserRole::Broker));
+    perms.insert("dialer:access".to_string(), matches!(role, UserRole::Admin | UserRole::Agent | UserRole::Broker));
+    perms.insert("payments:manage".to_string(), matches!(role, UserRole::Admin | UserRole::Manager | UserRole::Landlord | UserRole::Broker));
     
     perms
 }

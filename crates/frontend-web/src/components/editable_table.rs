@@ -45,27 +45,32 @@ pub fn EditableTable(
         });
     };
     
-    let density_class = format!("density-{}", density);
+    let padding_y = match density.as_str() {
+        "compact" => "py-1",
+        "spacious" => "py-5",
+        _ => "py-3",
+    };
     
     view! {
-        <div class=format!("editable-table-wrapper {}", density_class)>
-            <table class="editable-table">
+        <div class="w-full overflow-x-auto rounded-xl border border-white/10 bg-surface/30 backdrop-blur-md">
+            <table class="w-full border-collapse text-left">
                 <thead>
                     <tr>
                         {columns.iter().map(|col| {
                             view! {
-                                <th class="table-header" title=col.name.clone()>
+                                <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-white/10 whitespace-nowrap" title=col.name.clone()>
                                     <span>{col.label.clone()}</span>
                                 </th>
                             }
                         }).collect_view()}
-                        <th class="action-header"></th>
+                        <th class="px-4 py-3 border-b border-white/10 w-12"></th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-white/5">
                     {move || {
                         let cols = columns.clone();
                         let on_click = on_row_click.clone();
+                        let py_class = padding_y.clone();
                         
                         data.get().into_iter().map(|row| {
                             let record_id = row.get("id")
@@ -75,9 +80,10 @@ pub fn EditableTable(
                             
                             let row_id = record_id.clone();
                             let nav_id = record_id.clone();
+                            let py = py_class.clone();
                             
                             view! {
-                                <tr class="table-row">
+                                <tr class="group transition-colors hover:bg-white/5">
                                     {cols.iter().map(|col| {
                                         let field = col.clone();
                                         let value = row.get(&col.name)
@@ -85,12 +91,13 @@ pub fn EditableTable(
                                             .unwrap_or(serde_json::Value::Null);
                                         let rid = row_id.clone();
                                         let fname = col.name.clone();
+                                        let py_cell = py.clone();
                                         
                                         // Determine if field is editable (not readonly, not id)
                                         let is_editable = !col.is_readonly && col.name != "id" && col.name != "created_at" && col.name != "updated_at";
                                         
                                         view! {
-                                            <td class="table-cell" class:editable=is_editable>
+                                            <td class=format!("px-6 {} text-sm text-slate-300 whitespace-nowrap transition-colors", py_cell) class:bg-white_5=is_editable class:hover:bg-white_10=is_editable>
                                                 {if is_editable {
                                                     view! {
                                                         <EditableFieldValue 
@@ -103,7 +110,7 @@ pub fn EditableTable(
                                                     }.into_view()
                                                 } else {
                                                     view! {
-                                                        <span class="readonly-value">
+                                                        <span class="opacity-70">
                                                             {format_display_value(&value, &col.get_field_type())}
                                                         </span>
                                                     }.into_view()
@@ -111,12 +118,12 @@ pub fn EditableTable(
                                             </td>
                                         }
                                     }).collect_view()}
-                                    <td class="action-cell">
+                                    <td class="px-4 py-3 whitespace-nowrap text-right">
                                         {on_click.map(|cb| {
                                             let id = nav_id.clone();
                                             view! {
                                                 <button 
-                                                    class="row-action-btn"
+                                                    class="w-8 h-8 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
                                                     on:click=move |_| cb.call(id.clone())
                                                     title="Open"
                                                 >
@@ -133,10 +140,10 @@ pub fn EditableTable(
             </table>
             
             {move || data.get().is_empty().then(|| view! {
-                <div class="empty-state">
-                    <span class="empty-icon">"📋"</span>
-                    <h3>"No records found"</h3>
-                    <p>"Create your first record using the + New button"</p>
+                <div class="flex flex-col items-center justify-center py-16 text-slate-500">
+                    <span class="text-4xl mb-4 opacity-50">"📋"</span>
+                    <h3 class="text-lg font-medium text-slate-400 mb-2">"No records found"</h3>
+                    <p class="text-sm">"Create your first record using the + New button"</p>
                 </div>
             })}
         </div>

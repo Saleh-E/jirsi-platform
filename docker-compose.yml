@@ -4,9 +4,9 @@
 version: '3.8'
 
 services:
-  # PostgreSQL - Primary database with event store
+  # PostgreSQL with pgvector - Primary database with vector search
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: jirsi-postgres
     restart: unless-stopped
     environment:
