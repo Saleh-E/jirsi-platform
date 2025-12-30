@@ -164,23 +164,16 @@ pub fn AppStorePage() -> impl IntoView {
             <div class="flex gap-3 mb-8 overflow-x-auto pb-2">
                 {categories.into_iter().map(|cat| {
                     let code = cat.code.clone();
-                    let is_selected = move || {
-                        selected_category.get().as_deref() == Some(&code) || 
-                        (code == "all" && selected_category.get().is_none())
-                    };
+                    let code_for_click = cat.code.clone();
+                    let is_all = cat.code == "all";
                     view! {
                         <button
-                            class="flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all"
-                            class:bg-indigo-500=is_selected
-                            class:text-white=is_selected
-                            class:bg-white/5=move || !is_selected()
-                            class:text-slate-400=move || !is_selected()
-                            class:hover:bg-white/10=move || !is_selected()
+                            class="flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all bg-white/5 text-slate-400 hover:bg-white/10"
                             on:click=move |_| {
-                                if cat.code == "all" {
+                                if is_all {
                                     set_selected_category.set(None);
                                 } else {
-                                    set_selected_category.set(Some(cat.code.clone()));
+                                    set_selected_category.set(Some(code_for_click.clone()));
                                 }
                             }
                         >

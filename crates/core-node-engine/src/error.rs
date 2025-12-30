@@ -25,6 +25,12 @@ pub enum NodeEngineError {
 
     #[error("Type mismatch: expected {expected}, got {actual}")]
     TypeMismatch { expected: String, actual: String },
+    
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+    
+    #[error("Invalid configuration: {0}")]
+    InvalidConfig(String),
 
     #[error("Execution timeout")]
     Timeout,
@@ -39,3 +45,4 @@ pub enum NodeEngineError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 }
+

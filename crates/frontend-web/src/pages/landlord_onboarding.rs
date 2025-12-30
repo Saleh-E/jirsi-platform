@@ -98,11 +98,6 @@ pub fn LandlordOnboarding() -> impl IntoView {
     let (loading, set_loading) = create_signal(false);
     let (error, set_error) = create_signal(Option::<String>::None);
     
-    let navigate = use_navigate();
-    
-    let on_complete = move |_| {
-        navigate("/app/settings/payments", Default::default());
-    };
     
     view! {
         <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -120,13 +115,18 @@ pub fn LandlordOnboarding() -> impl IntoView {
             <div class="container mx-auto px-4 py-16 max-w-2xl">
                 // Step indicator
                 <div class="flex items-center justify-center gap-2 mb-8">
-                    {(0..6).map(|i| view! {
-                        <div 
-                            class="w-3 h-3 rounded-full transition-all duration-300"
-                            class:bg-indigo-500=move || step.get().index() >= i
-                            class:bg-slate-600=move || step.get().index() < i
-                            class:scale-125=move || step.get().index() == i
-                        />
+                    {(0..6).map(|i| {
+                        let is_current_or_past = move || step.get().index() >= i;
+                        let is_future = move || step.get().index() < i;
+                        let is_current = move || step.get().index() == i;
+                        view! {
+                            <div 
+                                class="w-3 h-3 rounded-full transition-all duration-300"
+                                class=("bg-indigo-500", is_current_or_past)
+                                class=("bg-slate-600", is_future)
+                                class=("scale-125", is_current)
+                            />
+                        }
                     }).collect::<Vec<_>>()}
                 </div>
                 
@@ -194,7 +194,10 @@ pub fn LandlordOnboarding() -> impl IntoView {
                         view! {
                             <button
                                 class="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-green-500/25 transition-all"
-                                on:click=on_complete
+                                on:click=move |_| {
+                                    let nav = use_navigate();
+                                    nav("/app/settings/payments", Default::default());
+                                }
                             >
                                 "Go to Dashboard →"
                             </button>

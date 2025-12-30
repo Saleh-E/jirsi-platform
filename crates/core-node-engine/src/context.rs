@@ -11,6 +11,8 @@ pub struct ExecutionContext {
     pub values: HashMap<String, Value>,
     pub logs: Vec<Value>,
     pub ai_service: Option<Arc<dyn AiService>>,
+    /// Data from the trigger that started this execution
+    pub trigger_data: Value,
 }
 
 impl ExecutionContext {
@@ -22,4 +24,10 @@ impl ExecutionContext {
         self.ai_service = Some(service);
         self
     }
+    
+    pub fn with_trigger_data(mut self, data: Value) -> Self {
+        self.trigger_data = data;
+        self
+    }
 }
+

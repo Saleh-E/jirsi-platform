@@ -26,13 +26,14 @@ pub fn TenantPortal() -> impl IntoView {
             <div class="flex gap-2 mb-8">
                 {["home", "payments", "requests", "documents"].into_iter().map(|tab| {
                     let is_active = move || active_tab.get() == tab;
+                    let not_active = move || !is_active();
                     view! {
                         <button
                             class="px-4 py-2 rounded-lg font-medium transition-all"
-                            class:bg-indigo-500=is_active
-                            class:text-white=is_active
-                            class:bg-white/5=move || !is_active()
-                            class:text-slate-400=move || !is_active()
+                            class=("bg-indigo-500", is_active)
+                            class=("text-white", is_active)
+                            class=("bg-white/5", not_active)
+                            class=("text-slate-400", not_active)
                             on:click=move |_| set_active_tab.set(tab)
                         >
                             {match tab {

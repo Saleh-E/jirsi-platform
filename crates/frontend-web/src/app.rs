@@ -14,6 +14,13 @@ use crate::layouts::HolographicShell;
 use crate::layouts::public_layout::PublicLayout;
 use crate::core::shortcuts::ShortcutInitializer;
 
+// Chameleon Engine: Persona Portals
+use crate::pages::landlord_portal::LandlordPortal;
+use crate::pages::tenant_portal::TenantPortal;
+use crate::pages::agent_command_center::AgentCommandCenter;
+use crate::pages::broker_dashboard::BrokerDashboard;
+use crate::pages::landlord_onboarding::LandlordOnboarding;
+
 use crate::context::theme::provide_theme_context;
 
 #[component]
@@ -51,6 +58,13 @@ pub fn App() -> impl IntoView {
                     <Route path="app/reports" view=ReportsPage/>
                     <Route path="app/inbox" view=InboxPage/>
                     <Route path="app/automation" view=AutomationPage/>
+                    
+                    // === CHAMELEON ENGINE: Persona Portals ===
+                    <Route path="app/portal/landlord" view=LandlordPortal/>
+                    <Route path="app/portal/tenant" view=TenantPortal/>
+                    <Route path="app/agent" view=AgentCommandCenter/>
+                    <Route path="app/broker" view=BrokerDashboard/>
+                    <Route path="app/onboarding/landlord" view=LandlordOnboarding/>
                     
                     // Component Playground (development/demo)
                     <Route path="app/playground" view=ComponentPlayground/>

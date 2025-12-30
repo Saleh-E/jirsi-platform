@@ -150,8 +150,9 @@ pub fn CreateModal(
                             <form class="modal-form" on:submit=handle_submit>
                                 {move || error.get().map(|e| view! { <div class="form-error">{e}</div> })}
                                 
-                                <div class="form-fields">
-                                    <For
+                                <div class="ui-modal-body">
+                                    <div class="form-fields">
+                                        <For
                                         each=move || fields.get().into_iter().filter(|f| !f.is_readonly)
                                         key=|f| f.name.clone()
                                         children=move |field| {
@@ -382,6 +383,7 @@ pub fn CreateModal(
                                             }
                                         }
                                     />
+                                </div>
                                 </div>
                                 
                                 <div class="ui-modal-footer">

@@ -489,18 +489,74 @@ fn render_edit_input(
             }.into_view()
         }
 
-        // Select - SmartSelect
+        // Select - SmartSelect with Add New and Delete
         "select" => {
             let val = current_value.as_str().unwrap_or("").to_string();
             let opts_list = field.get_options();
-            let select_opts: Vec<SelectOption> = opts_list.into_iter()
-                .map(|(v, l)| SelectOption::new(v, l))
-                .collect();
+            let (select_opts, set_select_opts) = create_signal(
+                opts_list.into_iter()
+                    .map(|(v, l)| SelectOption::new(v, l))
+                    .collect::<Vec<_>>()
+            );
+            
+            // Store field info for API calls
+            let field_id = field.id.clone();
+            let field_id_for_create = field_id.clone();
+            let field_id_for_delete = field_id.clone();
+            let field_label = field.label.clone();
+            
+            // Handle adding new option
+            let handle_create_value = move |new_value: String| {
+                let trimmed = new_value.trim().to_string();
+                if !trimmed.is_empty() {
+                    // Add to local options
+                    let new_option = SelectOption::new(trimmed.clone(), trimmed.clone());
+                    set_select_opts.update(|opts| {
+                        if !opts.iter().any(|o| o.value == trimmed) {
+                            opts.push(new_option);
+                        }
+                    });
+                    
+                    // Select the new value
+                    let json_val = serde_json::Value::String(trimmed.clone());
+                    set_current_value.set(json_val.clone());
+                    on_change.call(json_val);
+                    set_editing.set(false);
+                    
+                    // Persist to backend
+                    let fid = field_id_for_create.clone();
+                    let val = trimmed.clone();
+                    spawn_local(async move {
+                        // Use an empty entity_type since we're in field_renderer
+                        // The add_field_option function should handle this
+                        if let Err(e) = add_field_option("", &fid, &val, Some(&val)).await {
+                            web_sys::console::error_1(&format!("Failed to add option: {}", e).into());
+                        }
+                    });
+                }
+            };
+            
+            // Handle deleting an option
+            let handle_delete_option = move |value_to_delete: String| {
+                // Remove from local options
+                set_select_opts.update(|opts| {
+                    opts.retain(|o| o.value != value_to_delete);
+                });
+                
+                // Persist deletion to backend
+                let fid = field_id_for_delete.clone();
+                let val = value_to_delete.clone();
+                spawn_local(async move {
+                    if let Err(e) = crate::api::delete_field_option("", &fid, &val).await {
+                        web_sys::console::error_1(&format!("Failed to delete option: {}", e).into());
+                    }
+                });
+            };
             
             view! {
                  <div class="field-input-select" style="min-width: 150px;">
                      <SmartSelect
-                         options=select_opts
+                         options=select_opts.get()
                          value=val
                          on_change=move |new_val| {
                              let json_val = serde_json::Value::String(new_val);
@@ -508,7 +564,12 @@ fn render_edit_input(
                              on_change.call(json_val);
                              set_editing.set(false);
                          }
-                         placeholder=format!("Select {}...", field.label)
+                         allow_search=true
+                         allow_create=true
+                         create_label="+ Add New".to_string()
+                         on_create_value=Callback::new(handle_create_value)
+                         on_delete_option=Callback::new(handle_delete_option)
+                         placeholder=format!("Select {}...", field_label)
                      />
                  </div>
             }.into_view()

@@ -332,19 +332,21 @@ pub fn DialerWidget() -> impl IntoView {
 
 /// Call the API to initiate a call
 async fn call_api(phone: &str, record: bool) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    use gloo_net::http::Request;
     
-    let response = client
-        .post("/api/v1/voice/call")
-        .json(&serde_json::json!({
-            "to": phone,
-            "record": record
-        }))
+    let body = serde_json::json!({
+        "to": phone,
+        "record": record
+    });
+    
+    let response = Request::post("/api/v1/voice/call")
+        .json(&body)
+        .map_err(|e| e.to_string())?
         .send()
         .await
         .map_err(|e| e.to_string())?;
     
-    if !response.status().is_success() {
+    if !response.ok() {
         return Err("Failed to initiate call".to_string());
     }
     
@@ -355,10 +357,9 @@ async fn call_api(phone: &str, record: bool) -> Result<String, String> {
 
 /// Call the API to end a call
 async fn end_call_api(call_sid: &str) -> Result<(), String> {
-    let client = reqwest::Client::new();
+    use gloo_net::http::Request;
     
-    client
-        .post(format!("/api/v1/voice/call/{}/end", call_sid))
+    Request::post(&format!("/api/v1/voice/call/{}/end", call_sid))
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -383,3 +384,4 @@ pub fn use_click_to_dial() -> impl Fn(String) {
         }
     }
 }
+

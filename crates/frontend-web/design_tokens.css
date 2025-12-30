@@ -216,6 +216,191 @@ html.light select option,
 }
 
 /* ============================================
+   CORE SHELL CLASSES (Theme Responsive)
+   ============================================ */
+
+/* Void Background - adapts to theme */
+.bg-void {
+    background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%) !important;
+}
+
+html.light .bg-void {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%) !important;
+}
+
+/* Glass Morphism - adapts to theme */
+.glass-morphism {
+    background: rgba(15, 15, 25, 0.8) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+html.light .glass-morphism {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Surface Background - adapts to theme */
+.bg-surface {
+    background-color: var(--bg-surface) !important;
+}
+
+/* ============================================
+   LIGHT MODE: Global Text Color Overrides
+   These override Tailwind's hardcoded dark-theme colors
+   ============================================ */
+
+/* White text → Dark text in light mode */
+html.light .text-white {
+    color: #1e293b !important;
+    /* slate-800 */
+}
+
+/* Slate colors → Darker shades in light mode */
+html.light .text-slate-100,
+html.light .text-slate-200 {
+    color: #334155 !important;
+    /* slate-700 */
+}
+
+html.light .text-slate-300,
+html.light .text-slate-400 {
+    color: #475569 !important;
+    /* slate-600 */
+}
+
+html.light .text-slate-500 {
+    color: #64748b !important;
+    /* slate-500 - same */
+}
+
+/* Gray colors → Darker shades in light mode */
+html.light .text-gray-100,
+html.light .text-gray-200,
+html.light .text-gray-300 {
+    color: #374151 !important;
+    /* gray-700 */
+}
+
+html.light .text-gray-400,
+html.light .text-gray-500 {
+    color: #4b5563 !important;
+    /* gray-600 */
+}
+
+/* ============================================
+   LIGHT MODE: Background Color Overrides
+   ============================================ */
+
+/* Dark backgrounds → Light backgrounds */
+html.light .bg-slate-900,
+html.light .bg-slate-800 {
+    background-color: #f8fafc !important;
+    /* slate-50 */
+}
+
+html.light .bg-slate-700 {
+    background-color: #f1f5f9 !important;
+    /* slate-100 */
+}
+
+html.light .bg-gray-900,
+html.light .bg-gray-800 {
+    background-color: #f9fafb !important;
+    /* gray-50 */
+}
+
+/* Semi-transparent backgrounds */
+html.light .bg-white\/5,
+html.light .bg-white\/10 {
+    background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light .bg-white\/20 {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .bg-black\/50,
+html.light .bg-black\/60 {
+    background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* ============================================
+   LIGHT MODE: Border Color Overrides
+   ============================================ */
+
+html.light .border-white\/10,
+html.light .border-white\/20 {
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .border-slate-700,
+html.light .border-slate-600 {
+    border-color: #e2e8f0 !important;
+    /* slate-200 */
+}
+
+/* ============================================
+   LIGHT MODE: Table Specific Fixes
+   ============================================ */
+
+html.light table,
+html.light .ui-table {
+    color: #1e293b !important;
+}
+
+html.light th {
+    color: #475569 !important;
+    background-color: #f1f5f9 !important;
+}
+
+html.light td {
+    color: #334155 !important;
+}
+
+html.light tr:hover {
+    background-color: #f1f5f9 !important;
+}
+
+/* ============================================
+   LIGHT MODE: Sidebar & Navigation
+   ============================================ */
+
+html.light .main-sidebar {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .main-sidebar a,
+html.light .main-sidebar span {
+    color: #475569 !important;
+}
+
+html.light .main-sidebar a:hover {
+    background-color: rgba(99, 102, 241, 0.1) !important;
+    color: #4f46e5 !important;
+}
+
+/* ============================================
+   LIGHT MODE: Cards & Panels
+   ============================================ */
+
+html.light .ui-card {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+}
+
+html.light .field-label {
+    color: #64748b !important;
+}
+
+html.light .field-value {
+    color: #1e293b !important;
+}
+
+/* ============================================
    UTILITY CLASSES (Use these in components)
    ============================================ */
 
@@ -459,33 +644,705 @@ html.light select option,
     color: var(--text-primary);
 }
 
-/* Modal Components */
+/* ============================================
+   PREMIUM MODAL SYSTEM - World-Class Design
+   ============================================ */
+
 .ui-modal-overlay {
     position: fixed !important;
     inset: 0 !important;
-    background-color: rgba(0, 0, 0, 0.7) !important;
-    backdrop-filter: blur(8px) !important;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.85), rgba(15, 15, 35, 0.9)) !important;
+    backdrop-filter: blur(12px) saturate(150%) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     z-index: 1000 !important;
+    animation: overlay-fade-in 0.3s ease-out !important;
+}
+
+@keyframes overlay-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .ui-modal {
-    background-color: var(--bg-surface) !important;
-    border: 1px solid var(--border-default) !important;
-    border-radius: 1rem !important;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 50px rgba(139, 92, 246, 0.15) !important;
-    max-width: 90vw !important;
-    max-height: 90vh !important;
+    background: linear-gradient(145deg, rgba(20, 20, 40, 0.98), rgba(15, 15, 30, 0.95)) !important;
+    border: 1px solid rgba(99, 102, 241, 0.3) !important;
+    border-radius: 1.5rem !important;
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 25px 80px -10px rgba(0, 0, 0, 0.6),
+        0 0 60px rgba(99, 102, 241, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    width: 560px !important;
+    max-width: 95vw !important;
+    max-height: 85vh !important;
+    display: flex !important;
+    flex-direction: column !important;
     overflow: hidden !important;
-    animation: modal-zoom-in 0.2s ease-out !important;
+    animation: modal-spring-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    position: relative !important;
 }
 
-@keyframes modal-zoom-in {
+/* Glowing top accent line */
+.ui-modal::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #6366f1, #8b5cf6, #6366f1, transparent);
+    border-radius: 2px;
+    filter: blur(1px);
+}
+
+@keyframes modal-spring-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(30px);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.02) translateY(-5px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.ui-modal-header {
+    padding: 1.5rem 2rem !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.1), transparent) !important;
+}
+
+.ui-modal-title {
+    color: #ffffff !important;
+    font-size: 1.375rem !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    letter-spacing: -0.02em !important;
+    text-shadow: 0 2px 10px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* Close button glow */
+.ui-modal-header .ui-btn-ghost {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 50% !important;
+    font-size: 1.5rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.ui-modal-header .ui-btn-ghost:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #ef4444 !important;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3) !important;
+    transform: rotate(90deg) !important;
+}
+
+.ui-modal-body {
+    padding: 1.5rem 2rem !important;
+    overflow-y: auto !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(99, 102, 241, 0.3) transparent !important;
+}
+
+.ui-modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ui-modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ui-modal-body::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #6366f1, #8b5cf6);
+    border-radius: 3px;
+}
+
+.ui-modal-footer {
+    padding: 1rem 2rem !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 1rem !important;
+    background: linear-gradient(0deg, rgba(15, 15, 30, 0.98), rgba(20, 20, 40, 0.95)) !important;
+    flex-shrink: 0 !important;
+}
+
+/* ============================================
+   PREMIUM FORM FIELDS
+   ============================================ */
+
+.modal-form {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+.form-fields {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1.25rem !important;
+    padding: 0.5rem !important;
+}
+
+.form-field {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.375rem !important;
+}
+
+.field-label {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: rgba(148, 163, 184, 0.9) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+}
+
+/* Required asterisk glow */
+.field-label::after {
+    color: #ef4444;
+    text-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+.field-input,
+.field-input[type="text"],
+.field-input[type="number"],
+.field-input[type="email"],
+.field-input[type="date"],
+.field-input[type="datetime-local"],
+textarea.field-input {
+    width: 100% !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0.75rem !important;
+    padding: 0.875rem 1rem !important;
+    font-size: 0.9375rem !important;
+    color: #ffffff !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    outline: none !important;
+}
+
+.field-input::placeholder {
+    color: rgba(148, 163, 184, 0.5) !important;
+}
+
+.field-input:hover {
+    border-color: rgba(99, 102, 241, 0.3) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.field-input:focus {
+    border-color: #6366f1 !important;
+    background: rgba(99, 102, 241, 0.08) !important;
+    box-shadow:
+        0 0 0 3px rgba(99, 102, 241, 0.15),
+        0 0 30px rgba(99, 102, 241, 0.2) !important;
+    transform: translateY(-1px) !important;
+}
+
+textarea.field-input {
+    min-height: 100px !important;
+    resize: vertical !important;
+}
+
+/* Checkbox styling */
+.field-checkbox {
+    width: 20px !important;
+    height: 20px !important;
+    accent-color: #6366f1 !important;
+    cursor: pointer !important;
+}
+
+/* Error state */
+.form-error {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.08)) !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    border-radius: 0.75rem !important;
+    padding: 1rem !important;
+    color: #fca5a5 !important;
+    font-size: 0.875rem !important;
+    margin-bottom: 1.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+.form-error::before {
+    content: '⚠️';
+    font-size: 1.25rem;
+}
+
+/* Loading state */
+.modal-loading {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4rem 2rem !important;
+    color: rgba(148, 163, 184, 0.7) !important;
+    font-size: 1rem !important;
+}
+
+/* Create button premium styling */
+.ui-modal-footer .ui-btn-primary {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%) !important;
+    padding: 0.875rem 2rem !important;
+    font-size: 0.9375rem !important;
+    font-weight: 600 !important;
+    border-radius: 0.75rem !important;
+    box-shadow:
+        0 4px 15px rgba(99, 102, 241, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+    transition: all 0.3s ease !important;
+}
+
+.ui-modal-footer .ui-btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+    box-shadow:
+        0 8px 25px rgba(99, 102, 241, 0.5),
+        0 0 40px rgba(139, 92, 246, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+.ui-modal-footer .ui-btn-primary:active:not(:disabled) {
+    transform: translateY(0) !important;
+}
+
+.ui-modal-footer .ui-btn-secondary {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    padding: 0.875rem 1.5rem !important;
+    border-radius: 0.75rem !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.ui-modal-footer .ui-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Light mode overrides for modal */
+html.light .ui-modal {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95)) !important;
+    border-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+html.light .ui-modal-header {
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.08), transparent) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .ui-modal-title {
+    color: #1e293b !important;
+    text-shadow: none !important;
+}
+
+html.light .field-label {
+    color: #64748b !important;
+}
+
+html.light .field-input {
+    background: rgba(0, 0, 0, 0.02) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: #1e293b !important;
+}
+
+html.light .field-input:hover {
+    border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+html.light .field-input:focus {
+    background: rgba(99, 102, 241, 0.05) !important;
+}
+
+html.light .ui-modal-footer {
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.03), transparent) !important;
+    border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .ui-modal-footer .ui-btn-secondary {
+    background: rgba(0, 0, 0, 0.03) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: #475569 !important;
+}
+
+/* ============================================
+   PREMIUM SMART SELECT - World-Class Design
+   ============================================ */
+
+.smart-select {
+    position: relative !important;
+    display: inline-block !important;
+    min-width: 200px !important;
+    width: 100% !important;
+}
+
+.smart-select--disabled {
+    opacity: 0.5 !important;
+    pointer-events: none !important;
+}
+
+/* Premium Trigger Button */
+.smart-select__trigger {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    padding: 0.875rem 1rem !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0.75rem !important;
+    color: var(--text-primary, #f0f0f0) !important;
+    cursor: pointer !important;
+    font-size: 0.9375rem !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.smart-select__trigger:hover {
+    border-color: rgba(99, 102, 241, 0.4) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    transform: translateY(-1px) !important;
+}
+
+.smart-select--open .smart-select__trigger {
+    border-color: #6366f1 !important;
+    background: rgba(99, 102, 241, 0.08) !important;
+    box-shadow:
+        0 0 0 3px rgba(99, 102, 241, 0.15),
+        0 0 20px rgba(99, 102, 241, 0.2) !important;
+}
+
+.smart-select__value {
+    flex: 1 !important;
+    text-align: left !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-weight: 500 !important;
+}
+
+.smart-select__arrow {
+    margin-left: 0.75rem !important;
+    font-size: 0.625rem !important;
+    color: rgba(148, 163, 184, 0.7) !important;
+    transition: transform 0.3s ease !important;
+}
+
+.smart-select--open .smart-select__arrow {
+    transform: rotate(180deg) !important;
+    color: #6366f1 !important;
+}
+
+/* Premium Dropdown Panel */
+.smart-select__dropdown {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    background: linear-gradient(145deg, rgba(20, 20, 40, 0.98), rgba(15, 15, 30, 0.95)) !important;
+    backdrop-filter: blur(20px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+    border: 1px solid rgba(99, 102, 241, 0.3) !important;
+    border-radius: 1rem !important;
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 20px 50px -10px rgba(0, 0, 0, 0.5),
+        0 0 40px rgba(99, 102, 241, 0.2) !important;
+    z-index: 9999 !important;
+    overflow: hidden !important;
+    animation: smartSelectSlide 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+@keyframes smartSelectSlide {
+    0% {
+        opacity: 0;
+        transform: translateY(-12px) scale(0.95);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Glowing top border */
+.smart-select__dropdown::before {
+    content: '' !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 15% !important;
+    right: 15% !important;
+    height: 2px !important;
+    background: linear-gradient(90deg, transparent, #6366f1, #8b5cf6, #6366f1, transparent) !important;
+    filter: blur(1px) !important;
+}
+
+/* Premium Search Input */
+.smart-select__search {
+    padding: 0.75rem !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: rgba(0, 0, 0, 0.2) !important;
+}
+
+.smart-select__search-input {
+    width: 100% !important;
+    padding: 0.75rem 1rem !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 0.625rem !important;
+    color: var(--text-primary, #f0f0f0) !important;
+    font-size: 0.875rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.smart-select__search-input::placeholder {
+    color: rgba(148, 163, 184, 0.5) !important;
+}
+
+.smart-select__search-input:focus {
+    outline: none !important;
+    border-color: rgba(99, 102, 241, 0.5) !important;
+    background: rgba(99, 102, 241, 0.08) !important;
+    box-shadow:
+        0 0 0 3px rgba(99, 102, 241, 0.12),
+        inset 0 0 10px rgba(99, 102, 241, 0.05) !important;
+}
+
+/* Options List */
+.smart-select__options {
+    max-height: 280px !important;
+    overflow-y: auto !important;
+    padding: 0.5rem !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(99, 102, 241, 0.3) transparent !important;
+}
+
+.smart-select__options::-webkit-scrollbar {
+    width: 5px;
+}
+
+.smart-select__options::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.smart-select__options::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #6366f1, #8b5cf6);
+    border-radius: 3px;
+}
+
+/* Premium Option Item */
+.smart-select__option {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    padding: 0.75rem 1rem !important;
+    margin: 0.25rem 0 !important;
+    border-radius: 0.625rem !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    position: relative !important;
+}
+
+.smart-select__option-icon {
+    font-size: 1.125rem !important;
+    min-width: 24px !important;
+    text-align: center !important;
+}
+
+.smart-select__option-label {
+    flex: 1 !important;
+    font-size: 0.9375rem !important;
+    font-weight: 500 !important;
+}
+
+.smart-select__option:hover,
+.smart-select__option--focused {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1)) !important;
+}
+
+.smart-select__option--selected {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15)) !important;
+    color: #a5b4fc !important;
+    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* Checkmark for selected */
+.smart-select__option--selected::after {
+    content: '✓' !important;
+    font-size: 0.875rem !important;
+    color: #22c55e !important;
+    margin-left: auto !important;
+    font-weight: 600 !important;
+    text-shadow: 0 0 8px rgba(34, 197, 94, 0.5) !important;
+}
+
+/* Premium Delete Button - Always Visible */
+.smart-select__option-delete {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 24px !important;
+    height: 24px !important;
+    margin-left: 0.5rem !important;
+    padding: 0 !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+    border: 1px solid rgba(239, 68, 68, 0.4) !important;
+    border-radius: 50% !important;
+    color: #f87171 !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.25s ease !important;
+}
+
+.smart-select__option:hover .smart-select__option-delete {
+    opacity: 1 !important;
+}
+
+.smart-select__option-delete:hover {
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+    border-color: #ef4444 !important;
+    color: white !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.5) !important;
+}
+
+/* Empty State */
+.smart-select__empty {
+    padding: 2rem 1rem !important;
+    text-align: center !important;
+    color: rgba(148, 163, 184, 0.7) !important;
+    font-style: italic !important;
+    font-size: 0.875rem !important;
+}
+
+/* Premium Create Section */
+.smart-select__create {
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 0.75rem !important;
+    background: rgba(0, 0, 0, 0.15) !important;
+}
+
+.smart-select__create-btn {
+    width: 100% !important;
+    padding: 0.875rem 1.25rem !important;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15)) !important;
+    border: 1px dashed rgba(99, 102, 241, 0.5) !important;
+    border-radius: 0.75rem !important;
+    color: #a5b4fc !important;
+    cursor: pointer !important;
+    font-weight: 600 !important;
+    font-size: 0.9375rem !important;
+    transition: all 0.3s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+}
+
+.smart-select__create-btn:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.25)) !important;
+    border-style: solid !important;
+    border-color: #6366f1 !important;
+    transform: translateY(-2px) !important;
+    box-shadow:
+        0 8px 25px rgba(99, 102, 241, 0.35),
+        0 0 25px rgba(139, 92, 246, 0.25) !important;
+}
+
+.smart-select__create-btn--inline {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.12)) !important;
+    border-color: rgba(34, 197, 94, 0.5) !important;
+    color: #86efac !important;
+}
+
+.smart-select__create-btn--inline:hover {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(34, 197, 94, 0.2)) !important;
+    border-color: #22c55e !important;
+    box-shadow:
+        0 8px 25px rgba(34, 197, 94, 0.3),
+        0 0 20px rgba(34, 197, 94, 0.2) !important;
+}
+
+.smart-select__create-hint {
+    text-align: center !important;
+    color: rgba(148, 163, 184, 0.6) !important;
+    font-size: 0.8125rem !important;
+    padding: 0.75rem !important;
+    font-style: italic !important;
+}
+
+/* Backdrop */
+.smart-select__backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 9998 !important;
+    background: transparent !important;
+}
+
+/* Image icons */
+.smart-select__option-img {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
+    object-fit: cover !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ============================================
+   PREMIUM MULTI-SELECT CHIPS
+   ============================================ */
+
+.multi-select__chips {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    padding: 0.5rem 0 !important;
+}
+
+.multi-select__chip {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+    padding: 0.375rem 0.75rem !important;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1)) !important;
+    border: 1px solid rgba(99, 102, 241, 0.4) !important;
+    border-radius: 100px !important;
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+    color: #a5b4fc !important;
+    animation: chipIn 0.25s ease !important;
+}
+
+@keyframes chipIn {
     from {
         opacity: 0;
-        transform: scale(0.95);
+        transform: scale(0.8);
     }
 
     to {
@@ -494,35 +1351,104 @@ html.light select option,
     }
 }
 
-.ui-modal-header {
-    padding: 1.25rem 1.5rem !important;
-    border-bottom: 1px solid var(--border-subtle) !important;
+.multi-select__chip-remove {
     display: flex !important;
     align-items: center !important;
-    justify-content: space-between !important;
-    background-color: var(--bg-elevated) !important;
+    justify-content: center !important;
+    width: 18px !important;
+    height: 18px !important;
+    padding: 0 !important;
+    margin-left: 0.25rem !important;
+    border: none !important;
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #f87171 !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
 }
 
-.ui-modal-title {
-    color: var(--text-primary) !important;
-    font-size: 1.125rem !important;
-    font-weight: 600 !important;
-    margin: 0 !important;
+.multi-select__chip-remove:hover {
+    background: #ef4444 !important;
+    color: white !important;
+    transform: scale(1.1) !important;
 }
 
-.ui-modal-body {
-    padding: 1.5rem !important;
-    overflow-y: auto !important;
-    max-height: calc(90vh - 140px) !important;
+.multi-select__add-btn {
+    padding: 0.375rem 0.875rem !important;
+    background: transparent !important;
+    border: 1px dashed rgba(99, 102, 241, 0.4) !important;
+    border-radius: 100px !important;
+    color: rgba(165, 180, 252, 0.8) !important;
+    cursor: pointer !important;
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+    transition: all 0.25s ease !important;
 }
 
-.ui-modal-footer {
-    padding: 1rem 1.5rem !important;
-    border-top: 1px solid var(--border-subtle) !important;
-    display: flex !important;
-    justify-content: flex-end !important;
-    gap: 0.75rem !important;
-    background-color: var(--bg-elevated) !important;
+.multi-select__add-btn:hover {
+    border-color: #6366f1 !important;
+    border-style: solid !important;
+    color: #a5b4fc !important;
+    background: rgba(99, 102, 241, 0.1) !important;
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.2) !important;
+}
+
+/* ============================================
+   LIGHT MODE OVERRIDES FOR SMART SELECT
+   ============================================ */
+
+html.light .smart-select__trigger {
+    background: rgba(0, 0, 0, 0.02) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: #1e293b !important;
+}
+
+html.light .smart-select__trigger:hover {
+    background: rgba(99, 102, 241, 0.05) !important;
+    border-color: rgba(99, 102, 241, 0.4) !important;
+}
+
+html.light .smart-select--open .smart-select__trigger {
+    background: rgba(99, 102, 241, 0.08) !important;
+}
+
+html.light .smart-select__dropdown {
+    background: rgba(255, 255, 255, 0.98) !important;
+    border-color: rgba(99, 102, 241, 0.25) !important;
+    box-shadow:
+        0 20px 50px -10px rgba(0, 0, 0, 0.15),
+        0 0 40px rgba(99, 102, 241, 0.1) !important;
+}
+
+html.light .smart-select__search-input {
+    background: rgba(0, 0, 0, 0.02) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: #1e293b !important;
+}
+
+html.light .smart-select__option-label {
+    color: #1e293b !important;
+}
+
+html.light .smart-select__option:hover,
+html.light .smart-select__option--focused {
+    background: rgba(99, 102, 241, 0.08) !important;
+}
+
+html.light .smart-select__option--selected {
+    background: rgba(99, 102, 241, 0.12) !important;
+    color: #4f46e5 !important;
+}
+
+html.light .smart-select__create-btn {
+    color: #4f46e5 !important;
+}
+
+html.light .multi-select__chip {
+    background: rgba(99, 102, 241, 0.1) !important;
+    color: #4f46e5 !important;
 }
 
 /* Dropdown Components */

@@ -12,8 +12,34 @@
 
     <title>Jirsi Platform</title>
 
-    <!-- Tailwind CSS (Locally Built) -->
-    <link rel="stylesheet" href="/assets/tailwind.css">
+    <!-- Tailwind CSS via CDN (Play CDN - for development) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            200: '#c7d2fe',
+                            300: '#a5b4fc',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            800: '#3730a3',
+                            900: '#312e81',
+                        },
+                    },
+                },
+            },
+        }
+    </script>
 
     <!-- FontAwesome 6.4 for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

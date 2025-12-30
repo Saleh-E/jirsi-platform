@@ -144,10 +144,6 @@ pub fn LandlordPortal() -> impl IntoView {
                 <div class="bg-white/5 border border-white/10 rounded-2xl p-6">
                     <h2 class="text-xl font-bold text-white mb-4">"🔧 Maintenance"</h2>
                     <div class="space-y-4">
-                        {maintenance_requests.into_iter().map(|req| view! {
-                            <MaintenanceCard request=req />
-                        }).collect::<Vec<_>>()}
-                        
                         {if maintenance_requests.is_empty() {
                             view! {
                                 <div class="text-center text-slate-500 py-8">
@@ -155,7 +151,9 @@ pub fn LandlordPortal() -> impl IntoView {
                                 </div>
                             }.into_view()
                         } else {
-                            view! { <div></div> }.into_view()
+                            maintenance_requests.into_iter().map(|req| view! {
+                                <MaintenanceCard request=req />
+                            }).collect::<Vec<_>>().into_view()
                         }}
                     </div>
                 </div>
